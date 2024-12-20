@@ -18,6 +18,7 @@ pub fn parse(path: &str) -> Result<ResourceStorage<Line>, Box<dyn Error>> {
     const ROW_B: i32 = 2;
     const ROW_C: i32 = 3;
     const ROW_D: i32 = 4;
+    const ROW_E: i32 = 5;
 
     #[rustfmt::skip]
     let row_parser = RowParser::new(vec![
@@ -42,6 +43,10 @@ pub fn parse(path: &str) -> Result<ResourceStorage<Line>, Box<dyn Error>> {
             ColumnDefinition::new(15, 17, ExpectedType::Integer16),
             ColumnDefinition::new(19, 21, ExpectedType::Integer16),
         ]),
+        // This row contains the short name.
+        RowDefinition::new(ROW_E, Box::new(FastRowMatcher::new(9, 3, "L T", true)), vec![
+            ColumnDefinition::new(13, -1, ExpectedType::String),
+        ]),
     ]);
     let parser = FileParser::new(&format!("{path}/LINIE"), row_parser)?;
 
@@ -60,6 +65,7 @@ pub fn parse(path: &str) -> Result<ResourceStorage<Line>, Box<dyn Error>> {
                     ROW_B => set_short_name(values, line),
                     ROW_C => set_text_color(values, line),
                     ROW_D => set_background_color(values, line),
+                    ROW_E => set_long_name(values, line),
                     _ => unreachable!(),
                 }
             }
@@ -86,6 +92,12 @@ fn set_short_name(mut values: Vec<ParsedValue>, line: &mut Line) {
     let short_name: String = values.remove(0).into();
 
     line.set_short_name(short_name);
+}
+
+fn set_long_name(mut values: Vec<ParsedValue>, line: &mut Line) {
+    let long_name: String = values.remove(0).into();
+
+    line.set_long_name(long_name);
 }
 
 fn set_text_color(mut values: Vec<ParsedValue>, line: &mut Line) {

@@ -70,7 +70,7 @@ fn load_coordinates(
                     ColumnDefinition::new(20, 29, ExpectedType::Float),
                     ColumnDefinition::new(31, 36, ExpectedType::Integer16),
                 ],
-                Version::V_5_40_41_2_0_5 => vec![
+                Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6 => vec![
                     ColumnDefinition::new(1, 7, ExpectedType::Integer32),
                     ColumnDefinition::new(9, 19, ExpectedType::Float),
                     ColumnDefinition::new(21, 31, ExpectedType::Float),

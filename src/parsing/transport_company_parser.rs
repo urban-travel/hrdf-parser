@@ -22,6 +22,7 @@ pub fn parse(path: &str) -> Result<ResourceStorage<TransportCompany>, Box<dyn Er
     log::info!("Parsing BETRIEB_IT...");
     const ROW_A: i32 = 1;
     const ROW_B: i32 = 2;
+    const ROW_C: i32 = 3;
 
     #[rustfmt::skip]
     let row_parser = RowParser::new(vec![
@@ -30,6 +31,11 @@ pub fn parse(path: &str) -> Result<ResourceStorage<TransportCompany>, Box<dyn Er
         // This row is used to create a TransportCompany instance.
         RowDefinition::new(ROW_B, Box::new(FastRowMatcher::new(7, 1, ":", true)), vec![
             ColumnDefinition::new(1, 5, ExpectedType::Integer32),
+            ColumnDefinition::new(9, -1, ExpectedType::String),
+        ]),
+
+        // This row is used to create a TransportCompany instance from the SBOID identifier.
+        RowDefinition::new(ROW_C, Box::new(FastRowMatcher::new(7, 1, "N", true)), vec![
             ColumnDefinition::new(9, -1, ExpectedType::String),
         ]),
     ]);
@@ -42,6 +48,8 @@ pub fn parse(path: &str) -> Result<ResourceStorage<TransportCompany>, Box<dyn Er
                 match id {
                     ROW_A => {}
                     ROW_B => return Some(create_instance(values)),
+                    ROW_C => { // TODO we should probably add an explicit treatment for the sboid
+                    }
                     _ => unreachable!(),
                 };
                 None
