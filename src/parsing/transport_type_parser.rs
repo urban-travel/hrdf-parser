@@ -24,6 +24,7 @@ pub fn parse(path: &str) -> Result<TransportTypeAndTypeConverter, Box<dyn Error>
     const ROW_C: i32 = 3;
     const ROW_D: i32 = 4;
     const ROW_E: i32 = 5;
+    const ROW_F: i32 = 6;
 
     #[rustfmt::skip]
     let row_parser = RowParser::new(vec![
@@ -59,6 +60,11 @@ pub fn parse(path: &str) -> Result<TransportTypeAndTypeConverter, Box<dyn Error>
             ColumnDefinition::new(10, 12, ExpectedType::Integer32),
             ColumnDefinition::new(14, -1, ExpectedType::String),
         ]),
+        // This row contains specific information
+        RowDefinition::new(ROW_F, Box::new(FastRowMatcher::new(1, 2, "*I", true)), vec![
+            ColumnDefinition::new(4, 5, ExpectedType::String),
+            ColumnDefinition::new(7, 15, ExpectedType::OptionInteger32),
+        ]),
     ]);
     let parser = FileParser::new(&format!("{path}/ZUGART"), row_parser)?;
 
@@ -86,6 +92,9 @@ pub fn parse(path: &str) -> Result<TransportTypeAndTypeConverter, Box<dyn Error>
                     }
                     ROW_D => {}
                     ROW_E => set_category_name(values, transport_type, current_language),
+                    ROW_F => {
+                        // TODO: Use information, currently not used
+                    }
                     _ => unreachable!(),
                 }
             }
