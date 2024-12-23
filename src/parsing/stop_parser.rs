@@ -70,7 +70,7 @@ fn load_coordinates(
                     ColumnDefinition::new(20, 29, ExpectedType::Float),
                     ColumnDefinition::new(31, 36, ExpectedType::Integer16),
                 ],
-                Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6 => vec![
+                Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6 | Version::V_5_40_41_2_0_7 => vec![
                     ColumnDefinition::new(1, 7, ExpectedType::Integer32),
                     ColumnDefinition::new(9, 19, ExpectedType::Float),
                     ColumnDefinition::new(21, 31, ExpectedType::Float),
@@ -294,8 +294,11 @@ fn set_restrictions(
     let stop_id: i32 = values.remove(0).into();
     let restrictions: i16 = values.remove(0).into();
 
-    let stop = data.get_mut(&stop_id).ok_or("Unknown ID")?;
-    stop.set_restrictions(restrictions);
+    if let Some(stop) = data.get_mut(&stop_id) {
+        stop.set_restrictions(restrictions);
+    } else {
+        log::info!("Unknown ID: {stop_id} for restrictions");
+    }
 
     Ok(())
 }
@@ -307,8 +310,11 @@ fn set_sloid(
     let stop_id: i32 = values.remove(0).into();
     let sloid: String = values.remove(0).into();
 
-    let stop = data.get_mut(&stop_id).ok_or("Unknown ID")?;
-    stop.set_sloid(sloid);
+    if let Some(stop) = data.get_mut(&stop_id) {
+        stop.set_sloid(sloid);
+    } else {
+        log::info!("Unknown ID: {stop_id} for sloid");
+    }
 
     Ok(())
 }
@@ -320,8 +326,11 @@ fn add_boarding_area(
     let stop_id: i32 = values.remove(0).into();
     let sloid: String = values.remove(0).into();
 
-    let stop = data.get_mut(&stop_id).ok_or("Unknown ID")?;
-    stop.add_boarding_area(sloid);
+    if let Some(stop) = data.get_mut(&stop_id) {
+        stop.add_boarding_area(sloid);
+    } else {
+        log::info!("Unknown ID: {stop_id} for boarding area");
+    }
 
     Ok(())
 }

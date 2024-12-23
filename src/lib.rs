@@ -16,10 +16,21 @@ mod tests {
     use test_log::test;
 
     #[test(tokio::test)]
-    async fn parsing() {
+    async fn parsing_2024() {
         let _hrdf = Hrdf::new(
             Version::V_5_40_41_2_0_6,
             "https://opentransportdata.swiss/en/dataset/timetable-54-2024-hrdf/permalink",
+            true,
+        )
+        .await
+        .unwrap();
+    }
+
+    #[test(tokio::test)]
+    async fn parsing_2025() {
+        let _hrdf = Hrdf::new(
+            Version::V_5_40_41_2_0_7,
+            "https://opentransportdata.swiss/de/dataset/timetable-54-2025-hrdf/permalink",
             true,
         )
         .await
