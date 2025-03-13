@@ -48,7 +48,7 @@ pub fn parse(version: Version, path: &str) -> Result<StopStorageAndExchangeTimes
     log::info!("Parsing UMSTEIGB...");
     let default_exchange_time = load_exchange_times(path, &mut data)?;
     log::info!("Parsing BHFART_60...");
-    load_descriptions(path, &mut data)?;
+    load_descriptions(version, path, &mut data)?;
 
     Ok((ResourceStorage::new(data), default_exchange_time))
 }
@@ -159,7 +159,11 @@ fn load_exchange_times(
     Ok(default_exchange_time)
 }
 
-fn load_descriptions(path: &str, data: &mut FxHashMap<i32, Stop>) -> Result<(), Box<dyn Error>> {
+fn load_descriptions(
+    version: Version,
+    path: &str,
+    data: &mut FxHashMap<i32, Stop>,
+) -> Result<(), Box<dyn Error>> {
     const ROW_A: i32 = 1;
     const ROW_B: i32 = 2;
     const ROW_C: i32 = 3;
@@ -185,7 +189,16 @@ fn load_descriptions(path: &str, data: &mut FxHashMap<i32, Stop>) -> Result<(), 
             ColumnDefinition::new(13, -1, ExpectedType::String),
         ]),
     ]);
-    let parser = FileParser::new(&format!("{path}/BHFART_60"), row_parser)?;
+
+    log::info!("{}", format!("{path}/BHFART_60"));
+
+    let bhfart = match version {
+        Version::V_5_40_41_2_0_4 | Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6 => {
+            "BHFART_60"
+        }
+        Version::V_5_40_41_2_0_7 => "BHFART",
+    };
+    let parser = FileParser::new(&format!("{path}/{bhfart}"), row_parser)?;
 
     parser.parse().try_for_each(|x| {
         let (id, _, values) = x?;
