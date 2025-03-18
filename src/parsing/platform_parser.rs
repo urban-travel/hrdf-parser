@@ -125,8 +125,7 @@ fn construct_row_parser(version: Version) -> RowParser {
                     vec![
                         ColumnDefinition::new(1, 7, ExpectedType::Integer32),
                         ColumnDefinition::new(10, 16, ExpectedType::Integer32), // Should be 9-16, but here the # character is ignored.
-                        ColumnDefinition::new(20, 26, ExpectedType::Float), // This column has not been explicitly defined in the SBB specification.
-                        ColumnDefinition::new(28, 34, ExpectedType::Float), // This column has not been explicitly defined in the SBB specification.
+                        ColumnDefinition::new(20, -1, ExpectedType::String), // This column has not been explicitly defined in the SBB specification.
                     ],
                 ),
             ])
@@ -213,7 +212,6 @@ pub fn parse(
 ) -> Result<(ResourceStorage<JourneyPlatform>, ResourceStorage<Platform>), Box<dyn Error>> {
     log::info!("Parsing GLEIS...");
     let row_parser = construct_row_parser(version);
-    let parser = FileParser::new(&format!("{path}/GLEIS"), row_parser)?;
 
     let auto_increment = AutoIncrement::new();
     let mut platforms = Vec::new();
@@ -222,21 +220,53 @@ pub fn parse(
     let mut bytes_offset = 0;
     let mut journey_platform = Vec::new();
 
-    for x in parser.parse() {
-        let (id, bytes_read, values) = x?;
-        match id {
-            ROW_JOURNEY_PLATFORM => {
-                bytes_offset += bytes_read;
-                journey_platform.push(values);
+    match version {
+        Version::V_5_40_41_2_0_4 | Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6 => {
+            let parser = FileParser::new(&format!("{path}/GLEIS"), row_parser)?;
+            for x in parser.parse() {
+                let (id, bytes_read, values) = x?;
+                match id {
+                    ROW_JOURNEY_PLATFORM => {
+                        bytes_offset += bytes_read;
+                        journey_platform.push(values);
+                    }
+                    ROW_PLATFORM => {
+                        platforms.push(create_platform(
+                            values,
+                            &auto_increment,
+                            &mut platforms_pk_type_converter,
+                        )?);
+                    }
+                    _ => unreachable!(),
+                }
             }
-            ROW_PLATFORM => {
-                platforms.push(create_platform(
-                    values,
-                    &auto_increment,
-                    &mut platforms_pk_type_converter,
-                )?);
+        }
+        Version::V_5_40_41_2_0_7 => {
+            let parser = FileParser::new(&format!("{path}/GLEISE_LV95"), row_parser)?;
+            for x in parser.parse() {
+                let (id, bytes_read, values) = x?;
+                match id {
+                    ROW_JOURNEY_PLATFORM => {
+                        bytes_offset += bytes_read;
+                        journey_platform.push(values);
+                    }
+                    ROW_PLATFORM => {
+                        platforms.push(create_platform(
+                            values,
+                            &auto_increment,
+                            &mut platforms_pk_type_converter,
+                        )?);
+                    }
+                    ROW_SECTION => {
+                        // We do nothing
+                        // We may want to use section at some point
+                    }
+                    ROW_SLOID | ROW_COORD => {
+                        // We do nothing, coordinates and sloid are parsed afterwards
+                    }
+                    _ => unreachable!(),
+                }
             }
-            _ => unreachable!(),
         }
     }
 
@@ -275,12 +305,18 @@ fn load_coordinates_for_platforms(
     pk_type_converter: &FxHashMap<(i32, i32), i32>,
     data: &mut FxHashMap<i32, Platform>,
 ) -> Result<(), Box<dyn Error>> {
-    println!("{bytes_offset}");
-
     let row_parser = construct_row_parser(version);
-    let filename = match coordinate_system {
-        CoordinateSystem::LV95 => "GLEIS_LV95",
-        CoordinateSystem::WGS84 => "GLEIS_WGS",
+    let filename = match (version, coordinate_system) {
+        (
+            Version::V_5_40_41_2_0_4 | Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6,
+            CoordinateSystem::LV95,
+        ) => "GLEIS_LV95",
+        (
+            Version::V_5_40_41_2_0_4 | Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6,
+            CoordinateSystem::WGS84,
+        ) => "GLEIS_WGS",
+        (Version::V_5_40_41_2_0_7, CoordinateSystem::LV95) => "GLEISE_LV95",
+        (Version::V_5_40_41_2_0_7, CoordinateSystem::WGS84) => "GLEISE_WGS",
     };
     let parser =
         FileParser::new_with_bytes_offset(&format!("{path}/{filename}"), row_parser, bytes_offset)?;
@@ -307,22 +343,27 @@ fn load_coordinates_for_platforms(
                 Ok(())
             })
         }
-        Version::V_5_40_41_2_0_7 => parser.parse().try_for_each(|x| {
-            let (id, _, values) = x?;
-            match id {
-                ROW_JOURNEY_PLATFORM | ROW_PLATFORM | ROW_SECTION => {
-                    // This should already have been treated
+        Version::V_5_40_41_2_0_7 => {
+            parser.parse().try_for_each(|x| {
+                let (id, _, values) = x?;
+                match id {
+                    ROW_JOURNEY_PLATFORM | ROW_PLATFORM | ROW_SECTION => {
+                        // This should already have been treated
+                    }
+                    ROW_SLOID => {
+                        platform_set_sloid(values, coordinate_system, pk_type_converter, data)?
+                    }
+                    ROW_COORD => platform_set_coordinates(
+                        values,
+                        coordinate_system,
+                        pk_type_converter,
+                        data,
+                    )?,
+                    _ => unreachable!(),
                 }
-                ROW_SLOID => {
-                    platform_set_sloid(values, coordinate_system, pk_type_converter, data)?
-                }
-                ROW_COORD => {
-                    platform_set_coordinates(values, coordinate_system, pk_type_converter, data)?
-                }
-                _ => unreachable!(),
-            }
-            Ok(())
-        }),
+                Ok(())
+            })
+        }
     }
 }
 
@@ -406,8 +447,13 @@ fn platform_set_coordinates(
 ) -> Result<(), Box<dyn Error>> {
     let stop_id: i32 = values.remove(0).into();
     let index: i32 = values.remove(0).into();
-    let mut xy1: f64 = values.remove(0).into();
-    let mut xy2: f64 = values.remove(0).into();
+
+    let floats: Vec<_> = String::from(values.remove(0))
+        .split_whitespace()
+        .map(|v| v.parse::<f64>().unwrap())
+        .collect();
+    let mut xy1 = floats[0];
+    let mut xy2 = floats[1];
 
     if coordinate_system == CoordinateSystem::WGS84 {
         // WGS84 coordinates are stored in reverse order for some unknown reason.

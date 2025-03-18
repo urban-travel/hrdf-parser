@@ -209,7 +209,6 @@ fn load_descriptions(
         }
         Version::V_5_40_41_2_0_7 => "BHFART",
     };
-    log::info!("Loading {}", format!("{path}/{bhfart}"));
     let parser = FileParser::new(&format!("{path}/{bhfart}"), row_parser)?;
 
     parser.parse().try_for_each(|x| {
