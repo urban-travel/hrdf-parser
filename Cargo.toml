@@ -19,6 +19,8 @@ serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.10.8"
 strum = "0.25.0"
 strum_macros = "0.25.3"
+test-log = "0.2.16"
+tokio = { version = "1.42.0", features = ["macros"]}
 url = "2.5.2"
 zip = "2.1.3"
 

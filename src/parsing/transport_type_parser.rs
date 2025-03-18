@@ -13,32 +13,51 @@ use crate::{
     },
     storage::ResourceStorage,
     utils::AutoIncrement,
+    Version,
 };
 
 type TransportTypeAndTypeConverter = (ResourceStorage<TransportType>, FxHashMap<String, i32>);
 
-pub fn parse(path: &str) -> Result<TransportTypeAndTypeConverter, Box<dyn Error>> {
+pub fn parse(
+    version: Version,
+    path: &str,
+) -> Result<TransportTypeAndTypeConverter, Box<dyn Error>> {
     log::info!("Parsing ZUGART...");
     const ROW_A: i32 = 1;
     const ROW_B: i32 = 2;
     const ROW_C: i32 = 3;
     const ROW_D: i32 = 4;
     const ROW_E: i32 = 5;
+    const ROW_F: i32 = 6;
 
     #[rustfmt::skip]
     let row_parser = RowParser::new(vec![
         // This row is used to create a TransportType instance.
         RowDefinition::new(ROW_A, Box::new(
             AdvancedRowMatcher::new(r"^.{3} [ 0-9]{2}")?
-        ), vec![
-            ColumnDefinition::new(1, 3, ExpectedType::String),
-            ColumnDefinition::new(5, 6, ExpectedType::Integer16),
-            ColumnDefinition::new(8, 8, ExpectedType::String),
-            ColumnDefinition::new(10, 10, ExpectedType::Integer16),
-            ColumnDefinition::new(12, 19, ExpectedType::String),
-            ColumnDefinition::new(21, 21, ExpectedType::Integer16),
-            ColumnDefinition::new(23, 23, ExpectedType::String),
-        ]),
+        ),
+
+        match version {
+             Version::V_5_40_41_2_0_4 | Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6 => vec![
+                ColumnDefinition::new(1, 3, ExpectedType::String),
+                ColumnDefinition::new(5, 6, ExpectedType::Integer16),
+                ColumnDefinition::new(8, 8, ExpectedType::String),
+                ColumnDefinition::new(10, 10, ExpectedType::Integer16),
+                ColumnDefinition::new(12, 19, ExpectedType::String),
+                ColumnDefinition::new(21, 21, ExpectedType::Integer16),
+                ColumnDefinition::new(23, 23, ExpectedType::String),
+            ],
+            Version::V_5_40_41_2_0_7 => vec![
+                ColumnDefinition::new(1, 3, ExpectedType::String),
+                ColumnDefinition::new(5, 6, ExpectedType::Integer16),
+                ColumnDefinition::new(8, 8, ExpectedType::String),
+                ColumnDefinition::new(11, 11, ExpectedType::Integer16),
+                ColumnDefinition::new(13, 20, ExpectedType::String),
+                ColumnDefinition::new(22, 22, ExpectedType::Integer16),
+                ColumnDefinition::new(24, 24, ExpectedType::String),
+            ],
+
+        }),
         // This row indicates the language for translations in the section that follows it.
         RowDefinition::new(ROW_B, Box::new(FastRowMatcher::new(1, 1, "<", true)), vec![
             ColumnDefinition::new(1, -1, ExpectedType::String),
@@ -59,7 +78,13 @@ pub fn parse(path: &str) -> Result<TransportTypeAndTypeConverter, Box<dyn Error>
             ColumnDefinition::new(10, 12, ExpectedType::Integer32),
             ColumnDefinition::new(14, -1, ExpectedType::String),
         ]),
+        // This row contains specific information
+        RowDefinition::new(ROW_F, Box::new(FastRowMatcher::new(1, 2, "*I", true)), vec![
+            ColumnDefinition::new(4, 5, ExpectedType::String),
+            ColumnDefinition::new(7, 15, ExpectedType::OptionInteger32),
+        ]),
     ]);
+
     let parser = FileParser::new(&format!("{path}/ZUGART"), row_parser)?;
 
     let auto_increment = AutoIncrement::new();
@@ -70,6 +95,7 @@ pub fn parse(path: &str) -> Result<TransportTypeAndTypeConverter, Box<dyn Error>
 
     for x in parser.parse() {
         let (id, _, values) = x?;
+
         match id {
             ROW_A => {
                 let transport_type =
@@ -86,6 +112,9 @@ pub fn parse(path: &str) -> Result<TransportTypeAndTypeConverter, Box<dyn Error>
                     }
                     ROW_D => {}
                     ROW_E => set_category_name(values, transport_type, current_language),
+                    ROW_F => {
+                        // TODO: Use information, currently not used
+                    }
                     _ => unreachable!(),
                 }
             }

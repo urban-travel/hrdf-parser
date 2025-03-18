@@ -512,7 +512,7 @@ impl Journey {
         entry.resource_id.unwrap()
     }
 
-    pub fn transport_type<'a>(&'a self, data_storage: &'a DataStorage) -> &TransportType {
+    pub fn transport_type<'a>(&'a self, data_storage: &'a DataStorage) -> &'a TransportType {
         data_storage
             .transport_types()
             .find(self.transport_type_id())
@@ -782,7 +782,7 @@ impl JourneyRouteEntry {
 
     // Functions
 
-    pub fn stop<'a>(&'a self, data_storage: &'a DataStorage) -> &Stop {
+    pub fn stop<'a>(&'a self, data_storage: &'a DataStorage) -> &'a Stop {
         data_storage
             .stops()
             .find(self.stop_id())
@@ -857,6 +857,7 @@ pub struct Line {
     id: i32,
     name: String,
     short_name: String,
+    long_name: String,
     text_color: Color,
     background_color: Color,
 }
@@ -869,6 +870,7 @@ impl Line {
             id,
             name,
             short_name: String::default(),
+            long_name: String::default(),
             text_color: Color::default(),
             background_color: Color::default(),
         }
@@ -878,6 +880,10 @@ impl Line {
 
     pub fn set_short_name(&mut self, value: String) {
         self.short_name = value;
+    }
+
+    pub fn set_long_name(&mut self, value: String) {
+        self.long_name = value;
     }
 
     pub fn set_text_color(&mut self, value: Color) {
@@ -1274,4 +1280,6 @@ impl TransportType {
 pub enum Version {
     V_5_40_41_2_0_4,
     V_5_40_41_2_0_5,
+    V_5_40_41_2_0_6,
+    V_5_40_41_2_0_7,
 }

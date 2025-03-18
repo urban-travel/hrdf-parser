@@ -47,8 +47,8 @@ pub fn parse(version: Version, path: &str) -> Result<StopStorageAndExchangeTimes
     load_exchange_flags(path, &mut data)?;
     log::info!("Parsing UMSTEIGB...");
     let default_exchange_time = load_exchange_times(path, &mut data)?;
-    log::info!("Parsing BHFART_60...");
-    load_descriptions(path, &mut data)?;
+    log::info!("Parsing BHFART...");
+    load_descriptions(version, path, &mut data)?;
 
     Ok((ResourceStorage::new(data), default_exchange_time))
 }
@@ -70,7 +70,7 @@ fn load_coordinates(
                     ColumnDefinition::new(20, 29, ExpectedType::Float),
                     ColumnDefinition::new(31, 36, ExpectedType::Integer16),
                 ],
-                Version::V_5_40_41_2_0_5 => vec![
+                Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6 | Version::V_5_40_41_2_0_7 => vec![
                     ColumnDefinition::new(1, 7, ExpectedType::Integer32),
                     ColumnDefinition::new(9, 19, ExpectedType::Float),
                     ColumnDefinition::new(21, 31, ExpectedType::Float),
@@ -159,11 +159,17 @@ fn load_exchange_times(
     Ok(default_exchange_time)
 }
 
-fn load_descriptions(path: &str, data: &mut FxHashMap<i32, Stop>) -> Result<(), Box<dyn Error>> {
+fn load_descriptions(
+    version: Version,
+    path: &str,
+    data: &mut FxHashMap<i32, Stop>,
+) -> Result<(), Box<dyn Error>> {
     const ROW_A: i32 = 1;
     const ROW_B: i32 = 2;
     const ROW_C: i32 = 3;
     const ROW_D: i32 = 4;
+    const ROW_E: i32 = 5;
+    const ROW_F: i32 = 6;
 
     #[rustfmt::skip]
     let row_parser = RowParser::new(vec![
@@ -184,8 +190,26 @@ fn load_descriptions(path: &str, data: &mut FxHashMap<i32, Stop>) -> Result<(), 
             ColumnDefinition::new(1, 7, ExpectedType::Integer32),
             ColumnDefinition::new(13, -1, ExpectedType::String),
         ]),
+        // This row contains the country
+        RowDefinition::new(ROW_E, Box::new(FastRowMatcher::new(9, 1, "L", true)), vec![
+            ColumnDefinition::new(1, 7, ExpectedType::Integer32),
+            ColumnDefinition::new(11, 12, ExpectedType::String),
+        ]),
+        // This row contains the KT (kanton) information
+        RowDefinition::new(ROW_F, Box::new(FastRowMatcher::new(9, 1, "I", true)), vec![
+            ColumnDefinition::new(1, 7, ExpectedType::Integer32),
+            ColumnDefinition::new(11, 12, ExpectedType::String),
+            ColumnDefinition::new(14, 22, ExpectedType::Integer32),
+        ]),
     ]);
-    let parser = FileParser::new(&format!("{path}/BHFART_60"), row_parser)?;
+
+    let bhfart = match version {
+        Version::V_5_40_41_2_0_4 | Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6 => {
+            "BHFART_60"
+        }
+        Version::V_5_40_41_2_0_7 => "BHFART",
+    };
+    let parser = FileParser::new(&format!("{path}/{bhfart}"), row_parser)?;
 
     parser.parse().try_for_each(|x| {
         let (id, _, values) = x?;
@@ -194,6 +218,12 @@ fn load_descriptions(path: &str, data: &mut FxHashMap<i32, Stop>) -> Result<(), 
             ROW_B => set_restrictions(values, data)?,
             ROW_C => set_sloid(values, data)?,
             ROW_D => add_boarding_area(values, data)?,
+            ROW_E => {
+                // TODO: add possibility to use Land data
+            }
+            ROW_F => {
+                // TODO: add possibility to use KT information and the associated number
+            }
             _ => unreachable!(),
         }
         Ok(())
@@ -294,8 +324,11 @@ fn set_restrictions(
     let stop_id: i32 = values.remove(0).into();
     let restrictions: i16 = values.remove(0).into();
 
-    let stop = data.get_mut(&stop_id).ok_or("Unknown ID")?;
-    stop.set_restrictions(restrictions);
+    if let Some(stop) = data.get_mut(&stop_id) {
+        stop.set_restrictions(restrictions);
+    } else {
+        log::info!("Unknown ID: {stop_id} for restrictions");
+    }
 
     Ok(())
 }
@@ -307,8 +340,11 @@ fn set_sloid(
     let stop_id: i32 = values.remove(0).into();
     let sloid: String = values.remove(0).into();
 
-    let stop = data.get_mut(&stop_id).ok_or("Unknown ID")?;
-    stop.set_sloid(sloid);
+    if let Some(stop) = data.get_mut(&stop_id) {
+        stop.set_sloid(sloid);
+    } else {
+        log::info!("Unknown ID: {stop_id} for sloid");
+    }
 
     Ok(())
 }
@@ -320,8 +356,11 @@ fn add_boarding_area(
     let stop_id: i32 = values.remove(0).into();
     let sloid: String = values.remove(0).into();
 
-    let stop = data.get_mut(&stop_id).ok_or("Unknown ID")?;
-    stop.add_boarding_area(sloid);
+    if let Some(stop) = data.get_mut(&stop_id) {
+        stop.add_boarding_area(sloid);
+    } else {
+        log::info!("Unknown ID: {stop_id} for boarding area");
+    }
 
     Ok(())
 }
