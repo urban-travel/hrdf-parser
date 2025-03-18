@@ -90,7 +90,7 @@ impl DataStorage {
             &directions_pk_type_converter,
         )?;
         let (journey_platform, platforms) =
-            parsing::load_platforms(path, &journeys_pk_type_converter)?;
+            parsing::load_platforms(version, path, &journeys_pk_type_converter)?;
         let through_service = parsing::load_through_service(path, &journeys_pk_type_converter)?;
 
         // Exchange times

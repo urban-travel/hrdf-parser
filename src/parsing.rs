@@ -143,11 +143,20 @@ impl FastRowMatcher {
 
 impl RowMatcher for FastRowMatcher {
     fn match_row(&self, row: &str) -> bool {
+        let start = self.start - 1;
+
         // Info: if the start index is after characters longer than 1 byte, the code will not function correctly.
         // This is not a problem, as the start index is always at the beginning of the
         // string, where there is no character requiring more than 1 byte.
-        let start = self.start - 1;
-        let target_value = &row[start..(start + self.length)];
+        // let target_value = &row[start..(start + self.length)];
+        //
+        // Above is the old way of parsing. This is wrong for UTF-8 chars that can have more than
+        // one byte.
+        //
+        // This is the correct way to go. If for some reason an UTF-8 char is located somewhere
+        // before start the matching will fail, same if the char is non UTF-8. This method is
+        // slower obviously but not that much. In tests adds about 10% time
+        let target_value: String = row.chars().skip(start).take(self.length).collect();
         self.should_equal_value == (target_value == self.value)
     }
 }
@@ -276,6 +285,7 @@ impl RowParser {
                 };
 
                 let value = row[start..stop].trim();
+                //log::info!("{value}, {start}, {stop}");
 
                 let result = match column_definition.expected_type {
                     ExpectedType::Float => ParsedValue::Float(value.parse()?),
@@ -365,6 +375,9 @@ impl Iterator for ParsedRowIterator<'_> {
         self.rows_iter
             .by_ref()
             .find(|row| !row.trim().is_empty())
-            .map(|row| self.row_parser.parse(row))
+            .map(|row| {
+                //log::info!("paring row: {row}");
+                self.row_parser.parse(row)
+            })
     }
 }

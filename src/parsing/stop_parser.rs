@@ -47,7 +47,7 @@ pub fn parse(version: Version, path: &str) -> Result<StopStorageAndExchangeTimes
     load_exchange_flags(path, &mut data)?;
     log::info!("Parsing UMSTEIGB...");
     let default_exchange_time = load_exchange_times(path, &mut data)?;
-    log::info!("Parsing BHFART_60...");
+    log::info!("Parsing BHFART...");
     load_descriptions(version, path, &mut data)?;
 
     Ok((ResourceStorage::new(data), default_exchange_time))
@@ -168,6 +168,8 @@ fn load_descriptions(
     const ROW_B: i32 = 2;
     const ROW_C: i32 = 3;
     const ROW_D: i32 = 4;
+    const ROW_E: i32 = 5;
+    const ROW_F: i32 = 6;
 
     #[rustfmt::skip]
     let row_parser = RowParser::new(vec![
@@ -188,9 +190,18 @@ fn load_descriptions(
             ColumnDefinition::new(1, 7, ExpectedType::Integer32),
             ColumnDefinition::new(13, -1, ExpectedType::String),
         ]),
+        // This row contains the country
+        RowDefinition::new(ROW_E, Box::new(FastRowMatcher::new(9, 1, "L", true)), vec![
+            ColumnDefinition::new(1, 7, ExpectedType::Integer32),
+            ColumnDefinition::new(11, 12, ExpectedType::String),
+        ]),
+        // This row contains the KT (kanton) information
+        RowDefinition::new(ROW_F, Box::new(FastRowMatcher::new(9, 1, "I", true)), vec![
+            ColumnDefinition::new(1, 7, ExpectedType::Integer32),
+            ColumnDefinition::new(11, 12, ExpectedType::String),
+            ColumnDefinition::new(14, 22, ExpectedType::Integer32),
+        ]),
     ]);
-
-    log::info!("{}", format!("{path}/BHFART_60"));
 
     let bhfart = match version {
         Version::V_5_40_41_2_0_4 | Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6 => {
@@ -198,6 +209,7 @@ fn load_descriptions(
         }
         Version::V_5_40_41_2_0_7 => "BHFART",
     };
+    log::info!("Loading {}", format!("{path}/{bhfart}"));
     let parser = FileParser::new(&format!("{path}/{bhfart}"), row_parser)?;
 
     parser.parse().try_for_each(|x| {
@@ -207,6 +219,12 @@ fn load_descriptions(
             ROW_B => set_restrictions(values, data)?,
             ROW_C => set_sloid(values, data)?,
             ROW_D => add_boarding_area(values, data)?,
+            ROW_E => {
+                // TODO: add possibility to use Land data
+            }
+            ROW_F => {
+                // TODO: add possibility to use KT information and the associated number
+            }
             _ => unreachable!(),
         }
         Ok(())
