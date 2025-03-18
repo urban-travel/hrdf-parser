@@ -285,7 +285,6 @@ impl RowParser {
                 };
 
                 let value = row[start..stop].trim();
-                //log::info!("{value}, {start}, {stop}");
 
                 let result = match column_definition.expected_type {
                     ExpectedType::Float => ParsedValue::Float(value.parse()?),
@@ -375,9 +374,6 @@ impl Iterator for ParsedRowIterator<'_> {
         self.rows_iter
             .by_ref()
             .find(|row| !row.trim().is_empty())
-            .map(|row| {
-                //log::info!("paring row: {row}");
-                self.row_parser.parse(row)
-            })
+            .map(|row| self.row_parser.parse(row))
     }
 }
