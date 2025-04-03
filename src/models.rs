@@ -175,24 +175,32 @@ impl Coordinates {
 
     // Getters/Setters
 
-    pub fn easting(&self) -> f64 {
-        assert!(self.coordinate_system == CoordinateSystem::LV95);
-        self.x
+    pub fn easting(&self) -> Option<f64> {
+        match self.coordinate_system {
+            CoordinateSystem::LV95 => Some(self.x),
+            CoordinateSystem::WGS84 => None,
+        }
     }
 
-    pub fn northing(&self) -> f64 {
-        assert!(self.coordinate_system == CoordinateSystem::LV95);
-        self.y
+    pub fn northing(&self) -> Option<f64> {
+        match self.coordinate_system {
+            CoordinateSystem::LV95 => Some(self.y),
+            CoordinateSystem::WGS84 => None,
+        }
     }
 
-    pub fn latitude(&self) -> f64 {
-        assert!(self.coordinate_system == CoordinateSystem::WGS84);
-        self.x
+    pub fn latitude(&self) -> Option<f64> {
+        match self.coordinate_system {
+            CoordinateSystem::WGS84 => Some(self.x),
+            CoordinateSystem::LV95 => None,
+        }
     }
 
-    pub fn longitude(&self) -> f64 {
-        assert!(self.coordinate_system == CoordinateSystem::WGS84);
-        self.y
+    pub fn longitude(&self) -> Option<f64> {
+        match self.coordinate_system {
+            CoordinateSystem::WGS84 => Some(self.y),
+            CoordinateSystem::LV95 => None,
+        }
     }
 }
 
