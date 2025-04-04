@@ -25,11 +25,16 @@ impl Hrdf {
         version: Version,
         url_or_path: &str,
         force_rebuild_cache: bool,
+        cache_prefix: Option<String>,
     ) -> Result<Self, Box<dyn Error>> {
         let now = Instant::now();
 
         let unique_filename = format!("{:x}", Sha256::digest(url_or_path.as_bytes()));
-        let cache_path = format!("{unique_filename}.cache");
+        let cache_path = format!(
+            "{}/{unique_filename}.cache",
+            cache_prefix.unwrap_or(String::from("./"))
+        )
+        .replace("//", "/");
 
         let hrdf = if Path::new(&cache_path).exists() && !force_rebuild_cache {
             // Loading from cache.
