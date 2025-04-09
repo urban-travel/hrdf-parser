@@ -299,7 +299,7 @@ fn create_bit_fields_by_day(
             // The first two bits must be ignored.
             .skip(2)
             .enumerate()
-            .filter(|(i, &x)| *i < num_days && x == 1)
+            .filter(|&(ref i, &x)| *i < num_days && x == 1)
             .map(|(i, _)| i)
             .collect();
 
