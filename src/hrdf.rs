@@ -7,6 +7,7 @@ use std::{
 };
 
 use crate::{models::Version, storage::DataStorage};
+use bincode::config;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use url::Url;
@@ -107,14 +108,14 @@ impl Hrdf {
     // Functions
 
     pub fn build_cache(&self, path: &str) -> Result<(), Box<dyn Error>> {
-        let data = bincode::serialize(&self)?;
+        let data = bincode::serde::encode_to_vec(self, config::standard())?;
         fs::write(path, data)?;
         Ok(())
     }
 
     pub fn load_from_cache(path: &str) -> Result<Self, Box<dyn Error>> {
         let data = fs::read(path)?;
-        let hrdf: Self = bincode::deserialize(&data)?;
+        let (hrdf, _) = bincode::serde::decode_from_slice(&data, config::standard())?;
         Ok(hrdf)
     }
 }
