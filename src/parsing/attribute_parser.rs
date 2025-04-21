@@ -9,6 +9,7 @@ use std::{error::Error, str::FromStr};
 use rustc_hash::FxHashMap;
 
 use crate::{
+    Version,
     models::{Attribute, Language, Model},
     parsing::{
         AdvancedRowMatcher, ColumnDefinition, ExpectedType, FastRowMatcher, FileParser,
@@ -20,36 +21,64 @@ use crate::{
 
 type AttributeAndTypeConverter = (ResourceStorage<Attribute>, FxHashMap<String, i32>);
 
-pub fn parse(path: &str) -> Result<AttributeAndTypeConverter, Box<dyn Error>> {
-    log::info!("Parsing ATTRIBUT...");
-    const ROW_A: i32 = 1;
-    const ROW_B: i32 = 2;
-    const ROW_C: i32 = 3;
-    const ROW_D: i32 = 4;
+enum RowType {
+    RowA = 1,
+    RowB = 2,
+    RowC = 3,
+    RowD = 4,
+}
 
-    #[rustfmt::skip]
+fn attribute_row_parser(version: Version) -> Result<RowParser, Box<dyn Error>> {
     let row_parser = RowParser::new(vec![
         // This row is used to create an Attribute instance.
-        RowDefinition::new(ROW_A, Box::new(
-            AdvancedRowMatcher::new(r"^.{2} [0-9] [0-9 ]{3} [0-9 ]{2}$")?
-        ), vec![
-            ColumnDefinition::new(1, 2, ExpectedType::String),
-            ColumnDefinition::new(4, 4, ExpectedType::Integer16),
-            ColumnDefinition::new(6, 8, ExpectedType::Integer16),
-            ColumnDefinition::new(10, 11, ExpectedType::Integer16),
-        ]),
+        RowDefinition::new(
+            RowType::RowA as i32,
+            Box::new(AdvancedRowMatcher::new(
+                r"^.{2} [0-9] [0-9 ]{3} [0-9 ]{2}$",
+            )?),
+            vec![
+                ColumnDefinition::new(1, 2, ExpectedType::String),
+                ColumnDefinition::new(4, 4, ExpectedType::Integer16),
+                ColumnDefinition::new(6, 8, ExpectedType::Integer16),
+                ColumnDefinition::new(10, 11, ExpectedType::Integer16),
+            ],
+        ),
         // This row is ignored.
-        RowDefinition::new(ROW_B, Box::new(FastRowMatcher::new(1, 1, "#", true)), Vec::new()),
+        RowDefinition::new(
+            RowType::RowB as i32,
+            Box::new(FastRowMatcher::new(1, 1, "#", true)),
+            Vec::new(),
+        ),
         // This row indicates the language for translations in the section that follows it.
-        RowDefinition::new(ROW_C, Box::new(FastRowMatcher::new(1, 1, "<", true)), vec![
-            ColumnDefinition::new(1, -1, ExpectedType::String),
-        ]),
+        RowDefinition::new(
+            RowType::RowC as i32,
+            Box::new(FastRowMatcher::new(1, 1, "<", true)),
+            vec![ColumnDefinition::new(1, -1, ExpectedType::String)],
+        ),
         // This row contains the description in a specific language.
-        RowDefinition::new(ROW_D, Box::new(AdvancedRowMatcher::new(r"^.{2} .+$")?), vec![
-            ColumnDefinition::new(1, 2, ExpectedType::String),
-            ColumnDefinition::new(4, -1, ExpectedType::String),
-        ]),
+        // The format changed in V 2.0.7 and now the description starts at column 5 instead of 4
+        RowDefinition::new(
+            RowType::RowD as i32,
+            Box::new(AdvancedRowMatcher::new(r"^.{2} .+$")?),
+            vec![
+                ColumnDefinition::new(1, 2, ExpectedType::String),
+                match version {
+                    Version::V_5_40_41_2_0_4
+                    | Version::V_5_40_41_2_0_5
+                    | Version::V_5_40_41_2_0_6 => {
+                        ColumnDefinition::new(4, -1, ExpectedType::String)
+                    }
+                    Version::V_5_40_41_2_0_7 => ColumnDefinition::new(5, -1, ExpectedType::String),
+                },
+            ],
+        ),
     ]);
+    Ok(row_parser)
+}
+
+pub fn parse(version: Version, path: &str) -> Result<AttributeAndTypeConverter, Box<dyn Error>> {
+    log::info!("Parsing ATTRIBUT...");
+    let row_parser = attribute_row_parser(version)?;
     // The ATTRIBUT file is used instead of ATTRIBUT_* for simplicity's sake.
     let parser = FileParser::new(&format!("{path}/ATTRIBUT"), row_parser)?;
 
@@ -61,15 +90,17 @@ pub fn parse(path: &str) -> Result<AttributeAndTypeConverter, Box<dyn Error>> {
 
     for x in parser.parse() {
         let (id, _, values) = x?;
-        match id {
-            ROW_A => {
-                let attribute = create_instance(values, &auto_increment, &mut pk_type_converter);
-                data.insert(attribute.id(), attribute);
-            }
-            ROW_B => {}
-            ROW_C => update_current_language(values, &mut current_language)?,
-            ROW_D => set_description(values, &pk_type_converter, &mut data, current_language)?,
-            _ => unreachable!(),
+        if id == RowType::RowA as i32 {
+            let attribute = create_instance(values, &auto_increment, &mut pk_type_converter);
+            data.insert(attribute.id(), attribute);
+        } else if id == RowType::RowB as i32 {
+            // We discard lines starting with #
+        } else if id == RowType::RowC as i32 {
+            update_current_language(values, &mut current_language)?;
+        } else if id == RowType::RowD as i32 {
+            set_description(values, &pk_type_converter, &mut data, current_language)?;
+        } else {
+            unreachable!()
         }
     }
 
@@ -137,4 +168,17 @@ fn update_current_language(
     }
 
     Ok(())
+}
+
+#[test]
+fn description_row_v207() {
+    let rows = vec![
+        "VR  VELOS: Reservation obligatory".to_string(),
+        "VR  BICYCLES: Reservation required".to_string(),
+    ];
+    let parser = FileParser {
+        row_parser: attribute_row_parser(Version::V_5_40_41_2_0_7).unwrap(),
+        rows,
+    };
+    let (id, _, parsed_values) = parser.parse().next().unwrap().unwrap();
 }
