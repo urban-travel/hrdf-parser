@@ -47,7 +47,7 @@ fn attribute_row_parser(version: Version) -> Result<RowParser, Box<dyn Error>> {
         RowDefinition::new(
             RowType::RowB as i32,
             Box::new(FastRowMatcher::new(1, 1, "#", true)),
-            Vec::new(),
+            vec![ColumnDefinition::new(1, -1, ExpectedType::String)],
         ),
         // This row indicates the language for translations in the section that follows it.
         RowDefinition::new(
@@ -161,24 +161,118 @@ fn update_current_language(
     current_language: &mut Language,
 ) -> Result<(), Box<dyn Error>> {
     let language: String = values.remove(0).into();
-    let language = &language[1..&language.len() - 1];
+    let language = language.replace(['<', '>'], "");
 
     if language != "text" {
-        *current_language = Language::from_str(language)?;
+        *current_language = Language::from_str(&language)?;
     }
 
     Ok(())
 }
 
 #[test]
-fn description_row_v207() {
+fn description_row_d_v207() {
     let rows = vec![
         "VR  VELOS: Reservation obligatory".to_string(),
-        "VR  BICYCLES: Reservation required".to_string(),
+        "2   2nd class only".to_string(),
     ];
     let parser = FileParser {
         row_parser: attribute_row_parser(Version::V_5_40_41_2_0_7).unwrap(),
         rows,
     };
-    let (id, _, parsed_values) = parser.parse().next().unwrap().unwrap();
+    let mut parser_iterator = parser.parse();
+    let (id, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
+    assert_eq!(id, RowType::RowD as i32);
+    let legacy_id: String = parsed_values.remove(0).into();
+    assert_eq!("VR", &legacy_id);
+    let description: String = parsed_values.remove(0).into();
+    assert_eq!("VELOS: Reservation obligatory", &description);
+    let (id, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
+    assert_eq!(id, RowType::RowD as i32);
+    let legacy_id: String = parsed_values.remove(0).into();
+    assert_eq!("2", &legacy_id);
+    let description: String = parsed_values.remove(0).into();
+    assert_eq!("2nd class only", &description);
+}
+
+#[test]
+fn description_row_a_v207() {
+    let rows = vec!["1  0   1  5".to_string(), "GR 0   6  3".to_string()];
+    let parser = FileParser {
+        row_parser: attribute_row_parser(Version::V_5_40_41_2_0_7).unwrap(),
+        rows,
+    };
+    let mut parser_iterator = parser.parse();
+    let (id, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
+    assert_eq!(id, RowType::RowA as i32);
+    let legacy_id: String = parsed_values.remove(0).into();
+    assert_eq!("1", &legacy_id);
+    let num: i16 = parsed_values.remove(0).into();
+    assert_eq!(0, num);
+    let num: i16 = parsed_values.remove(0).into();
+    assert_eq!(1, num);
+    let num: i16 = parsed_values.remove(0).into();
+    assert_eq!(5, num);
+    let (id, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
+    assert_eq!(id, RowType::RowA as i32);
+    let legacy_id: String = parsed_values.remove(0).into();
+    assert_eq!("GR", &legacy_id);
+    let num: i16 = parsed_values.remove(0).into();
+    assert_eq!(0, num);
+    let num: i16 = parsed_values.remove(0).into();
+    assert_eq!(6, num);
+    let num: i16 = parsed_values.remove(0).into();
+    assert_eq!(3, num);
+}
+
+#[test]
+fn description_row_b_v207() {
+    let rows = vec!["# PG PG PG".to_string()];
+    let parser = FileParser {
+        row_parser: attribute_row_parser(Version::V_5_40_41_2_0_7).unwrap(),
+        rows,
+    };
+    let mut parser_iterator = parser.parse();
+    let (id, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
+    assert_eq!(id, RowType::RowB as i32);
+    let description: String = parsed_values.remove(0).into();
+    assert_eq!(&description, "# PG PG PG");
+}
+
+#[test]
+fn description_row_c_v207() {
+    let rows = vec![
+        "<ita>".to_string(),
+        "<fra>".to_string(),
+        "<deu>".to_string(),
+        "<eng>".to_string(),
+        "<text>".to_string(),
+    ];
+    let parser = FileParser {
+        row_parser: attribute_row_parser(Version::V_5_40_41_2_0_7).unwrap(),
+        rows,
+    };
+    let mut parser_iterator = parser.parse();
+    let (id, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
+    assert_eq!(id, RowType::RowC as i32);
+    let lang: String = parsed_values.remove(0).into();
+    assert_eq!(&lang, "<ita>");
+
+    let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+    assert_eq!(id, RowType::RowC as i32);
+    let mut current_language = Language::default();
+    update_current_language(parsed_values, &mut current_language).unwrap();
+    assert_eq!(current_language, Language::French);
+    let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+    assert_eq!(id, RowType::RowC as i32);
+    update_current_language(parsed_values, &mut current_language).unwrap();
+    assert_eq!(current_language, Language::German);
+    let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+    assert_eq!(id, RowType::RowC as i32);
+    update_current_language(parsed_values, &mut current_language).unwrap();
+    assert_eq!(current_language, Language::English);
+    let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+    assert_eq!(id, RowType::RowC as i32);
+    update_current_language(parsed_values, &mut current_language).unwrap();
+    assert_eq!(current_language, Language::English);
 }
