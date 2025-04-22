@@ -6,6 +6,7 @@ use std::error::Error;
 use rustc_hash::FxHashMap;
 
 use crate::{
+    Version,
     models::{Language, Model, TransportType},
     parsing::{
         AdvancedRowMatcher, ColumnDefinition, ExpectedType, FastRowMatcher, FileParser,
@@ -13,7 +14,6 @@ use crate::{
     },
     storage::ResourceStorage,
     utils::AutoIncrement,
-    Version,
 };
 
 type TransportTypeAndTypeConverter = (ResourceStorage<TransportType>, FxHashMap<String, i32>);

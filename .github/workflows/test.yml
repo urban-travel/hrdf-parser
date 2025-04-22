@@ -76,6 +76,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Install nightly for -Zminimal-versions
         uses: dtolnay/rust-toolchain@nightly
+      - name: Install openssl
+        run: sudo apt install libssl-dev -y
       - name: rustup default stable
         run: rustup default stable
       - name: cargo update -Zminimal-versions
