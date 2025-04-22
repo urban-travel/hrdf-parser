@@ -7,6 +7,7 @@
 use std::{error::Error, str::FromStr};
 
 use rustc_hash::FxHashMap;
+use serde::Serialize;
 
 use crate::{
     Version,
@@ -178,11 +179,25 @@ fn update_current_language(
 
 #[cfg(test)]
 mod tests {
-
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use pretty_assertions::assert_eq;
     use serde::Deserialize;
+
+    fn get_json_values<F>(
+        lhs: &F,
+        rhs: &str,
+    ) -> Result<(serde_json::Value, serde_json::Value), Box<dyn Error>>
+    where
+        for<'a> F: Serialize + Deserialize<'a>,
+    {
+        let serialized = serde_json::to_string(&lhs)?;
+        let reference = serde_json::to_string(&serde_json::from_str::<F>(rhs)?)?;
+        Ok((
+            serialized.parse::<serde_json::Value>()?,
+            reference.parse::<serde_json::Value>()?,
+        ))
+    }
 
     #[test]
     fn description_row_d_v206() {
@@ -284,7 +299,6 @@ mod tests {
         let (data, pk_type_converter) = convert_data_strcutures(parser).unwrap();
         assert_eq!(*pk_type_converter.get("GK").unwrap(), 1);
         let attribute = data.get(&1).unwrap();
-        let serialized = serde_json::to_string(attribute).unwrap();
         let reference = r#"
             {
                 "id":1,
@@ -299,13 +313,8 @@ mod tests {
                     "Italian":"Possibile controllo doganale, prevedere più tempo"
                 }
             }"#;
-        let reference =
-            serde_json::to_string(&serde_json::from_str::<Attribute>(reference).unwrap()).unwrap();
-        // assert_json_diff::assert_json_eq!(serialized.parse::<serde_json::Value>(), reference);
-        assert_eq!(
-            serialized.parse::<serde_json::Value>().unwrap(),
-            reference.parse::<serde_json::Value>().unwrap()
-        );
+        let (attribute, reference) = get_json_values(attribute, reference).unwrap();
+        assert_eq!(attribute, reference);
     }
 
     #[test]
