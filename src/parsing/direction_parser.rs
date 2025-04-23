@@ -1,15 +1,16 @@
-// 1 file(s).
-// File(s) read by the parser:
-// RICHTUNG
-/**
- * This file contains direction informations: namely the Direction ID (that is also contained in
- * the FPLAN file) and the direction Text which gives the last stop of the traject. From
- * [https://opentransportdata.swiss/en/cookbook/hafas-rohdaten-format-hrdf/#Technical_description_What_is_in_the_HRDF_files_contents](HRDF the docs) we have:
- *
- * `R000011 Esslingen    % Richtung 11 nach Esslingen`
- *
- * that the direction 11 (R is for Richtung) travels to Esslingen
- */
+/// # Direction parsing
+///
+/// This file contains direction informations: namely the Direction ID (that is also contained in
+/// the FPLAN file) and the direction Text which gives the last stop of the traject. From
+/// [https://opentransportdata.swiss/en/cookbook/hafas-rohdaten-format-hrdf/#Technical_description_What_is_in_the_HRDF_files_contents](HRDF the docs) we have:
+///
+/// `R000011 Esslingen    % Richtung 11 nach Esslingen`
+///
+/// that the direction 11 (R is for Richtung) travels to Esslingen
+///
+/// 1 file(s).
+/// File(s) read by the parser:
+/// RICHTUNG
 use std::error::Error;
 
 use rustc_hash::FxHashMap;
