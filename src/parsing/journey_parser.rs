@@ -13,7 +13,7 @@ use crate::{
         RowParser,
     },
     storage::ResourceStorage,
-    utils::{create_time_from_value, AutoIncrement},
+    utils::{AutoIncrement, create_time_from_value},
 };
 
 type JourneyAndTypeConverter = (ResourceStorage<Journey>, FxHashMap<(i32, String), i32>);
