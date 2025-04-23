@@ -1,9 +1,51 @@
-// 5 file(s).
-// File(s) read by the parser:
-// ATTRIBUT
-// ---
-// Files not used by the parser:
-// ATTRIBUT_DE, ATTRIBUT_EN, ATTRIBUT_FR, ATTRIBUT_IT
+/// # Attribute parsing
+///
+/// List of abbreviations describing additional offers (e.g.: dining car)
+/// or restrictions (e.g.: seat reservation obligatory). See [https://opentransportdata.swiss/en/cookbook/hafas-rohdaten-format-hrdf/#Technical_description_What_is_in_the_HRDF_files_contents](the documentaion) for more informations.
+///
+/// This file contains:
+///
+/// ## The list of offers
+///
+///
+///
+/// ### Example (excerpt):
+///
+/// `
+/// Y  0   5  5 % The code Y applies to the journey section (0) with priority 5 and sorting 5
+/// `
+///
+/// ## Description of how the offers can be displayed
+///
+/// **Important:** Currently these lines are not used in the library
+///
+/// ### Example (excerpt):
+///
+/// `
+/// # Y  Y  Y  % Attribute code Y should be output as Y for partial route and as Y for full route
+/// `
+///
+/// ## Description in the following languages : German, English, French, Italian
+///
+/// ## Example (excerpts):
+///
+/// ...
+/// <text>                % Keyword pour la définition du texte
+/// <deu>                 % The language becomes german
+/// ...
+/// Y  Zu Fuss            % Code Y, with description "Zu Fuss"
+/// ...
+/// <fra>                 % The language becomes French
+/// ...
+/// Y  A pied             % Code Y, with description "A pied"
+/// ...
+///
+/// File(s) read by the parser:
+/// ATTRIBUT
+/// ---
+/// Files not used by the parser vor version < 2.0.7:
+/// ATTRIBUT_DE, ATTRIBUT_EN, ATTRIBUT_FR, ATTRIBUT_IT
+/// These files were suppressed in 2.0.7
 use std::{error::Error, str::FromStr};
 
 use rustc_hash::FxHashMap;

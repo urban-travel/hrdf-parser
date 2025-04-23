@@ -1,6 +1,5 @@
-// 1 file(s).
-// File(s) read by the parser:
-// UMSTEIGV
+/// # Administration Exchange Time parsing
+///
 /// Tranfer time betweem two transport companies (see
 /// [https://opentransportdata.swiss/en/cookbook/hafas-rohdaten-format-hrdf/](the documentation)
 ///
@@ -20,6 +19,9 @@
 /// 8500065 000037 000037 00 Ettingen, Dorf % HS-Nr*  8500065, TU-Code 000037,  TU-Code 000037, Mindestumsteigzeit 0, HS-Name Ettingen, Dorf
 /// `
 ///
+/// 1 file(s).
+/// File(s) read by the parser:
+/// UMSTEIGV
 use std::error::Error;
 
 use rustc_hash::FxHashMap;
