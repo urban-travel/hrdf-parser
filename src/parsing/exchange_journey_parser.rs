@@ -196,7 +196,6 @@ mod tests {
         journeys_pk_type_converter.insert((24256, "000011".to_string()), 4);
 
         let data = convert_data_strcutures(parser, &journeys_pk_type_converter).unwrap();
-        println!("{data:?}");
         // First row
         let attribute = data.get(&1).unwrap();
         let reference = r#"

@@ -1,6 +1,17 @@
-// 1 file(s).
-// File(s) read by the parser:
-// FEIERTAG
+/// # Holiday parsing
+///
+/// For more informations see
+/// [https://opentransportdata.swiss/en/cookbook/hafas-rohdaten-format-hrdf/#Technical_description_What_is_in_the_HRDF_files_contents](the HRDF documentation).
+///
+/// List of public holidays that apply in Switzerland.
+///
+/// In addition to the date of the holiday, the description of the holiday is listed in four languages: DE, FR, IT, EN
+///
+/// Can be read in decoupled from other data.
+///
+/// 1 file(s).
+/// File(s) read by the parser:
+/// FEIERTAG
 use std::{error::Error, str::FromStr};
 
 use chrono::NaiveDate;

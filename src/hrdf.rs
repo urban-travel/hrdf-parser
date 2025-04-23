@@ -1,4 +1,5 @@
 use std::{
+    env,
     error::Error,
     fs::{self, File},
     io::{BufReader, Cursor},
@@ -21,7 +22,7 @@ pub struct Hrdf {
 impl Hrdf {
     /// Loads and parses the data.<br>
     /// If an URL is provided, the HRDF archive (ZIP file) is downloaded automatically. If a path is provided, it must absolutely point to an HRDF archive (ZIP file).<br>
-    /// The ZIP archive is automatically decompressed into the /tmp folder.
+    /// The ZIP archive is automatically decompressed into the temp_dir of the OS folder.
     pub async fn new(
         version: Version,
         url_or_path: &str,
@@ -55,7 +56,11 @@ impl Hrdf {
             // The cache must be built.
             // If cache loading has failed, the cache must be rebuilt.
             let compressed_data_path = if Url::parse(url_or_path).is_ok() {
-                let compressed_data_path = format!("/tmp/{unique_filename}.zip");
+                let compressed_data_path = env::temp_dir()
+                    .join(format!("{unique_filename}.zip"))
+                    .into_os_string()
+                    .into_string()
+                    .expect("Could not convert to string.");
 
                 if !Path::new(&compressed_data_path).exists() {
                     // The data must be downloaded.
@@ -71,7 +76,11 @@ impl Hrdf {
                 url_or_path.to_string()
             };
 
-            let decompressed_data_path = format!("/tmp/{unique_filename}");
+            let decompressed_data_path = env::temp_dir()
+                .join(format!("{unique_filename}"))
+                .into_os_string()
+                .into_string()
+                .expect("Could not convert to string.");
 
             if !Path::new(&decompressed_data_path).exists() {
                 // The data must be decompressed.

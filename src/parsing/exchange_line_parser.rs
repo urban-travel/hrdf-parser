@@ -294,39 +294,121 @@ mod tests {
         assert_eq!("", &is_guaranteed);
     }
 
-    // #[test]
-    // fn type_converter_v207() {
-    //     let rows = vec![
-    //         "8501008 023057 000011 001671 000011 002  000010 Genève".to_string(),
-    //         "8501120 001929 000011 024256 000011 999         Lausanne".to_string(),
-    //     ];
-    //     let parser = FileParser {
-    //         row_parser: exchange_journey_row_parser(),
-    //         rows,
-    //     };
-    //
-    //     // The journeys_pk_type_converter is dummy and created just for testing purposes
-    //     let mut journeys_pk_type_converter: FxHashMap<(i32, String), i32> = FxHashMap::default();
-    //     journeys_pk_type_converter.insert((23057, "000011".to_string()), 1);
-    //     journeys_pk_type_converter.insert((1929, "000011".to_string()), 2);
-    //     journeys_pk_type_converter.insert((1671, "000011".to_string()), 3);
-    //     journeys_pk_type_converter.insert((24256, "000011".to_string()), 4);
-    //
-    //     let data = convert_data_strcutures(parser, &journeys_pk_type_converter).unwrap();
-    //     println!("{data:?}");
-    //     // First row
-    //     let attribute = data.get(&1).unwrap();
-    //     let reference = r#"
-    //         {
-    //             "id":1,
-    //             "stop_id": 8501008,
-    //             "journey_id_1": 1,
-    //             "journey_id_2": 3,
-    //             "duration": 2,
-    //             "is_guaranteed": false,
-    //             "bit_field_id": 10
-    //         }"#;
-    //     let (attribute, reference) = get_json_values(attribute, reference).unwrap();
-    //     assert_eq!(attribute, reference);
-    // }
+    #[test]
+    fn type_converter_v207() {
+        let rows = vec![
+            "8301113 000011 S   *        * 007000 B   *        * 003  Luino (I)".to_string(),
+            "1111135 sbg034 B   7339     H sbg034 TX  7341     H 000! Waldshut, Busbahnhof"
+                .to_string(),
+            "8509002 000011 RE  *        * 000065 S   12       * 008  Landquart".to_string(),
+            "8580522 003849 T   #0000482 * 003849 T   #0000488 * 003  Zürich, Escher-Wyss-Platz"
+                .to_string(),
+        ];
+        let parser = FileParser {
+            row_parser: exchange_line_row_parser(),
+            rows,
+        };
+
+        // The transport_types_pk_type_converter is dummy and created just for testing purposes
+        let mut transport_types_pk_type_converter: FxHashMap<String, i32> = FxHashMap::default();
+        transport_types_pk_type_converter.insert("S".to_string(), 1);
+        transport_types_pk_type_converter.insert("B".to_string(), 2);
+        transport_types_pk_type_converter.insert("TX".to_string(), 3);
+        transport_types_pk_type_converter.insert("RE".to_string(), 4);
+        transport_types_pk_type_converter.insert("T".to_string(), 5);
+
+        let data = convert_data_strcutures(parser, &transport_types_pk_type_converter).unwrap();
+        // Id 1
+        let attribute = data.get(&1).unwrap();
+        let reference = r#"
+             {
+                 "id": 1,
+                 "stop_id": 8301113,
+                 "line_1": {
+                    "administration": "000011",
+                    "transport_type_id": 1,
+                    "line_id": null,
+                    "direction": null
+                 },
+                 "line_2": {
+                    "administration": "007000",
+                    "transport_type_id": 2,
+                    "line_id": null,
+                    "direction": null
+                 },
+                 "duration": 3,
+                 "is_guaranteed": false
+             }"#;
+        let (attribute, reference) = get_json_values(attribute, reference).unwrap();
+        assert_eq!(attribute, reference);
+        // Id 2
+        let attribute = data.get(&2).unwrap();
+        let reference = r#"
+             {
+                 "id": 2,
+                 "stop_id": 1111135,
+                 "line_1": {
+                    "administration": "sbg034",
+                    "transport_type_id": 2,
+                    "line_id": "7339",
+                    "direction": "Return"
+                 },
+                 "line_2": {
+                    "administration": "sbg034",
+                    "transport_type_id": 3,
+                    "line_id": "7341",
+                    "direction": "Return"
+                 },
+                 "duration": 0,
+                 "is_guaranteed": true
+             }"#;
+        let (attribute, reference) = get_json_values(attribute, reference).unwrap();
+        assert_eq!(attribute, reference);
+        // Id 3
+        let attribute = data.get(&3).unwrap();
+        let reference = r#"
+             {
+                 "id": 3,
+                 "stop_id": 8509002,
+                 "line_1": {
+                    "administration": "000011",
+                    "transport_type_id": 4,
+                    "line_id": null,
+                    "direction": null
+                 },
+                 "line_2": {
+                    "administration": "000065",
+                    "transport_type_id": 1,
+                    "line_id": "12",
+                    "direction": null
+                 },
+                 "duration": 8,
+                 "is_guaranteed": false
+             }"#;
+        let (attribute, reference) = get_json_values(attribute, reference).unwrap();
+        assert_eq!(attribute, reference);
+        // Id 4
+        let attribute = data.get(&4).unwrap();
+        let reference = r###"
+             {
+                 "id": 4,
+                 "stop_id": 8580522,
+                 "line_1": {
+                    "administration": "003849",
+                    "transport_type_id": 5,
+                    "line_id": "#0000482",
+                    "direction": null
+                 },
+                 "line_2": {
+                    "administration": "003849",
+                    "transport_type_id": 5,
+                    "line_id": "#0000488",
+                    "direction": null
+                 },
+                 "duration": 3,
+                 "is_guaranteed": false
+             }"###;
+        let (attribute, reference) = get_json_values(attribute, reference).unwrap();
+        assert_eq!(attribute, reference);
+    }
 }
