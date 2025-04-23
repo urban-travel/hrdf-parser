@@ -182,22 +182,6 @@ mod tests {
     use super::*;
     use crate::parsing::tests::get_json_values;
     use pretty_assertions::assert_eq;
-    // use serde::{Deserialize, Serialize};
-
-    // fn get_json_values<F>(
-    //     lhs: &F,
-    //     rhs: &str,
-    // ) -> Result<(serde_json::Value, serde_json::Value), Box<dyn Error>>
-    // where
-    //     for<'a> F: Serialize + Deserialize<'a>,
-    // {
-    //     let serialized = serde_json::to_string(&lhs)?;
-    //     let reference = serde_json::to_string(&serde_json::from_str::<F>(rhs)?)?;
-    //     Ok((
-    //         serialized.parse::<serde_json::Value>()?,
-    //         reference.parse::<serde_json::Value>()?,
-    //     ))
-    // }
 
     #[test]
     fn description_row_d_v206() {

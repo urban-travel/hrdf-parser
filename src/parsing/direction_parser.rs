@@ -21,6 +21,7 @@ use crate::{
 };
 
 type DirectionAndTypeConverter = (ResourceStorage<Direction>, FxHashMap<String, i32>);
+type FxHashMapsAndTypeConverter = (FxHashMap<i32, Direction>, FxHashMap<String, i32>);
 
 fn direction_row_parser() -> RowParser {
     RowParser::new(vec![
@@ -31,12 +32,9 @@ fn direction_row_parser() -> RowParser {
         ]),
     ])
 }
-
-pub fn parse(path: &str) -> Result<DirectionAndTypeConverter, Box<dyn Error>> {
-    log::info!("Parsing RICHTUNG...");
-    let row_parser = direction_row_parser();
-    let parser = FileParser::new(&format!("{path}/RICHTUNG"), row_parser)?;
-
+fn convert_data_strcutures(
+    parser: FileParser,
+) -> Result<FxHashMapsAndTypeConverter, Box<dyn Error>> {
     let mut pk_type_converter = FxHashMap::default();
 
     let data = parser
@@ -44,6 +42,15 @@ pub fn parse(path: &str) -> Result<DirectionAndTypeConverter, Box<dyn Error>> {
         .map(|x| x.and_then(|(_, _, values)| create_instance(values, &mut pk_type_converter)))
         .collect::<Result<Vec<_>, _>>()?;
     let data = Direction::vec_to_map(data);
+    Ok((data, pk_type_converter))
+}
+
+pub fn parse(path: &str) -> Result<DirectionAndTypeConverter, Box<dyn Error>> {
+    log::info!("Parsing RICHTUNG...");
+    let row_parser = direction_row_parser();
+    let parser = FileParser::new(&format!("{path}/RICHTUNG"), row_parser)?;
+
+    let (data, pk_type_converter) = convert_data_strcutures(parser)?;
 
     Ok((ResourceStorage::new(data), pk_type_converter))
 }
@@ -69,6 +76,7 @@ fn create_instance(
 // --- Helper Functions
 // ------------------------------------------------------------------------------------------------
 
+// TODO: handle the empty string case
 fn remove_first_char(value: &str) -> &str {
     let mut chars = value.chars();
     chars.next();
@@ -83,17 +91,72 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn parser_row_d_v207() {
-        let rows = vec!["R000008 Winterthur".to_string()];
+    fn row_parser_v207() {
+        let rows = vec![
+            "R000008 Winterthur".to_string(),
+            "R000192 Saas-Fee, Parkhaus".to_string(),
+            "R002609 Hégenheim - Collège des Trois Pays".to_string(),
+        ];
         let parser = FileParser {
             row_parser: direction_row_parser(),
             rows,
         };
         let mut parser_iterator = parser.parse();
-        // let (id, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
-        // let legacy_id: String = parsed_values.remove(0).into();
-        // assert_eq!("VR", &legacy_id);
-        // let description: String = parsed_values.remove(0).into();
-        // assert_eq!("VELOS: Reservation obligatory", &description);
+        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
+        let direction_id: String = parsed_values.remove(0).into();
+        assert_eq!("R000008", &direction_id);
+        let description: String = parsed_values.remove(0).into();
+        assert_eq!("Winterthur", &description);
+        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
+        let direction_id: String = parsed_values.remove(0).into();
+        assert_eq!("R000192", &direction_id);
+        let description: String = parsed_values.remove(0).into();
+        assert_eq!("Saas-Fee, Parkhaus", &description);
+        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
+        let direction_id: String = parsed_values.remove(0).into();
+        assert_eq!("R002609", &direction_id);
+        let description: String = parsed_values.remove(0).into();
+        assert_eq!("Hégenheim - Collège des Trois Pays", &description);
+    }
+
+    #[test]
+    fn type_converter_v207() {
+        let rows = vec![
+            "R000008 Winterthur".to_string(),
+            "R000192 Saas-Fee, Parkhaus".to_string(),
+            "R002609 Hégenheim - Collège des Trois Pays".to_string(),
+        ];
+        let parser = FileParser {
+            row_parser: direction_row_parser(),
+            rows,
+        };
+        let (data, pk_type_converter) = convert_data_strcutures(parser).unwrap();
+        assert_eq!(*pk_type_converter.get("R000008").unwrap(), 8);
+        assert_eq!(*pk_type_converter.get("R000192").unwrap(), 192);
+        assert_eq!(*pk_type_converter.get("R002609").unwrap(), 2609);
+        let attribute = data.get(&8).unwrap();
+        let reference = r#"
+            {
+                "id":8,
+                "name":"Winterthur"
+            }"#;
+        let (attribute, reference) = get_json_values(attribute, reference).unwrap();
+        assert_eq!(attribute, reference);
+        let attribute = data.get(&192).unwrap();
+        let reference = r#"
+            {
+                "id":192,
+                "name":"Saas-Fee, Parkhaus"
+            }"#;
+        let (attribute, reference) = get_json_values(attribute, reference).unwrap();
+        assert_eq!(attribute, reference);
+        let attribute = data.get(&2609).unwrap();
+        let reference = r#"
+            {
+                "id":2609,
+                "name":"Hégenheim - Collège des Trois Pays"
+            }"#;
+        let (attribute, reference) = get_json_values(attribute, reference).unwrap();
+        assert_eq!(attribute, reference);
     }
 }
