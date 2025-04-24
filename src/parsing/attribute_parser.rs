@@ -119,7 +119,7 @@ fn attribute_row_parser(version: Version) -> Result<RowParser, Box<dyn Error>> {
     Ok(row_parser)
 }
 
-fn convert_data_strcutures(
+fn attribute_row_converter(
     parser: FileParser,
 ) -> Result<FxHashMapsAndTypeConverter, Box<dyn Error>> {
     let auto_increment = AutoIncrement::new();
@@ -151,7 +151,7 @@ pub fn parse(version: Version, path: &str) -> Result<AttributeAndTypeConverter, 
     let row_parser = attribute_row_parser(version)?;
     // The ATTRIBUT file is used instead of ATTRIBUT_* for simplicity's sake.
     let parser = FileParser::new(&format!("{path}/ATTRIBUT"), row_parser)?;
-    let (data, pk_type_converter) = convert_data_strcutures(parser)?;
+    let (data, pk_type_converter) = attribute_row_converter(parser)?;
     Ok((ResourceStorage::new(data), pk_type_converter))
 }
 
@@ -334,7 +334,7 @@ mod tests {
             row_parser: attribute_row_parser(Version::V_5_40_41_2_0_7).unwrap(),
             rows,
         };
-        let (data, pk_type_converter) = convert_data_strcutures(parser).unwrap();
+        let (data, pk_type_converter) = attribute_row_converter(parser).unwrap();
         assert_eq!(*pk_type_converter.get("GK").unwrap(), 1);
         let attribute = data.get(&1).unwrap();
         let reference = r#"

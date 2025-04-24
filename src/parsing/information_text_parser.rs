@@ -34,9 +34,7 @@ fn id_row_parser() -> RowParser {
     ])
 }
 
-fn id_convert_data_strcutures(
-    parser: FileParser,
-) -> Result<FxHashMap<i32, InformationText>, Box<dyn Error>> {
+fn id_row_converter(parser: FileParser) -> Result<FxHashMap<i32, InformationText>, Box<dyn Error>> {
     let data = parser
         .parse()
         .map(|x| x.map(|(_, _, values)| create_instance(values)))
@@ -55,7 +53,7 @@ fn infotext_row_parser() -> RowParser {
     ])
 }
 
-fn infotext_convert_data_strcutures(
+fn infotext_row_converter(
     parser: FileParser,
     data: &mut FxHashMap<i32, InformationText>,
     language: Language,
@@ -75,7 +73,7 @@ pub fn parse(path: &str) -> Result<ResourceStorage<InformationText>, Box<dyn Err
 
     let row_parser = id_row_parser();
     let parser = FileParser::new(&format!("{path}/INFOTEXT_DE"), row_parser)?;
-    let mut data = id_convert_data_strcutures(parser)?;
+    let mut data = id_row_converter(parser)?;
 
     load_content(path, &mut data, Language::German)?;
     load_content(path, &mut data, Language::English)?;
@@ -98,7 +96,7 @@ fn load_content(
         Language::Italian => "INFOTEXT_IT",
     };
     let parser = FileParser::new(&format!("{path}/{filename}"), row_parser)?;
-    infotext_convert_data_strcutures(parser, data, language)
+    infotext_row_converter(parser, data, language)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -162,7 +160,7 @@ mod tests {
             row_parser: id_row_parser(),
             rows,
         };
-        let data = id_convert_data_strcutures(parser).unwrap();
+        let data = id_row_converter(parser).unwrap();
         // First row (id: 1)
         let attribute = data.get(&1921).unwrap();
         let reference = r#"
@@ -232,11 +230,11 @@ mod tests {
             row_parser: infotext_row_parser(),
             rows,
         };
-        let mut data = id_convert_data_strcutures(parser).unwrap();
-        infotext_convert_data_strcutures(parser_fr, &mut data, Language::French).unwrap();
-        infotext_convert_data_strcutures(parser_en, &mut data, Language::English).unwrap();
-        infotext_convert_data_strcutures(parser_de, &mut data, Language::German).unwrap();
-        infotext_convert_data_strcutures(parser_it, &mut data, Language::Italian).unwrap();
+        let mut data = id_row_converter(parser).unwrap();
+        infotext_row_converter(parser_fr, &mut data, Language::French).unwrap();
+        infotext_row_converter(parser_en, &mut data, Language::English).unwrap();
+        infotext_row_converter(parser_de, &mut data, Language::German).unwrap();
+        infotext_row_converter(parser_it, &mut data, Language::Italian).unwrap();
         // First row (id: 1)
         let attribute = data.get(&1921).unwrap();
         let reference = r#"

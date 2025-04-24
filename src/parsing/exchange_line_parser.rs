@@ -61,7 +61,7 @@ fn exchange_line_row_parser() -> RowParser {
         ]),
     ])
 }
-fn convert_data_strcutures(
+fn exchange_line_row_converter(
     parser: FileParser,
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
 ) -> Result<FxHashMap<i32, ExchangeTimeLine>, Box<dyn Error>> {
@@ -87,7 +87,7 @@ pub fn parse(
 
     let row_parser = exchange_line_row_parser();
     let parser = FileParser::new(&format!("{path}/UMSTEIGL"), row_parser)?;
-    let data = convert_data_strcutures(parser, transport_types_pk_type_converter)?;
+    let data = exchange_line_row_converter(parser, transport_types_pk_type_converter)?;
 
     Ok(ResourceStorage::new(data))
 }
@@ -317,7 +317,7 @@ mod tests {
         transport_types_pk_type_converter.insert("RE".to_string(), 4);
         transport_types_pk_type_converter.insert("T".to_string(), 5);
 
-        let data = convert_data_strcutures(parser, &transport_types_pk_type_converter).unwrap();
+        let data = exchange_line_row_converter(parser, &transport_types_pk_type_converter).unwrap();
         // Id 1
         let attribute = data.get(&1).unwrap();
         let reference = r#"

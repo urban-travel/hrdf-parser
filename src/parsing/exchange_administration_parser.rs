@@ -44,7 +44,7 @@ fn exchange_administration_row_parser() -> RowParser {
         ]),
     ])
 }
-fn convert_data_strcutures(
+fn exchange_administration_row_converter(
     parser: FileParser,
 ) -> Result<FxHashMap<i32, ExchangeTimeAdministration>, Box<dyn Error>> {
     let auto_increment = AutoIncrement::new();
@@ -61,7 +61,7 @@ pub fn parse(path: &str) -> Result<ResourceStorage<ExchangeTimeAdministration>, 
     log::info!("Parsing UMSTEIGV...");
     let row_parser = exchange_administration_row_parser();
     let parser = FileParser::new(&format!("{path}/UMSTEIGV"), row_parser)?;
-    let data = convert_data_strcutures(parser)?;
+    let data = exchange_administration_row_converter(parser)?;
 
     Ok(ResourceStorage::new(data))
 }
@@ -70,14 +70,19 @@ pub fn parse(path: &str) -> Result<ResourceStorage<ExchangeTimeAdministration>, 
 // --- Data Processing Functions
 // ------------------------------------------------------------------------------------------------
 
-fn create_instance(
-    mut values: Vec<ParsedValue>,
-    auto_increment: &AutoIncrement,
-) -> ExchangeTimeAdministration {
+fn row_from_parsed_values(mut values: Vec<ParsedValue>) -> (Option<i32>, String, String, i16) {
     let stop_id: Option<i32> = values.remove(0).into();
     let administration_1: String = values.remove(0).into();
     let administration_2: String = values.remove(0).into();
     let duration: i16 = values.remove(0).into();
+    (stop_id, administration_1, administration_2, duration)
+}
+
+fn create_instance(
+    values: Vec<ParsedValue>,
+    auto_increment: &AutoIncrement,
+) -> ExchangeTimeAdministration {
+    let (stop_id, administration_1, administration_2, duration) = row_from_parsed_values(values);
 
     ExchangeTimeAdministration::new(
         auto_increment.next(),
@@ -109,44 +114,36 @@ mod tests {
         };
         let mut parser_iterator = parser.parse();
         // First row
-        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let stop_id: Option<i32> = parsed_values.remove(0).into();
+        let (_, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+        let (stop_id, administration_1, administration_2, duration) =
+            row_from_parsed_values(parsed_values);
         assert_eq!(Some(1111135), stop_id);
-        let administration_1: String = parsed_values.remove(0).into();
         assert_eq!("sbg034", &administration_1);
-        let administration_2: String = parsed_values.remove(0).into();
         assert_eq!("sbg034", &administration_2);
-        let duration: i16 = parsed_values.remove(0).into();
         assert_eq!(1, duration);
-        // Second row
-        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let stop_id: Option<i32> = parsed_values.remove(0).into();
+        // second row
+        let (_, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+        let (stop_id, administration_1, administration_2, duration) =
+            row_from_parsed_values(parsed_values);
         assert_eq!(Some(8501008), stop_id);
-        let administration_1: String = parsed_values.remove(0).into();
         assert_eq!("085000", &administration_1);
-        let administration_2: String = parsed_values.remove(0).into();
         assert_eq!("000011", &administration_2);
-        let duration: i16 = parsed_values.remove(0).into();
         assert_eq!(10, duration);
-        // Third row
-        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let stop_id: Option<i32> = parsed_values.remove(0).into();
+        // third row
+        let (_, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+        let (stop_id, administration_1, administration_2, duration) =
+            row_from_parsed_values(parsed_values);
         assert_eq!(None, stop_id);
-        let administration_1: String = parsed_values.remove(0).into();
         assert_eq!("000793", &administration_1);
-        let administration_2: String = parsed_values.remove(0).into();
         assert_eq!("000873", &administration_2);
-        let duration: i16 = parsed_values.remove(0).into();
         assert_eq!(2, duration);
         // Third row
-        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let stop_id: Option<i32> = parsed_values.remove(0).into();
+        let (_, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+        let (stop_id, administration_1, administration_2, duration) =
+            row_from_parsed_values(parsed_values);
         assert_eq!(Some(8101236), stop_id);
-        let administration_1: String = parsed_values.remove(0).into();
         assert_eq!("81____", &administration_1);
-        let administration_2: String = parsed_values.remove(0).into();
         assert_eq!("007000", &administration_2);
-        let duration: i16 = parsed_values.remove(0).into();
         assert_eq!(2, duration);
     }
 
@@ -162,7 +159,7 @@ mod tests {
             row_parser: exchange_administration_row_parser(),
             rows,
         };
-        let data = convert_data_strcutures(parser).unwrap();
+        let data = exchange_administration_row_converter(parser).unwrap();
         // First row
         let attribute = data.get(&1).unwrap();
         let reference = r#"

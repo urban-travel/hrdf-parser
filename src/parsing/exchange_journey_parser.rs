@@ -50,7 +50,7 @@ fn exchange_journey_row_parser() -> RowParser {
         ]),
     ])
 }
-fn convert_data_strcutures(
+fn exchange_journey_row_converter(
     parser: FileParser,
     journeys_pk_type_converter: &FxHashMap<(i32, String), i32>,
 ) -> Result<FxHashMap<i32, ExchangeTimeJourney>, Box<dyn Error>> {
@@ -75,7 +75,7 @@ pub fn parse(
     log::info!("Parsing UMSTEIGZ...");
     let row_parser = exchange_journey_row_parser();
     let parser = FileParser::new(&format!("{path}/UMSTEIGZ"), row_parser)?;
-    let data = convert_data_strcutures(parser, journeys_pk_type_converter)?;
+    let data = exchange_journey_row_converter(parser, journeys_pk_type_converter)?;
 
     Ok(ResourceStorage::new(data))
 }
@@ -195,7 +195,7 @@ mod tests {
         journeys_pk_type_converter.insert((1671, "000011".to_string()), 3);
         journeys_pk_type_converter.insert((24256, "000011".to_string()), 4);
 
-        let data = convert_data_strcutures(parser, &journeys_pk_type_converter).unwrap();
+        let data = exchange_journey_row_converter(parser, &journeys_pk_type_converter).unwrap();
         // First row
         let attribute = data.get(&1).unwrap();
         let reference = r#"

@@ -33,7 +33,7 @@ fn direction_row_parser() -> RowParser {
         ]),
     ])
 }
-fn convert_data_strcutures(
+fn direction_row_converter(
     parser: FileParser,
 ) -> Result<FxHashMapsAndTypeConverter, Box<dyn Error>> {
     let mut pk_type_converter = FxHashMap::default();
@@ -51,7 +51,7 @@ pub fn parse(path: &str) -> Result<DirectionAndTypeConverter, Box<dyn Error>> {
     let row_parser = direction_row_parser();
     let parser = FileParser::new(&format!("{path}/RICHTUNG"), row_parser)?;
 
-    let (data, pk_type_converter) = convert_data_strcutures(parser)?;
+    let (data, pk_type_converter) = direction_row_converter(parser)?;
 
     Ok((ResourceStorage::new(data), pk_type_converter))
 }
@@ -60,12 +60,17 @@ pub fn parse(path: &str) -> Result<DirectionAndTypeConverter, Box<dyn Error>> {
 // --- Data Processing Functions
 // ------------------------------------------------------------------------------------------------
 
-fn create_instance(
-    mut values: Vec<ParsedValue>,
-    pk_type_converter: &mut FxHashMap<String, i32>,
-) -> Result<Direction, Box<dyn Error>> {
+fn row_from_parsed_values(mut values: Vec<ParsedValue>) -> (String, String) {
     let legacy_id: String = values.remove(0).into();
     let name: String = values.remove(0).into();
+    (legacy_id, name)
+}
+
+fn create_instance(
+    values: Vec<ParsedValue>,
+    pk_type_converter: &mut FxHashMap<String, i32>,
+) -> Result<Direction, Box<dyn Error>> {
+    let (legacy_id, name) = row_from_parsed_values(values);
 
     let id = remove_first_char(&legacy_id).parse::<i32>()?;
 
@@ -103,21 +108,18 @@ mod tests {
             rows,
         };
         let mut parser_iterator = parser.parse();
-        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let direction_id: String = parsed_values.remove(0).into();
-        assert_eq!("R000008", &direction_id);
-        let description: String = parsed_values.remove(0).into();
-        assert_eq!("Winterthur", &description);
-        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let direction_id: String = parsed_values.remove(0).into();
-        assert_eq!("R000192", &direction_id);
-        let description: String = parsed_values.remove(0).into();
-        assert_eq!("Saas-Fee, Parkhaus", &description);
-        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let direction_id: String = parsed_values.remove(0).into();
-        assert_eq!("R002609", &direction_id);
-        let description: String = parsed_values.remove(0).into();
-        assert_eq!("Hégenheim - Collège des Trois Pays", &description);
+        let (_, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+        let (legacy_id, name) = row_from_parsed_values(parsed_values);
+        assert_eq!("R000008", &legacy_id);
+        assert_eq!("Winterthur", &name);
+        let (_, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+        let (legacy_id, name) = row_from_parsed_values(parsed_values);
+        assert_eq!("R000192", &legacy_id);
+        assert_eq!("Saas-Fee, Parkhaus", &name);
+        let (_, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+        let (legacy_id, name) = row_from_parsed_values(parsed_values);
+        assert_eq!("R002609", &legacy_id);
+        assert_eq!("Hégenheim - Collège des Trois Pays", &name);
     }
 
     #[test]
@@ -131,7 +133,7 @@ mod tests {
             row_parser: direction_row_parser(),
             rows,
         };
-        let (data, pk_type_converter) = convert_data_strcutures(parser).unwrap();
+        let (data, pk_type_converter) = direction_row_converter(parser).unwrap();
         assert_eq!(*pk_type_converter.get("R000008").unwrap(), 8);
         assert_eq!(*pk_type_converter.get("R000192").unwrap(), 192);
         assert_eq!(*pk_type_converter.get("R002609").unwrap(), 2609);
