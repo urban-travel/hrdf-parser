@@ -1,6 +1,22 @@
-// 4 file(s).
-// File(s) read by the parser:
-// INFOTEXT_DE, INFOTEXT_EN, INFOTEXT_FR, INFOTEXT_IT
+/// # Infotext parsing
+///
+/// Additional information on objects (journeys, lines, etc.). This information can either be
+///
+/// - Be simple texts, e.g.: 000018154 Rollstühle können mit Unterstützung des Fahrpersonals befördert werden,
+/// - Values with semantic meaning. This means values that cannot be represented in any other way and have therefore been “outsourced” to INFOTEXT, e.g.  000000000 ch:1:sjyid:100001:3-002
+///
+/// The INFOTEXTCODE attribute defines whether these are simple texts or texts with a semantic meaning.
+/// The INFOTEXTCODE is not in the INFOTEXT file, but only in the INFOTEXT referencing files, e.g. FPLAN.
+///
+/// ## Remark
+///
+/// We start by parsing the INFOTEXT_DE file to get the ids of each ilne and then complement them
+/// with the rest of the infotext from INFOTEXT_* for the semantic meaning part, since all
+/// files have the same content from this point of view. The rest is parsed by language
+///
+/// 4 file(s).
+/// File(s) read by the parser:
+/// INFOTEXT_DE, INFOTEXT_EN, INFOTEXT_FR, INFOTEXT_IT
 use std::error::Error;
 
 use rustc_hash::FxHashMap;
