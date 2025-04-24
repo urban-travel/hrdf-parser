@@ -34,7 +34,7 @@ fn holiday_row_parser() -> RowParser {
     ])
 }
 
-fn convert_data_strcutures(parser: FileParser) -> Result<FxHashMap<i32, Holiday>, Box<dyn Error>> {
+fn holiday_row_converter(parser: FileParser) -> Result<FxHashMap<i32, Holiday>, Box<dyn Error>> {
     let auto_increment = AutoIncrement::new();
 
     let data = parser
@@ -49,7 +49,7 @@ pub fn parse(path: &str) -> Result<ResourceStorage<Holiday>, Box<dyn Error>> {
     log::info!("Parsing FEIERTAG...");
     let row_parser = holiday_row_parser();
     let parser = FileParser::new(&format!("{path}/FEIERTAG"), row_parser)?;
-    let data = convert_data_strcutures(parser)?;
+    let data = holiday_row_converter(parser)?;
 
     Ok(ResourceStorage::new(data))
 }
@@ -137,7 +137,7 @@ mod tests {
             row_parser: holiday_row_parser(),
             rows,
         };
-        let data = convert_data_strcutures(parser).unwrap();
+        let data = holiday_row_converter(parser).unwrap();
         // First row (id: 1)
         let attribute = data.get(&1).unwrap();
         let reference = r#"

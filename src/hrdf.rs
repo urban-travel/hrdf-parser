@@ -77,7 +77,7 @@ impl Hrdf {
             };
 
             let decompressed_data_path = env::temp_dir()
-                .join(format!("{unique_filename}"))
+                .join(unique_filename)
                 .into_os_string()
                 .into_string()
                 .expect("Could not convert to string.");
