@@ -583,13 +583,29 @@ fn add_information_text(values: Vec<ParsedValue>, journey: &mut Journey) {
     );
 }
 
-fn set_line(mut values: Vec<ParsedValue>, journey: &mut Journey) -> Result<(), Box<dyn Error>> {
+// Parsing RowF
+
+fn row_f_from_parsed_values(
+    mut values: Vec<ParsedValue>,
+) -> (String, Option<i32>, Option<i32>, Option<i32>, Option<i32>) {
     let line_designation: String = values.remove(0).into();
     let from_stop_id: Option<i32> = values.remove(0).into();
     let until_stop_id: Option<i32> = values.remove(0).into();
     let departure_time: Option<i32> = values.remove(0).into();
     let arrival_time: Option<i32> = values.remove(0).into();
 
+    (
+        line_designation,
+        from_stop_id,
+        until_stop_id,
+        departure_time,
+        arrival_time,
+    )
+}
+
+fn set_line(values: Vec<ParsedValue>, journey: &mut Journey) -> Result<(), Box<dyn Error>> {
+    let (line_designation, from_stop_id, until_stop_id, departure_time, arrival_time) =
+        row_f_from_parsed_values(values);
     let arrival_time = create_time(arrival_time);
     let departure_time = create_time(departure_time);
 
@@ -620,11 +636,18 @@ fn set_line(mut values: Vec<ParsedValue>, journey: &mut Journey) -> Result<(), B
     Ok(())
 }
 
-fn set_direction(
+// Parsing RowG
+
+fn row_g_from_parsed_values(
     mut values: Vec<ParsedValue>,
-    journey: &mut Journey,
-    directions_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<(), Box<dyn Error>> {
+) -> (
+    String,
+    String,
+    Option<i32>,
+    Option<i32>,
+    Option<i32>,
+    Option<i32>,
+) {
     let direction_type: String = values.remove(0).into();
     let direction_id: String = values.remove(0).into();
     let from_stop_id: Option<i32> = values.remove(0).into();
@@ -632,6 +655,23 @@ fn set_direction(
     let departure_time: Option<i32> = values.remove(0).into();
     let arrival_time: Option<i32> = values.remove(0).into();
 
+    (
+        direction_type,
+        direction_id,
+        from_stop_id,
+        until_stop_id,
+        departure_time,
+        arrival_time,
+    )
+}
+
+fn set_direction(
+    values: Vec<ParsedValue>,
+    journey: &mut Journey,
+    directions_pk_type_converter: &FxHashMap<String, i32>,
+) -> Result<(), Box<dyn Error>> {
+    let (direction_type, direction_id, from_stop_id, until_stop_id, departure_time, arrival_time) =
+        row_g_from_parsed_values(values);
     let arrival_time = create_time(arrival_time);
     let departure_time = create_time(departure_time);
 
@@ -661,6 +701,8 @@ fn set_direction(
     Ok(())
 }
 
+// Parsing RowH
+
 fn set_boarding_or_disembarking_exchange_time(mut values: Vec<ParsedValue>, journey: &mut Journey) {
     let ci_co: String = values.remove(0).into();
     let exchange_time: i32 = values.remove(0).into();
@@ -688,11 +730,17 @@ fn set_boarding_or_disembarking_exchange_time(mut values: Vec<ParsedValue>, jour
     );
 }
 
-fn add_route_entry(mut values: Vec<ParsedValue>, journey: &mut Journey) {
+// Parsing RowI
+
+fn row_i_from_parsed_values(mut values: Vec<ParsedValue>) -> (i32, Option<i32>, Option<i32>) {
     let stop_id: i32 = values.remove(0).into();
     let arrival_time: Option<i32> = values.remove(0).into();
     let departure_time: Option<i32> = values.remove(0).into();
+    (stop_id, arrival_time, departure_time)
+}
 
+fn add_route_entry(values: Vec<ParsedValue>, journey: &mut Journey) {
+    let (stop_id, arrival_time, departure_time) = row_i_from_parsed_values(values);
     let arrival_time = create_time(arrival_time);
     let departure_time = create_time(departure_time);
 
@@ -745,35 +793,120 @@ mod tests {
         };
         let mut parser_iterator = parser.parse();
 
-        let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-        assert_eq!(id, RowType::RowA as i32);
-        let (legacy_id, administration) = row_a_from_parsed_values(parsed_values);
-        assert_eq!(3, legacy_id);
-        assert_eq!("000011", &administration);
-        let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-        assert_eq!(id, RowType::RowB as i32);
-        let (designation, from_stop_id, until_stop_id) = row_b_from_parsed_values(parsed_values);
-        assert_eq!("ICE", &designation);
-        assert_eq!(Some(8500090), from_stop_id);
-        assert_eq!(Some(8503000), until_stop_id);
-        let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-        assert_eq!(id, RowType::RowC as i32);
-        let (from_stop_id, until_stop_id, bit_field_id) = row_c_from_parsed_values(parsed_values);
-        assert_eq!(Some(8500090), from_stop_id);
-        assert_eq!(Some(8503000), until_stop_id);
-        assert_eq!(Some(281004), bit_field_id);
-        let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-        assert_eq!(id, RowType::RowD as i32);
-        let (designation, from_stop_id, until_stop_id) = row_d_from_parsed_values(parsed_values);
-        assert_eq!("VR", &designation);
-        assert_eq!(Some(8500090), from_stop_id);
-        assert_eq!(Some(8503000), until_stop_id);
-        let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-        assert_eq!(id, RowType::RowD as i32);
-        let (designation, from_stop_id, until_stop_id) = row_d_from_parsed_values(parsed_values);
-        assert_eq!("WR", &designation);
-        assert_eq!(Some(8500090), from_stop_id);
-        assert_eq!(Some(8503000), until_stop_id);
+        {
+            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+            assert_eq!(id, RowType::RowA as i32);
+            let (legacy_id, administration) = row_a_from_parsed_values(parsed_values);
+            assert_eq!(3, legacy_id);
+            assert_eq!("000011", &administration);
+        }
+        {
+            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+            assert_eq!(id, RowType::RowB as i32);
+            let (designation, from_stop_id, until_stop_id) =
+                row_b_from_parsed_values(parsed_values);
+            assert_eq!("ICE", &designation);
+            assert_eq!(Some(8500090), from_stop_id);
+            assert_eq!(Some(8503000), until_stop_id);
+        }
+        {
+            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+            assert_eq!(id, RowType::RowC as i32);
+            let (from_stop_id, until_stop_id, bit_field_id) =
+                row_c_from_parsed_values(parsed_values);
+            assert_eq!(Some(8500090), from_stop_id);
+            assert_eq!(Some(8503000), until_stop_id);
+            assert_eq!(Some(281004), bit_field_id);
+        }
+        {
+            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+            assert_eq!(id, RowType::RowD as i32);
+            let (designation, from_stop_id, until_stop_id) =
+                row_d_from_parsed_values(parsed_values);
+            assert_eq!("VR", &designation);
+            assert_eq!(Some(8500090), from_stop_id);
+            assert_eq!(Some(8503000), until_stop_id);
+        }
+        {
+            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+            assert_eq!(id, RowType::RowD as i32);
+            let (designation, from_stop_id, until_stop_id) =
+                row_d_from_parsed_values(parsed_values);
+            assert_eq!("WR", &designation);
+            assert_eq!(Some(8500090), from_stop_id);
+            assert_eq!(Some(8503000), until_stop_id);
+        }
+        {
+            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+            assert_eq!(id, RowType::RowE as i32);
+            let (
+                code,
+                from_stop_id,
+                until_stop_id,
+                bit_field_id,
+                information_text_id,
+                departure_time,
+                arrival_time,
+            ) = row_e_from_parsed_values(parsed_values);
+            assert_eq!("JY", &code);
+            assert_eq!(None, from_stop_id);
+            assert_eq!(None, until_stop_id);
+            assert_eq!(None, bit_field_id);
+            assert_eq!(0, information_text_id);
+            assert_eq!(None, departure_time);
+            assert_eq!(None, arrival_time);
+        }
+        {
+            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+            assert_eq!(id, RowType::RowG as i32);
+            let (
+                direction_type,
+                direction_id,
+                from_stop_id,
+                until_stop_id,
+                departure_time,
+                arrival_time,
+            ) = row_g_from_parsed_values(parsed_values);
+            // "*R H                                                       %".to_string(),
+            assert_eq!("H", &direction_type);
+            assert_eq!("", &direction_id);
+            assert_eq!(None, from_stop_id);
+            assert_eq!(None, until_stop_id);
+            assert_eq!(None, departure_time);
+            assert_eq!(None, arrival_time);
+        }
+        {
+            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+            assert_eq!(id, RowType::RowI as i32);
+            let (stop_id, arrival_time, departure_time) = row_i_from_parsed_values(parsed_values);
+            assert_eq!(8500090, stop_id);
+            assert_eq!(None, arrival_time);
+            assert_eq!(Some(740), departure_time);
+        }
+        {
+            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+            assert_eq!(id, RowType::RowI as i32);
+            let (stop_id, arrival_time, departure_time) = row_i_from_parsed_values(parsed_values);
+            assert_eq!(8500010, stop_id);
+            assert_eq!(Some(748), arrival_time);
+            assert_eq!(Some(806), departure_time);
+        }
+        {
+            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+            assert_eq!(id, RowType::RowI as i32);
+            let (stop_id, arrival_time, departure_time) = row_i_from_parsed_values(parsed_values);
+            assert_eq!(175, stop_id);
+            assert_eq!(Some(-833), arrival_time);
+            assert_eq!(Some(-833), departure_time);
+        }
+        {
+            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+            assert_eq!(id, RowType::RowI as i32);
+            let (stop_id, arrival_time, departure_time) = row_i_from_parsed_values(parsed_values);
+            assert_eq!(8503000, stop_id);
+            assert_eq!(Some(900), arrival_time);
+            assert_eq!(None, departure_time);
+        }
     }
 
     // #[test]
