@@ -1,13 +1,54 @@
-// 5 file(s).
-// File(s) read by the parser:
-// ATTRIBUT
-// ---
-// Files not used by the parser:
-// ATTRIBUT_DE, ATTRIBUT_EN, ATTRIBUT_FR, ATTRIBUT_IT
+/// # Attribute parsing
+///
+/// List of abbreviations describing additional offers (e.g.: dining car)
+/// or restrictions (e.g.: seat reservation obligatory). See [https://opentransportdata.swiss/en/cookbook/hafas-rohdaten-format-hrdf/#Technical_description_What_is_in_the_HRDF_files_contents](the documentaion) for more informations.
+///
+/// This file contains:
+///
+/// ## The list of offers
+///
+///
+///
+/// ### Example (excerpt):
+///
+/// `
+/// Y  0   5  5 % The code Y applies to the journey section (0) with priority 5 and sorting 5
+/// `
+///
+/// ## Description of how the offers can be displayed
+///
+/// **Important:** Currently these lines are not used in the library
+///
+/// ### Example (excerpt):
+///
+/// `
+/// # Y  Y  Y  % Attribute code Y should be output as Y for partial route and as Y for full route
+/// `
+///
+/// ## Description in the following languages : German, English, French, Italian
+///
+/// ## Example (excerpts):
+///
+/// ...
+/// <text>                % Keyword pour la définition du texte
+/// <deu>                 % The language becomes german
+/// ...
+/// Y  Zu Fuss            % Code Y, with description "Zu Fuss"
+/// ...
+/// <fra>                 % The language becomes French
+/// ...
+/// Y  A pied             % Code Y, with description "A pied"
+/// ...
+///
+/// File(s) read by the parser:
+/// ATTRIBUT
+/// ---
+/// Files not used by the parser vor version < 2.0.7:
+/// ATTRIBUT_DE, ATTRIBUT_EN, ATTRIBUT_FR, ATTRIBUT_IT
+/// These files were suppressed in 2.0.7
 use std::{error::Error, str::FromStr};
 
 use rustc_hash::FxHashMap;
-use serde::Serialize;
 
 use crate::{
     Version,
@@ -78,7 +119,7 @@ fn attribute_row_parser(version: Version) -> Result<RowParser, Box<dyn Error>> {
     Ok(row_parser)
 }
 
-fn convert_data_strcutures(
+fn attribute_row_converter(
     parser: FileParser,
 ) -> Result<FxHashMapsAndTypeConverter, Box<dyn Error>> {
     let auto_increment = AutoIncrement::new();
@@ -110,7 +151,7 @@ pub fn parse(version: Version, path: &str) -> Result<AttributeAndTypeConverter, 
     let row_parser = attribute_row_parser(version)?;
     // The ATTRIBUT file is used instead of ATTRIBUT_* for simplicity's sake.
     let parser = FileParser::new(&format!("{path}/ATTRIBUT"), row_parser)?;
-    let (data, pk_type_converter) = convert_data_strcutures(parser)?;
+    let (data, pk_type_converter) = attribute_row_converter(parser)?;
     Ok((ResourceStorage::new(data), pk_type_converter))
 }
 
@@ -118,16 +159,26 @@ pub fn parse(version: Version, path: &str) -> Result<AttributeAndTypeConverter, 
 // --- Data Processing Functions
 // ------------------------------------------------------------------------------------------------
 
-fn create_instance(
-    mut values: Vec<ParsedValue>,
-    auto_increment: &AutoIncrement,
-    pk_type_converter: &mut FxHashMap<String, i32>,
-) -> Attribute {
+fn row_a_from_parsed_values(mut values: Vec<ParsedValue>) -> (String, i16, i16, i16) {
     let designation: String = values.remove(0).into();
     let stop_scope: i16 = values.remove(0).into();
     let main_sorting_priority: i16 = values.remove(0).into();
     let secondary_sorting_priority: i16 = values.remove(0).into();
+    (
+        designation,
+        stop_scope,
+        main_sorting_priority,
+        secondary_sorting_priority,
+    )
+}
 
+fn create_instance(
+    values: Vec<ParsedValue>,
+    auto_increment: &AutoIncrement,
+    pk_type_converter: &mut FxHashMap<String, i32>,
+) -> Attribute {
+    let (designation, stop_scope, main_sorting_priority, secondary_sorting_priority) =
+        row_a_from_parsed_values(values);
     let id = auto_increment.next();
 
     pk_type_converter.insert(designation.to_owned(), id);
@@ -140,15 +191,19 @@ fn create_instance(
     )
 }
 
+fn row_d_from_parsed_values(mut values: Vec<ParsedValue>) -> (String, String) {
+    let legacy_id: String = values.remove(0).into();
+    let description: String = values.remove(0).into();
+    (legacy_id, description)
+}
+
 fn set_description(
-    mut values: Vec<ParsedValue>,
+    values: Vec<ParsedValue>,
     pk_type_converter: &FxHashMap<String, i32>,
     data: &mut FxHashMap<i32, Attribute>,
     language: Language,
 ) -> Result<(), Box<dyn Error>> {
-    let legacy_id: String = values.remove(0).into();
-    let description: String = values.remove(0).into();
-
+    let (legacy_id, description) = row_d_from_parsed_values(values);
     let id = pk_type_converter
         .get(&legacy_id)
         .ok_or("Unknown legacy ID")?;
@@ -163,11 +218,16 @@ fn set_description(
 // --- Helper Functions
 // ------------------------------------------------------------------------------------------------
 
+fn row_c_from_parsed_values(mut values: Vec<ParsedValue>) -> String {
+    let language: String = values.remove(0).into();
+    language
+}
+
 fn update_current_language(
-    mut values: Vec<ParsedValue>,
+    values: Vec<ParsedValue>,
     current_language: &mut Language,
 ) -> Result<(), Box<dyn Error>> {
-    let language: String = values.remove(0).into();
+    let language = row_c_from_parsed_values(values);
     let language = language.replace(['<', '>'], "");
 
     if language != "text" {
@@ -181,23 +241,8 @@ fn update_current_language(
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
+    use crate::parsing::tests::get_json_values;
     use pretty_assertions::assert_eq;
-    use serde::Deserialize;
-
-    fn get_json_values<F>(
-        lhs: &F,
-        rhs: &str,
-    ) -> Result<(serde_json::Value, serde_json::Value), Box<dyn Error>>
-    where
-        for<'a> F: Serialize + Deserialize<'a>,
-    {
-        let serialized = serde_json::to_string(&lhs)?;
-        let reference = serde_json::to_string(&serde_json::from_str::<F>(rhs)?)?;
-        Ok((
-            serialized.parse::<serde_json::Value>()?,
-            reference.parse::<serde_json::Value>()?,
-        ))
-    }
 
     #[test]
     fn description_row_d_v206() {
@@ -207,20 +252,19 @@ mod tests {
         ];
         let parser = FileParser {
             row_parser: attribute_row_parser(Version::V_5_40_41_2_0_6).unwrap(),
-            rows,
+            rows: rows.clone(),
         };
         let mut parser_iterator = parser.parse();
-        let (id, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
+
+        let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
         assert_eq!(id, RowType::RowD as i32);
-        let legacy_id: String = parsed_values.remove(0).into();
+        let (legacy_id, description) = row_d_from_parsed_values(parsed_values);
         assert_eq!("VR", &legacy_id);
-        let description: String = parsed_values.remove(0).into();
         assert_eq!("VELOS: Reservation obligatory", &description);
-        let (id, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
+        let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
         assert_eq!(id, RowType::RowD as i32);
-        let legacy_id: String = parsed_values.remove(0).into();
+        let (legacy_id, description) = row_d_from_parsed_values(parsed_values);
         assert_eq!("2", &legacy_id);
-        let description: String = parsed_values.remove(0).into();
         assert_eq!("2nd class only", &description);
     }
 
@@ -235,17 +279,15 @@ mod tests {
             rows,
         };
         let mut parser_iterator = parser.parse();
-        let (id, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
+        let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
         assert_eq!(id, RowType::RowD as i32);
-        let legacy_id: String = parsed_values.remove(0).into();
+        let (legacy_id, description) = row_d_from_parsed_values(parsed_values);
         assert_eq!("VR", &legacy_id);
-        let description: String = parsed_values.remove(0).into();
         assert_eq!("VELOS: Reservation obligatory", &description);
-        let (id, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
+        let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
         assert_eq!(id, RowType::RowD as i32);
-        let legacy_id: String = parsed_values.remove(0).into();
+        let (legacy_id, description) = row_d_from_parsed_values(parsed_values);
         assert_eq!("2", &legacy_id);
-        let description: String = parsed_values.remove(0).into();
         assert_eq!("2nd class only", &description);
     }
 
@@ -257,26 +299,22 @@ mod tests {
             rows,
         };
         let mut parser_iterator = parser.parse();
-        let (id, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
+        let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
         assert_eq!(id, RowType::RowA as i32);
-        let legacy_id: String = parsed_values.remove(0).into();
-        assert_eq!("1", &legacy_id);
-        let num: i16 = parsed_values.remove(0).into();
-        assert_eq!(0, num);
-        let num: i16 = parsed_values.remove(0).into();
-        assert_eq!(1, num);
-        let num: i16 = parsed_values.remove(0).into();
-        assert_eq!(5, num);
-        let (id, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
+        let (designation, stop_scope, main_sorting_priority, secondary_sorting_priority) =
+            row_a_from_parsed_values(parsed_values);
+        assert_eq!("1", &designation);
+        assert_eq!(0, stop_scope);
+        assert_eq!(1, main_sorting_priority);
+        assert_eq!(5, secondary_sorting_priority);
+        let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
         assert_eq!(id, RowType::RowA as i32);
-        let legacy_id: String = parsed_values.remove(0).into();
-        assert_eq!("GR", &legacy_id);
-        let num: i16 = parsed_values.remove(0).into();
-        assert_eq!(0, num);
-        let num: i16 = parsed_values.remove(0).into();
-        assert_eq!(6, num);
-        let num: i16 = parsed_values.remove(0).into();
-        assert_eq!(3, num);
+        let (designation, stop_scope, main_sorting_priority, secondary_sorting_priority) =
+            row_a_from_parsed_values(parsed_values);
+        assert_eq!("GR", &designation);
+        assert_eq!(0, stop_scope);
+        assert_eq!(6, main_sorting_priority);
+        assert_eq!(3, secondary_sorting_priority);
     }
 
     #[test]
@@ -296,7 +334,7 @@ mod tests {
             row_parser: attribute_row_parser(Version::V_5_40_41_2_0_7).unwrap(),
             rows,
         };
-        let (data, pk_type_converter) = convert_data_strcutures(parser).unwrap();
+        let (data, pk_type_converter) = attribute_row_converter(parser).unwrap();
         assert_eq!(*pk_type_converter.get("GK").unwrap(), 1);
         let attribute = data.get(&1).unwrap();
         let reference = r#"
@@ -345,11 +383,10 @@ mod tests {
             rows,
         };
         let mut parser_iterator = parser.parse();
-        let (id, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
+        let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
         assert_eq!(id, RowType::RowC as i32);
-        let lang: String = parsed_values.remove(0).into();
+        let lang = row_c_from_parsed_values(parsed_values);
         assert_eq!(&lang, "<ita>");
-
         let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
         assert_eq!(id, RowType::RowC as i32);
         let mut current_language = Language::default();

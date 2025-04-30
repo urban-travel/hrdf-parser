@@ -1,7 +1,7 @@
 [![Crates.io](https://img.shields.io/crates/v/hrdf-parser.svg)](https://crates.io/crates/hrdf-parser)
 [![Documentation](https://docs.rs/hrdf-parser/badge.svg)](https://docs.rs/hrdf-parser/)
-[![Codecov](https://codecov.io/github/omalaspinas/hrdf-parser/coverage.svg?branch=master)](https://codecov.io/gh/omalaspinas/hrdf-parser)
-[![Dependency status](https://deps.rs/repo/github/omalaspinas/hrdf-parser/status.svg)](https://deps.rs/repo/github/omalaspinas/hrdf-parser)
+[![Codecov](https://codecov.io/github/florianburgener/hrdf-parser/coverage.svg?branch=master)](https://codecov.io/gh/florianburgener/hrdf-parser)
+[![Dependency status](https://deps.rs/repo/github/florianburgener/hrdf-parser/status.svg)](https://deps.rs/repo/github/florianburgener/hrdf-parser)
 
 # HRDF Parser
 
