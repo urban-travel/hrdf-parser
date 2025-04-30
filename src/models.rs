@@ -488,6 +488,10 @@ impl Journey {
         &self.administration
     }
 
+    pub fn legacy_id(&self) -> i32 {
+        self.legacy_id
+    }
+
     fn metadata(&self) -> &FxHashMap<JourneyMetadataType, Vec<JourneyMetadataEntry>> {
         &self.metadata
     }
