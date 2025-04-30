@@ -13,7 +13,7 @@ use crate::{
         RowParser,
     },
     storage::ResourceStorage,
-    utils::{create_time_from_value, AutoIncrement},
+    utils::{AutoIncrement, create_time_from_value},
 };
 
 type JourneyAndTypeConverter = (ResourceStorage<Journey>, FxHashMap<(i32, String), i32>);
@@ -155,7 +155,7 @@ fn create_instance(
     let id = auto_increment.next();
 
     pk_type_converter.insert((legacy_id, administration.to_owned()), id);
-    Journey::new(id, administration)
+    Journey::new(id, legacy_id, administration)
 }
 
 fn set_transport_type(

@@ -463,6 +463,7 @@ impl InformationText {
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Journey {
     id: i32,
+    legacy_id: i32,
     administration: String,
     metadata: FxHashMap<JourneyMetadataType, Vec<JourneyMetadataEntry>>,
     route: Vec<JourneyRouteEntry>,
@@ -471,9 +472,10 @@ pub struct Journey {
 impl_Model!(Journey);
 
 impl Journey {
-    pub fn new(id: i32, administration: String) -> Self {
+    pub fn new(id: i32, legacy_id: i32, administration: String) -> Self {
         Self {
             id,
+            legacy_id,
             administration,
             metadata: FxHashMap::default(),
             route: Vec::new(),
