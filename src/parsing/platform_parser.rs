@@ -8,14 +8,14 @@ use std::error::Error;
 use rustc_hash::FxHashMap;
 
 use crate::{
+    Version,
     models::{CoordinateSystem, Coordinates, JourneyPlatform, Model, Platform},
     parsing::{
         ColumnDefinition, ExpectedType, FastRowMatcher, FileParser, ParsedValue, RowDefinition,
         RowParser,
     },
     storage::ResourceStorage,
-    utils::{create_time_from_value, AutoIncrement},
-    Version,
+    utils::{AutoIncrement, create_time_from_value},
 };
 
 const ROW_JOURNEY_PLATFORM: i32 = 1;

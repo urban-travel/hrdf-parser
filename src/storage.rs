@@ -70,7 +70,7 @@ impl DataStorage {
         let timetable_metadata = parsing::load_timetable_metadata(path)?;
 
         // Basic data
-        let (attributes, attributes_pk_type_converter) = parsing::load_attributes(path)?;
+        let (attributes, attributes_pk_type_converter) = parsing::load_attributes(version, path)?;
         let (directions, directions_pk_type_converter) = parsing::load_directions(path)?;
         let information_texts = parsing::load_information_texts(path)?;
         let lines = parsing::load_lines(path)?;
