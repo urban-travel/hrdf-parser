@@ -909,6 +909,161 @@ mod tests {
         }
     }
 
+    #[test]
+    fn parsing_rows_alt_v207() {
+        let rows = vec![
+            "*Z 002359 000011   101                                     % -- 37649518273 --"
+                .to_string(),
+            "*G IR  8507000 8509000                                     %".to_string(),
+            "*A VE 8507000 8509000 348508                               %".to_string(),
+            "*A FS 8507000 8509000                                      %".to_string(),
+            "*I JY                        000001370                     %".to_string(),
+            "*L 35       8507000 8509000                                %".to_string(),
+            "*R H                                                       %".to_string(),
+            "*CI 0002 8507000 8507000                                   %".to_string(),
+            "8507000 Bern                         00638                 %".to_string(),
+            "8508005 Burgdorf              00652  00653                 %".to_string(),
+            "8508008 Herzogenbuchsee       00704  00705                 %".to_string(),
+            "8508100 Langenthal            00710  00712                 %".to_string(),
+            "8500218 Olten                 00724  00730                 %".to_string(),
+            "8503001 Zürich Altstetten     00800  00800                 %".to_string(),
+            "8503000 Zürich HB             00806  00812                 %".to_string(),
+            "0000176 Zimmerberg-Basistunn -00816 -00816                 %".to_string(),
+            "8503202 Thalwil               00821  00821                 %".to_string(),
+            "8503206 Wädenswil             00831  00831                 %".to_string(),
+            "8503209 Pfäffikon SZ          00839  00841                 %".to_string(),
+            "8503221 Siebnen-Wangen        00848  00848                 %".to_string(),
+            "8503225 Ziegelbrücke          00858  00900                 %".to_string(),
+            "8509416 Unterterzen           00910  00911                 %".to_string(),
+            "8509414 Walenstadt            00915  00915                 %".to_string(),
+            "8509411 Sargans               00925  00926                 %".to_string(),
+            "8509004 Bad Ragaz             00930  00930                 %".to_string(),
+            "8509003 Maienfeld             00933  00933                 %".to_string(),
+            "8509002 Landquart             00938  00938                 %".to_string(),
+            "8509000 Chur                  00948                        %".to_string(),
+        ];
+        let parser = FileParser {
+            row_parser: journey_row_parser(),
+            rows: rows.clone(),
+        };
+        let mut parser_iterator = parser.parse();
+
+        {
+            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+            assert_eq!(id, RowType::RowA as i32);
+            let (legacy_id, administration) = row_a_from_parsed_values(parsed_values);
+            assert_eq!(2359, legacy_id);
+            assert_eq!("000011", &administration);
+        }
+        {
+            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+            assert_eq!(id, RowType::RowB as i32);
+            let (designation, from_stop_id, until_stop_id) =
+                row_b_from_parsed_values(parsed_values);
+            assert_eq!("IR", &designation);
+            assert_eq!(Some(8507000), from_stop_id);
+            assert_eq!(Some(8509000), until_stop_id);
+        }
+        // {
+        //     let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+        //     assert_eq!(id, RowType::RowC as i32);
+        //     let (from_stop_id, until_stop_id, bit_field_id) =
+        //         row_c_from_parsed_values(parsed_values);
+        //     assert_eq!(Some(8500090), from_stop_id);
+        //     assert_eq!(Some(8503000), until_stop_id);
+        //     assert_eq!(Some(281004), bit_field_id);
+        // }
+        // {
+        //     let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+        //     assert_eq!(id, RowType::RowD as i32);
+        //     let (designation, from_stop_id, until_stop_id) =
+        //         row_d_from_parsed_values(parsed_values);
+        //     assert_eq!("VR", &designation);
+        //     assert_eq!(Some(8500090), from_stop_id);
+        //     assert_eq!(Some(8503000), until_stop_id);
+        // }
+        // {
+        //     let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+        //     assert_eq!(id, RowType::RowD as i32);
+        //     let (designation, from_stop_id, until_stop_id) =
+        //         row_d_from_parsed_values(parsed_values);
+        //     assert_eq!("WR", &designation);
+        //     assert_eq!(Some(8500090), from_stop_id);
+        //     assert_eq!(Some(8503000), until_stop_id);
+        // }
+        // {
+        //     let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+        //     assert_eq!(id, RowType::RowE as i32);
+        //     let (
+        //         code,
+        //         from_stop_id,
+        //         until_stop_id,
+        //         bit_field_id,
+        //         information_text_id,
+        //         departure_time,
+        //         arrival_time,
+        //     ) = row_e_from_parsed_values(parsed_values);
+        //     assert_eq!("JY", &code);
+        //     assert_eq!(None, from_stop_id);
+        //     assert_eq!(None, until_stop_id);
+        //     assert_eq!(None, bit_field_id);
+        //     assert_eq!(0, information_text_id);
+        //     assert_eq!(None, departure_time);
+        //     assert_eq!(None, arrival_time);
+        // }
+        // {
+        //     let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+        //     assert_eq!(id, RowType::RowG as i32);
+        //     let (
+        //         direction_type,
+        //         direction_id,
+        //         from_stop_id,
+        //         until_stop_id,
+        //         departure_time,
+        //         arrival_time,
+        //     ) = row_g_from_parsed_values(parsed_values);
+        //     // "*R H                                                       %".to_string(),
+        //     assert_eq!("H", &direction_type);
+        //     assert_eq!("", &direction_id);
+        //     assert_eq!(None, from_stop_id);
+        //     assert_eq!(None, until_stop_id);
+        //     assert_eq!(None, departure_time);
+        //     assert_eq!(None, arrival_time);
+        // }
+        // {
+        //     let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+        //     assert_eq!(id, RowType::RowI as i32);
+        //     let (stop_id, arrival_time, departure_time) = row_i_from_parsed_values(parsed_values);
+        //     assert_eq!(8500090, stop_id);
+        //     assert_eq!(None, arrival_time);
+        //     assert_eq!(Some(740), departure_time);
+        // }
+        // {
+        //     let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+        //     assert_eq!(id, RowType::RowI as i32);
+        //     let (stop_id, arrival_time, departure_time) = row_i_from_parsed_values(parsed_values);
+        //     assert_eq!(8500010, stop_id);
+        //     assert_eq!(Some(748), arrival_time);
+        //     assert_eq!(Some(806), departure_time);
+        // }
+        // {
+        //     let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+        //     assert_eq!(id, RowType::RowI as i32);
+        //     let (stop_id, arrival_time, departure_time) = row_i_from_parsed_values(parsed_values);
+        //     assert_eq!(175, stop_id);
+        //     assert_eq!(Some(-833), arrival_time);
+        //     assert_eq!(Some(-833), departure_time);
+        // }
+        // {
+        //     let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
+        //     assert_eq!(id, RowType::RowI as i32);
+        //     let (stop_id, arrival_time, departure_time) = row_i_from_parsed_values(parsed_values);
+        //     assert_eq!(8503000, stop_id);
+        //     assert_eq!(Some(900), arrival_time);
+        //     assert_eq!(None, departure_time);
+        // }
+    }
+
     // #[test]
     // fn type_converter_row_a_v207() {
     //     let rows = vec![
