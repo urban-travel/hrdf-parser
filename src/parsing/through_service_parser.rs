@@ -76,19 +76,12 @@ fn create_instance(
     if journey_1_stop_id != journey_2_stop_id {
         log::info!("{journey_1_stop_id}, {journey_2_stop_id}");
     }
-    //if journey_1_stop_id == 8774500 {
-    //    println!(
-    //        "({journey_1_legacy_id}, {journey_1_administration}), ({journey_2_legacy_id}, {journey_2_administration}), {journey_1_id}, {journey_2_id}, {journey_1_stop_id}, {bit_field_id}"
-    //    );
-    //}
 
     Ok(ThroughService::new(
         auto_increment.next(),
-        journey_1_id,
-        journey_1_administration,
+        (journey_1_id, journey_1_administration),
         journey_1_stop_id,
-        journey_2_id,
-        journey_2_administration,
+        (journey_2_id, journey_2_administration),
         journey_2_stop_id,
         bit_field_id,
     ))

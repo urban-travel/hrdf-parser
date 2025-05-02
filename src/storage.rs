@@ -5,6 +5,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    JourneyId,
     models::{
         Attribute, BitField, Direction, ExchangeTimeAdministration, ExchangeTimeJourney,
         ExchangeTimeLine, Holiday, InformationText, Journey, JourneyPlatform, Line, Model,
@@ -55,7 +56,7 @@ pub struct DataStorage {
     journeys_by_stop_id_and_bit_field_id: FxHashMap<(i32, i32), Vec<i32>>,
     stop_connections_by_stop_id: FxHashMap<i32, FxHashSet<i32>>,
     bit_field_id_for_through_service_by_journey_id_stop_id:
-        FxHashMap<((i32, String), (i32, String), i32), i32>,
+        FxHashMap<(JourneyId, JourneyId, i32), i32>,
     exchange_times_administration_map: FxHashMap<(Option<i32>, String, String), i32>,
     exchange_times_journey_map: FxHashMap<(i32, i32, i32), FxHashSet<i32>>,
 
@@ -227,7 +228,7 @@ impl DataStorage {
 
     pub fn bit_field_id_for_through_service_by_journey_id_stop_id(
         &self,
-    ) -> &FxHashMap<((i32, String), (i32, String), i32), i32> {
+    ) -> &FxHashMap<(JourneyId, JourneyId, i32), i32> {
         &self.bit_field_id_for_through_service_by_journey_id_stop_id
     }
 
@@ -365,27 +366,18 @@ fn create_journeys_by_stop_id_and_bit_field_id(
 /// Given journey_stop_id, and journey_id_1, journey_id_2, we obtain the bit_field_id of the ThroughService
 fn create_bit_field_id_through_service_by_journey_id_stop_id(
     through_services: &ResourceStorage<ThroughService>,
-) -> FxHashMap<((i32, String), (i32, String), i32), i32> {
+) -> FxHashMap<(JourneyId, JourneyId, i32), i32> {
     through_services
         .entries()
         .into_iter()
         .fold(FxHashMap::default(), |mut acc, through_service| {
-            let journey_1_legacy_id = through_service.journey_1_legacy_id();
-            let journey_1_admin_id = through_service.journey_1_admin_id();
-            let journey_2_legacy_id = through_service.journey_2_legacy_id();
-            let journey_2_admin_id = through_service.journey_1_admin_id();
+            let journey_1_id = through_service.journey_1_id();
+            let journey_2_id = through_service.journey_2_id();
             let journey_stop_id = through_service.journey_1_stop_id();
             let bit_field_id = through_service.bit_field_id();
-            //if journey_stop_id == 8774500 {
-            //    println!("{journey_id_1}, {journey_id_2}, {journey_stop_id}, {bit_field_id}");
-            //}
 
             acc.insert(
-                (
-                    (journey_1_legacy_id, journey_1_admin_id.to_string()),
-                    (journey_2_legacy_id, journey_2_admin_id.to_string()),
-                    journey_stop_id,
-                ),
+                (journey_1_id.clone(), journey_2_id.clone(), journey_stop_id),
                 bit_field_id,
             );
             acc

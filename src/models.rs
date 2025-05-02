@@ -13,6 +13,8 @@ use crate::{
     utils::{add_1_day, sub_1_day},
 };
 
+pub(crate) type JourneyId = (i32, String); // (legacy_id, administration)
+
 // ------------------------------------------------------------------------------------------------
 // --- Model
 // ------------------------------------------------------------------------------------------------
@@ -1115,11 +1117,9 @@ impl StopConnection {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ThroughService {
     id: i32,
-    journey_1_legacy_id: i32,
-    journey_1_admin_id: String,
+    journey_1_id: JourneyId,
     journey_1_stop_id: i32, // Last stop of journey 1.
-    journey_2_legacy_id: i32,
-    journey_2_admin_id: String,
+    journey_2_id: JourneyId,
     journey_2_stop_id: i32, // First stop of journey 2.
     bit_field_id: i32,
 }
@@ -1129,44 +1129,32 @@ impl_Model!(ThroughService);
 impl ThroughService {
     pub fn new(
         id: i32,
-        journey_1_legacy_id: i32,
-        journey_1_admin_id: String,
+        journey_1_id: JourneyId,
         journey_1_stop_id: i32,
-        journey_2_legacy_id: i32,
-        journey_2_admin_id: String,
+        journey_2_id: JourneyId,
         journey_2_stop_id: i32,
         bit_field_id: i32,
     ) -> Self {
         Self {
             id,
-            journey_1_legacy_id,
-            journey_1_admin_id,
+            journey_1_id,
             journey_1_stop_id,
-            journey_2_legacy_id,
-            journey_2_admin_id,
+            journey_2_id,
             journey_2_stop_id,
             bit_field_id,
         }
     }
 
-    pub fn journey_1_legacy_id(&self) -> i32 {
-        self.journey_1_legacy_id
-    }
-
-    pub fn journey_1_admin_id(&self) -> &str {
-        &self.journey_1_admin_id
+    pub fn journey_1_id(&self) -> &JourneyId {
+        &self.journey_1_id
     }
 
     pub fn journey_1_stop_id(&self) -> i32 {
         self.journey_1_stop_id
     }
 
-    pub fn journey_2_legacy_id(&self) -> i32 {
-        self.journey_2_legacy_id
-    }
-
-    pub fn journey_2_admin_id(&self) -> &str {
-        &self.journey_2_admin_id
+    pub fn journey_2_id(&self) -> &JourneyId {
+        &self.journey_2_id
     }
 
     pub fn journey_2_stop_id(&self) -> i32 {
