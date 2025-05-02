@@ -1118,7 +1118,7 @@ pub struct ThroughService {
     journey_1_id: i32,
     journey_1_stop_id: i32, // Last stop of journey 1.
     journey_2_id: i32,
-    journey_2_stop_id: Option<i32>, // First stop of journey 2.
+    journey_2_stop_id: i32, // First stop of journey 2.
     bit_field_id: i32,
 }
 
@@ -1130,7 +1130,7 @@ impl ThroughService {
         journey_1_id: i32,
         journey_1_stop_id: i32,
         journey_2_id: i32,
-        journey_2_stop_id: Option<i32>,
+        journey_2_stop_id: i32,
         bit_field_id: i32,
     ) -> Self {
         Self {
@@ -1141,6 +1141,26 @@ impl ThroughService {
             journey_2_stop_id,
             bit_field_id,
         }
+    }
+
+    pub fn journey_1_id(&self) -> i32 {
+        self.journey_1_id
+    }
+
+    pub fn journey_1_stop_id(&self) -> i32 {
+        self.journey_1_stop_id
+    }
+
+    pub fn journey_2_id(&self) -> i32 {
+        self.journey_2_id
+    }
+
+    pub fn journey_2_stop_id(&self) -> i32 {
+        self.journey_2_stop_id
+    }
+
+    pub fn bit_field_id(&self) -> i32 {
+        self.bit_field_id
     }
 }
 

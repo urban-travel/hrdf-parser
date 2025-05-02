@@ -27,7 +27,8 @@ pub fn parse(
             ColumnDefinition::new(23, 28, ExpectedType::Integer32),
             ColumnDefinition::new(30, 35, ExpectedType::String),
             ColumnDefinition::new(37, 42, ExpectedType::Integer32), // Should be INT16 according to the standard. The standard contains an error. The correct type is INT32.
-            ColumnDefinition::new(44, 50, ExpectedType::OptionInteger32),
+            ColumnDefinition::new(44, 50, ExpectedType::Integer32), // No indication this should be
+                                                                    // optional
         ]),
     ]);
     let parser = FileParser::new(&format!("{path}/DURCHBI"), row_parser)?;
@@ -62,15 +63,27 @@ fn create_instance(
     let journey_2_id: i32 = values.remove(0).into();
     let journey_2_administration: String = values.remove(0).into();
     let bit_field_id: i32 = values.remove(0).into();
-    let journey_2_stop_id: Option<i32> = values.remove(0).into();
+    let journey_2_stop_id: i32 = values.remove(0).into();
+
+    let journey_1_legacy_id = journey_1_id;
+    let journey_2_legacy_id = journey_2_id;
 
     let journey_1_id = *journeys_pk_type_converter
-        .get(&(journey_1_id, journey_1_administration))
+        .get(&(journey_1_id, journey_1_administration.clone()))
         .ok_or("Unknown legacy ID")?;
 
     let journey_2_id = *journeys_pk_type_converter
-        .get(&(journey_2_id, journey_2_administration))
+        .get(&(journey_2_id, journey_2_administration.clone()))
         .ok_or("Unknown legacy ID")?;
+
+    if journey_1_stop_id != journey_2_stop_id {
+        log::info!("{journey_1_stop_id}, {journey_2_stop_id}");
+    }
+    if journey_1_stop_id == 8774500 {
+        println!(
+            "({journey_1_legacy_id}, {journey_1_administration}), ({journey_2_legacy_id}, {journey_2_administration}), {journey_1_id}, {journey_2_id}, {journey_1_stop_id}, {bit_field_id}"
+        );
+    }
 
     Ok(ThroughService::new(
         auto_increment.next(),
