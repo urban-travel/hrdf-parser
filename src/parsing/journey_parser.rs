@@ -344,16 +344,12 @@ fn journey_row_parser() -> RowParser {
     ])
 }
 
-pub fn parse(
-    path: &str,
+fn journey_row_converter(
+    parser: FileParser,
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
     attributes_pk_type_converter: &FxHashMap<String, i32>,
     directions_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<JourneyAndTypeConverter, Box<dyn Error>> {
-    log::info!("Parsing FPLAN...");
-    let row_parser = journey_row_parser();
-    let parser = FileParser::new(&format!("{path}/FPLAN"), row_parser)?;
-
+) -> Result<(FxHashMap<i32, Journey>, FxHashMap<(i32, String), i32>), Box<dyn Error>> {
     let auto_increment = AutoIncrement::new();
     let mut data = Vec::new();
     let mut pk_type_converter = FxHashMap::default();
@@ -393,6 +389,25 @@ pub fn parse(
 
     let data = Journey::vec_to_map(data);
 
+    Ok((data, pk_type_converter))
+}
+
+pub fn parse(
+    path: &str,
+    transport_types_pk_type_converter: &FxHashMap<String, i32>,
+    attributes_pk_type_converter: &FxHashMap<String, i32>,
+    directions_pk_type_converter: &FxHashMap<String, i32>,
+) -> Result<JourneyAndTypeConverter, Box<dyn Error>> {
+    log::info!("Parsing FPLAN...");
+    let row_parser = journey_row_parser();
+    let parser = FileParser::new(&format!("{path}/FPLAN"), row_parser)?;
+
+    let (data, pk_type_converter) = journey_row_converter(
+        parser,
+        transport_types_pk_type_converter,
+        attributes_pk_type_converter,
+        directions_pk_type_converter,
+    )?;
     Ok((ResourceStorage::new(data), pk_type_converter))
 }
 
