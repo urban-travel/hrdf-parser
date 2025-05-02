@@ -222,8 +222,6 @@ use crate::{
     utils::{AutoIncrement, create_time_from_value},
 };
 
-use super::bit_field_parser;
-
 type JourneyAndTypeConverter = (ResourceStorage<Journey>, FxHashMap<(i32, String), i32>);
 
 enum RowType {

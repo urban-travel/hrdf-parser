@@ -65,31 +65,30 @@ fn create_instance(
     let bit_field_id: i32 = values.remove(0).into();
     let journey_2_stop_id: i32 = values.remove(0).into();
 
-    let journey_1_legacy_id = journey_1_id;
-    let journey_2_legacy_id = journey_2_id;
-
-    let journey_1_id = *journeys_pk_type_converter
+    let _journey_1_id = *journeys_pk_type_converter
         .get(&(journey_1_id, journey_1_administration.clone()))
         .ok_or("Unknown legacy ID")?;
 
-    let journey_2_id = *journeys_pk_type_converter
+    let _journey_2_id = *journeys_pk_type_converter
         .get(&(journey_2_id, journey_2_administration.clone()))
         .ok_or("Unknown legacy ID")?;
 
     if journey_1_stop_id != journey_2_stop_id {
         log::info!("{journey_1_stop_id}, {journey_2_stop_id}");
     }
-    if journey_1_stop_id == 8774500 {
-        println!(
-            "({journey_1_legacy_id}, {journey_1_administration}), ({journey_2_legacy_id}, {journey_2_administration}), {journey_1_id}, {journey_2_id}, {journey_1_stop_id}, {bit_field_id}"
-        );
-    }
+    //if journey_1_stop_id == 8774500 {
+    //    println!(
+    //        "({journey_1_legacy_id}, {journey_1_administration}), ({journey_2_legacy_id}, {journey_2_administration}), {journey_1_id}, {journey_2_id}, {journey_1_stop_id}, {bit_field_id}"
+    //    );
+    //}
 
     Ok(ThroughService::new(
         auto_increment.next(),
         journey_1_id,
+        journey_1_administration,
         journey_1_stop_id,
         journey_2_id,
+        journey_2_administration,
         journey_2_stop_id,
         bit_field_id,
     ))
