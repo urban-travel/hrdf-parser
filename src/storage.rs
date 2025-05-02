@@ -5,6 +5,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    JourneyId,
     models::{
         Attribute, BitField, Direction, ExchangeTimeAdministration, ExchangeTimeJourney,
         ExchangeTimeLine, Holiday, InformationText, Journey, JourneyPlatform, Line, Model,
@@ -54,6 +55,8 @@ pub struct DataStorage {
     bit_fields_by_stop_id: FxHashMap<i32, FxHashSet<i32>>,
     journeys_by_stop_id_and_bit_field_id: FxHashMap<(i32, i32), Vec<i32>>,
     stop_connections_by_stop_id: FxHashMap<i32, FxHashSet<i32>>,
+    bit_field_id_for_through_service_by_journey_id_stop_id:
+        FxHashMap<(JourneyId, JourneyId, i32), i32>,
     exchange_times_administration_map: FxHashMap<(Option<i32>, String, String), i32>,
     exchange_times_journey_map: FxHashMap<(i32, i32, i32), FxHashSet<i32>>,
 
@@ -61,7 +64,6 @@ pub struct DataStorage {
     default_exchange_time: (i16, i16), // (InterCity exchange time, Exchange time for all other journey types)
 }
 
-#[allow(unused)]
 impl DataStorage {
     pub fn new(version: Version, path: &str) -> Result<Self, Box<dyn Error>> {
         // Time-relevant data
@@ -104,18 +106,22 @@ impl DataStorage {
         let bit_fields_by_day = create_bit_fields_by_day(&bit_fields, &timetable_metadata)?;
         log::info!("Building bit_fields_by_stop_id...");
         let bit_fields_by_stop_id = create_bit_fields_by_stop_id(&journeys);
-        log::info!("Building journeys_by_stop_id_and_bit_field_id...");
+        log::info!("Building journeys by stop id and bit field_id...");
         let journeys_by_stop_id_and_bit_field_id =
             create_journeys_by_stop_id_and_bit_field_id(&journeys);
-        log::info!("Building stop_connections_by_stop_id...");
+        log::info!("Building stop connections by stop id...");
+        let bit_field_id_for_through_service_by_journey_id_stop_id =
+            create_bit_field_id_through_service_by_journey_id_stop_id(&through_service);
+        log::info!("Building stop connections by stop id...");
         let stop_connections_by_stop_id = create_stop_connections_by_stop_id(&stop_connections);
-        log::info!("Building exchange_times_administration_map...");
+        log::info!("Building exchange times administration map...");
         let exchange_times_administration_map =
             create_exchange_times_administration_map(&exchange_times_administration);
-        log::info!("Building exchange_times_journey_map...");
+        log::info!("Building exchange times journey_map...");
         let exchange_times_journey_map = create_exchange_times_journey_map(&exchange_times_journey);
+        log::info!("Building through service map...");
 
-        let mut data_storage = Self {
+        let data_storage = Self {
             // Time-relevant data
             bit_fields,
             holidays,
@@ -144,6 +150,7 @@ impl DataStorage {
             bit_fields_by_stop_id,
             journeys_by_stop_id_and_bit_field_id,
             stop_connections_by_stop_id,
+            bit_field_id_for_through_service_by_journey_id_stop_id,
             exchange_times_administration_map,
             exchange_times_journey_map,
             // Additional global data
@@ -173,6 +180,10 @@ impl DataStorage {
 
     pub fn stop_connections(&self) -> &ResourceStorage<StopConnection> {
         &self.stop_connections
+    }
+
+    pub fn through_service(&self) -> &ResourceStorage<ThroughService> {
+        &self.through_service
     }
 
     pub fn stops(&self) -> &ResourceStorage<Stop> {
@@ -213,6 +224,12 @@ impl DataStorage {
 
     pub fn stop_connections_by_stop_id(&self) -> &FxHashMap<i32, FxHashSet<i32>> {
         &self.stop_connections_by_stop_id
+    }
+
+    pub fn bit_field_id_for_through_service_by_journey_id_stop_id(
+        &self,
+    ) -> &FxHashMap<(JourneyId, JourneyId, i32), i32> {
+        &self.bit_field_id_for_through_service_by_journey_id_stop_id
     }
 
     pub fn exchange_times_administration_map(
@@ -342,6 +359,27 @@ fn create_journeys_by_stop_id_and_bit_field_id(
                     .or_default()
                     .push(journey.id());
             });
+            acc
+        })
+}
+
+/// Given journey_stop_id, and journey_id_1, journey_id_2, we obtain the bit_field_id of the ThroughService
+fn create_bit_field_id_through_service_by_journey_id_stop_id(
+    through_services: &ResourceStorage<ThroughService>,
+) -> FxHashMap<(JourneyId, JourneyId, i32), i32> {
+    through_services
+        .entries()
+        .into_iter()
+        .fold(FxHashMap::default(), |mut acc, through_service| {
+            let journey_1_id = through_service.journey_1_id();
+            let journey_2_id = through_service.journey_2_id();
+            let journey_stop_id = through_service.journey_1_stop_id();
+            let bit_field_id = through_service.bit_field_id();
+
+            acc.insert(
+                (journey_1_id.clone(), journey_2_id.clone(), journey_stop_id),
+                bit_field_id,
+            );
             acc
         })
 }
