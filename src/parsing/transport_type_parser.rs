@@ -145,7 +145,11 @@ fn create_instance(
 
     let id = auto_increment.next();
 
-    pk_type_converter.insert(designation.to_owned(), id);
+    if let Some(previous) = pk_type_converter.insert(designation.to_owned(), id) {
+        log::error!(
+            "Error: previous id {previous} for {designation}. The designation is not unique."
+        );
+    };
     TransportType::new(
         id,
         designation.to_owned(),

@@ -74,7 +74,11 @@ fn create_instance(
 
     let id = remove_first_char(&legacy_id).parse::<i32>()?;
 
-    pk_type_converter.insert(legacy_id, id);
+    if let Some(previous) = pk_type_converter.insert(legacy_id.clone(), id) {
+        log::error!(
+            "Error: previous id {previous} for {legacy_id}. The designation is not unique."
+        );
+    }
     Ok(Direction::new(id, name))
 }
 
