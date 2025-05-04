@@ -333,10 +333,8 @@ impl ExchangeTimeJourney {
     pub fn new(
         id: i32,
         stop_id: i32,
-        journey_legacy_id_1: i32,
-        administration_1: String,
-        journey_legacy_id_2: i32,
-        administration_2: String,
+        (journey_legacy_id_1, administration_1): JourneyId,
+        (journey_legacy_id_2, administration_2): JourneyId,
         duration: i16,
         is_guaranteed: bool,
         bit_field_id: Option<i32>,

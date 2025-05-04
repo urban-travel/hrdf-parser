@@ -210,9 +210,10 @@
 use std::error::Error;
 
 use chrono::NaiveTime;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
+    JourneyId,
     models::{Journey, JourneyMetadataEntry, JourneyMetadataType, JourneyRouteEntry, Model},
     parsing::{
         ColumnDefinition, ExpectedType, FastRowMatcher, FileParser, ParsedValue, RowDefinition,
@@ -222,7 +223,7 @@ use crate::{
     utils::{AutoIncrement, create_time_from_value},
 };
 
-type JourneyAndTypeConverter = (ResourceStorage<Journey>, FxHashMap<(i32, String), i32>);
+type JourneyAndTypeConverter = (ResourceStorage<Journey>, FxHashSet<JourneyId>);
 
 enum RowType {
     RowA = 1,
@@ -349,10 +350,10 @@ fn journey_row_converter(
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
     attributes_pk_type_converter: &FxHashMap<String, i32>,
     directions_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<(FxHashMap<i32, Journey>, FxHashMap<(i32, String), i32>), Box<dyn Error>> {
+) -> Result<(FxHashMap<i32, Journey>, FxHashSet<JourneyId>), Box<dyn Error>> {
     let auto_increment = AutoIncrement::new();
     let mut data = Vec::new();
-    let mut pk_type_converter = FxHashMap::default();
+    let mut pk_type_converter = FxHashSet::default();
 
     for x in parser.parse() {
         let (id, _, values) = x?;
@@ -426,17 +427,13 @@ fn row_a_from_parsed_values(mut values: Vec<ParsedValue>) -> (i32, String) {
 fn create_instance(
     values: Vec<ParsedValue>,
     auto_increment: &AutoIncrement,
-    pk_type_converter: &mut FxHashMap<(i32, String), i32>,
+    pk_type_converter: &mut FxHashSet<JourneyId>,
 ) -> Journey {
     let (legacy_id, administration) = row_a_from_parsed_values(values);
 
     let id = auto_increment.next();
 
-    if let Some(previous) = pk_type_converter.insert((legacy_id, administration.to_owned()), id) {
-        log::error!(
-            "Error: previous id {previous} for ({legacy_id}, {administration}). The ({legacy_id}, {administration}) is not unique."
-        );
-    };
+    pk_type_converter.insert((legacy_id, administration.to_owned()));
     Journey::new(id, legacy_id, administration)
 }
 
@@ -793,7 +790,7 @@ fn create_time(time: Option<i32>) -> Option<NaiveTime> {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::parsing::tests::get_json_values;
+    //use crate::parsing::tests::get_json_values;
     use pretty_assertions::assert_eq;
 
     #[test]

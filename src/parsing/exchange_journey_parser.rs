@@ -26,9 +26,10 @@
 /// UMSTEIGZ
 use std::error::Error;
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
+    JourneyId,
     models::{ExchangeTimeJourney, Model},
     parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
     storage::ResourceStorage,
@@ -52,7 +53,7 @@ fn exchange_journey_row_parser() -> RowParser {
 }
 fn exchange_journey_row_converter(
     parser: FileParser,
-    journeys_pk_type_converter: &FxHashMap<(i32, String), i32>,
+    journeys_pk_type_converter: &FxHashSet<JourneyId>,
 ) -> Result<FxHashMap<i32, ExchangeTimeJourney>, Box<dyn Error>> {
     let auto_increment = AutoIncrement::new();
 
@@ -70,7 +71,7 @@ fn exchange_journey_row_converter(
 
 pub fn parse(
     path: &str,
-    journeys_pk_type_converter: &FxHashMap<(i32, String), i32>,
+    journeys_pk_type_converter: &FxHashSet<JourneyId>,
 ) -> Result<ResourceStorage<ExchangeTimeJourney>, Box<dyn Error>> {
     log::info!("Parsing UMSTEIGZ...");
     let row_parser = exchange_journey_row_parser();
@@ -87,7 +88,7 @@ pub fn parse(
 fn create_instance(
     mut values: Vec<ParsedValue>,
     auto_increment: &AutoIncrement,
-    journeys_pk_type_converter: &FxHashMap<(i32, String), i32>,
+    journeys_pk_type_converter: &FxHashSet<JourneyId>,
 ) -> Result<ExchangeTimeJourney, Box<dyn Error>> {
     let stop_id: i32 = values.remove(0).into();
     let journey_id_1: i32 = values.remove(0).into();
@@ -98,11 +99,11 @@ fn create_instance(
     let is_guaranteed: String = values.remove(0).into();
     let bit_field_id: Option<i32> = values.remove(0).into();
 
-    let _journey_id_1 = *journeys_pk_type_converter
+    let _journey_id_1 = journeys_pk_type_converter
         .get(&(journey_id_1, administration_1.clone()))
         .ok_or("Unknown legacy ID")?;
 
-    let _journey_id_2 = *journeys_pk_type_converter
+    let _journey_id_2 = journeys_pk_type_converter
         .get(&(journey_id_2, administration_2.clone()))
         .ok_or("Unknown legacy ID")?;
 
@@ -113,10 +114,8 @@ fn create_instance(
     Ok(ExchangeTimeJourney::new(
         auto_increment.next(),
         stop_id,
-        journey_id_1,
-        administration_1,
-        journey_id_2,
-        administration_2,
+        (journey_id_1, administration_1),
+        (journey_id_2, administration_2),
         duration,
         is_guaranteed,
         bit_field_id,
@@ -191,11 +190,11 @@ mod tests {
         };
 
         // The journeys_pk_type_converter is dummy and created just for testing purposes
-        let mut journeys_pk_type_converter: FxHashMap<(i32, String), i32> = FxHashMap::default();
-        journeys_pk_type_converter.insert((23057, "000011".to_string()), 1);
-        journeys_pk_type_converter.insert((1929, "000011".to_string()), 2);
-        journeys_pk_type_converter.insert((1671, "000011".to_string()), 3);
-        journeys_pk_type_converter.insert((24256, "000011".to_string()), 4);
+        let mut journeys_pk_type_converter: FxHashSet<JourneyId> = FxHashSet::default();
+        journeys_pk_type_converter.insert((23057, "000011".to_string()));
+        journeys_pk_type_converter.insert((1929, "000011".to_string()));
+        journeys_pk_type_converter.insert((1671, "000011".to_string()));
+        journeys_pk_type_converter.insert((24256, "000011".to_string()));
 
         let data = exchange_journey_row_converter(parser, &journeys_pk_type_converter).unwrap();
         // First row

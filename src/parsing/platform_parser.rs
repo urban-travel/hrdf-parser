@@ -5,10 +5,10 @@
 // Note: this parser collects both the Platform and JourneyPlatform resources.
 use std::error::Error;
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-    Version,
+    JourneyId, Version,
     models::{CoordinateSystem, Coordinates, JourneyPlatform, Model, Platform},
     parsing::{
         ColumnDefinition, ExpectedType, FastRowMatcher, FileParser, ParsedValue, RowDefinition,
@@ -136,7 +136,7 @@ fn construct_row_parser(version: Version) -> RowParser {
 pub fn parse(
     version: Version,
     path: &str,
-    journeys_pk_type_converter: &FxHashMap<(i32, String), i32>,
+    journeys_pk_type_converter: &FxHashSet<JourneyId>,
 ) -> Result<(ResourceStorage<JourneyPlatform>, ResourceStorage<Platform>), Box<dyn Error>> {
     log::info!("Parsing GLEIS...");
     let row_parser = construct_row_parser(version);
@@ -301,7 +301,7 @@ fn load_coordinates_for_platforms(
 
 fn create_journey_platform(
     mut values: Vec<ParsedValue>,
-    journeys_pk_type_converter: &FxHashMap<(i32, String), i32>,
+    journeys_pk_type_converter: &FxHashSet<JourneyId>,
     platforms_pk_type_converter: &FxHashMap<(i32, i32), i32>,
 ) -> Result<JourneyPlatform, Box<dyn Error>> {
     let stop_id: i32 = values.remove(0).into();
@@ -311,7 +311,7 @@ fn create_journey_platform(
     let time: Option<i32> = values.remove(0).into();
     let bit_field_id: Option<i32> = values.remove(0).into();
 
-    let _journey_id = *journeys_pk_type_converter
+    let _journey_id = journeys_pk_type_converter
         .get(&(journey_id, administration.clone()))
         .ok_or("Unknown legacy journey ID")?;
 
@@ -343,8 +343,8 @@ fn create_platform(
     let (code, sectors) = parse_platform_data(platform_data)?;
 
     if let Some(previous) = platforms_pk_type_converter.insert((stop_id, index), id) {
-        log::error!(
-            "Error: previous id {previous} for ({stop_id}, {index}). The ({stop_id}, {index}) is not unique."
+        log::warn!(
+            "Warning: previous id {previous} for ({stop_id}, {index}). The pair (stop_id, index), ({stop_id}, {index}), is not unique."
         );
     };
 
