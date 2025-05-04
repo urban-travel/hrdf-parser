@@ -311,8 +311,8 @@ fn create_journey_platform(
     let time: Option<i32> = values.remove(0).into();
     let bit_field_id: Option<i32> = values.remove(0).into();
 
-    let journey_id = *journeys_pk_type_converter
-        .get(&(journey_id, administration))
+    let _journey_id = *journeys_pk_type_converter
+        .get(&(journey_id, administration.clone()))
         .ok_or("Unknown legacy journey ID")?;
 
     let platform_id = *platforms_pk_type_converter
@@ -323,6 +323,7 @@ fn create_journey_platform(
 
     Ok(JourneyPlatform::new(
         journey_id,
+        administration,
         platform_id,
         time,
         bit_field_id,
@@ -341,7 +342,12 @@ fn create_platform(
     let id = auto_increment.next();
     let (code, sectors) = parse_platform_data(platform_data)?;
 
-    platforms_pk_type_converter.insert((stop_id, index), id);
+    if let Some(previous) = platforms_pk_type_converter.insert((stop_id, index), id) {
+        log::error!(
+            "Error: previous id {previous} for ({stop_id}, {index}). The ({stop_id}, {index}) is not unique."
+        );
+    };
+
     Ok(Platform::new(id, code, sectors, stop_id))
 }
 

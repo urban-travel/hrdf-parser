@@ -98,12 +98,12 @@ fn create_instance(
     let is_guaranteed: String = values.remove(0).into();
     let bit_field_id: Option<i32> = values.remove(0).into();
 
-    let journey_id_1 = *journeys_pk_type_converter
-        .get(&(journey_id_1, administration_1))
+    let _journey_id_1 = *journeys_pk_type_converter
+        .get(&(journey_id_1, administration_1.clone()))
         .ok_or("Unknown legacy ID")?;
 
-    let journey_id_2 = *journeys_pk_type_converter
-        .get(&(journey_id_2, administration_2))
+    let _journey_id_2 = *journeys_pk_type_converter
+        .get(&(journey_id_2, administration_2.clone()))
         .ok_or("Unknown legacy ID")?;
 
     // TODO: I haven't seen an is_guaranteed field in the doc. Check if this makes sense.
@@ -114,7 +114,9 @@ fn create_instance(
         auto_increment.next(),
         stop_id,
         journey_id_1,
+        administration_1,
         journey_id_2,
+        administration_2,
         duration,
         is_guaranteed,
         bit_field_id,
@@ -202,8 +204,10 @@ mod tests {
             {
                 "id":1,
                 "stop_id": 8501008,
-                "journey_id_1": 1,
-                "journey_id_2": 3,
+                "journey_legacy_id_1": 23057,
+                "administration_1": "000011",
+                "journey_legacy_id_2": 1671,
+                "administration_2": "000011",
                 "duration": 2,
                 "is_guaranteed": false,
                 "bit_field_id": 10
@@ -215,8 +219,10 @@ mod tests {
             {
                 "id":2,
                 "stop_id": 8501120,
-                "journey_id_1": 2,
-                "journey_id_2": 4,
+                "journey_legacy_id_1": 1929,
+                "administration_1": "000011",
+                "journey_legacy_id_2": 24256,
+                "administration_2": "000011",
                 "duration": 999,
                 "is_guaranteed": false,
                 "bit_field_id": null

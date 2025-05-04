@@ -318,8 +318,10 @@ impl ExchangeTimeAdministration {
 pub struct ExchangeTimeJourney {
     id: i32,
     stop_id: i32,
-    journey_id_1: i32,
-    journey_id_2: i32,
+    journey_legacy_id_1: i32,
+    administration_1: String,
+    journey_legacy_id_2: i32,
+    administration_2: String,
     duration: i16, // Exchange time from journey 1 to journey 2 is in minutes.
     is_guaranteed: bool,
     bit_field_id: Option<i32>,
@@ -331,8 +333,10 @@ impl ExchangeTimeJourney {
     pub fn new(
         id: i32,
         stop_id: i32,
-        journey_id_1: i32,
-        journey_id_2: i32,
+        journey_legacy_id_1: i32,
+        administration_1: String,
+        journey_legacy_id_2: i32,
+        administration_2: String,
         duration: i16,
         is_guaranteed: bool,
         bit_field_id: Option<i32>,
@@ -340,8 +344,10 @@ impl ExchangeTimeJourney {
         Self {
             id,
             stop_id,
-            journey_id_1,
-            journey_id_2,
+            journey_legacy_id_1,
+            administration_1,
+            journey_legacy_id_2,
+            administration_2,
             duration,
             is_guaranteed,
             bit_field_id,
@@ -354,12 +360,20 @@ impl ExchangeTimeJourney {
         self.stop_id
     }
 
-    pub fn journey_id_1(&self) -> i32 {
-        self.journey_id_1
+    pub fn journey_legacy_id_1(&self) -> i32 {
+        self.journey_legacy_id_1
     }
 
-    pub fn journey_id_2(&self) -> i32 {
-        self.journey_id_2
+    pub fn administration_1(&self) -> &str {
+        &self.administration_1
+    }
+
+    pub fn journey_legacy_id_2(&self) -> i32 {
+        self.journey_legacy_id_2
+    }
+
+    pub fn administration_2(&self) -> &str {
+        &self.administration_2
     }
 
     pub fn duration(&self) -> i16 {
@@ -812,7 +826,8 @@ impl JourneyRouteEntry {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JourneyPlatform {
-    journey_id: i32,
+    journey_legacy_id: i32,
+    administration: String,
     platform_id: i32,
     time: Option<NaiveTime>,
     bit_field_id: Option<i32>,
@@ -820,13 +835,15 @@ pub struct JourneyPlatform {
 
 impl JourneyPlatform {
     pub fn new(
-        journey_id: i32,
+        journey_legacy_id: i32,
+        administration: String,
         platform_id: i32,
         time: Option<NaiveTime>,
         bit_field_id: Option<i32>,
     ) -> Self {
         Self {
-            journey_id,
+            journey_legacy_id,
+            administration,
             platform_id,
             time,
             bit_field_id,
@@ -838,7 +855,7 @@ impl Model<JourneyPlatform> for JourneyPlatform {
     type K = (i32, i32);
 
     fn id(&self) -> Self::K {
-        (self.journey_id, self.platform_id)
+        (self.journey_legacy_id, self.platform_id)
     }
 }
 
