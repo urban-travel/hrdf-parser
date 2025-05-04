@@ -3,9 +3,10 @@
 // DURCHBI
 use std::error::Error;
 
-use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 
 use crate::{
+    JourneyId,
     models::{Model, ThroughService},
     parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
     storage::ResourceStorage,
@@ -14,7 +15,7 @@ use crate::{
 
 pub fn parse(
     path: &str,
-    journeys_pk_type_converter: &FxHashMap<(i32, String), i32>,
+    journeys_pk_type_converter: &FxHashSet<JourneyId>,
 ) -> Result<ResourceStorage<ThroughService>, Box<dyn Error>> {
     log::info!("Parsing DURCHBI...");
     #[rustfmt::skip]
@@ -55,7 +56,7 @@ pub fn parse(
 fn create_instance(
     mut values: Vec<ParsedValue>,
     auto_increment: &AutoIncrement,
-    journeys_pk_type_converter: &FxHashMap<(i32, String), i32>,
+    journeys_pk_type_converter: &FxHashSet<JourneyId>,
 ) -> Result<ThroughService, Box<dyn Error>> {
     let journey_1_id: i32 = values.remove(0).into();
     let journey_1_administration: String = values.remove(0).into();
@@ -65,11 +66,11 @@ fn create_instance(
     let bit_field_id: i32 = values.remove(0).into();
     let journey_2_stop_id: i32 = values.remove(0).into();
 
-    let _journey_1_id = *journeys_pk_type_converter
+    let _journey_1_id = journeys_pk_type_converter
         .get(&(journey_1_id, journey_1_administration.clone()))
         .ok_or("Unknown legacy ID")?;
 
-    let _journey_2_id = *journeys_pk_type_converter
+    let _journey_2_id = journeys_pk_type_converter
         .get(&(journey_2_id, journey_2_administration.clone()))
         .ok_or("Unknown legacy ID")?;
 

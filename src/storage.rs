@@ -58,7 +58,7 @@ pub struct DataStorage {
     bit_field_id_for_through_service_by_journey_id_stop_id:
         FxHashMap<(JourneyId, JourneyId, i32), i32>,
     exchange_times_administration_map: FxHashMap<(Option<i32>, String, String), i32>,
-    exchange_times_journey_map: FxHashMap<(i32, i32, i32), FxHashSet<i32>>,
+    exchange_times_journey_map: FxHashMap<(i32, JourneyId, JourneyId), FxHashSet<i32>>,
 
     // Additional global data
     default_exchange_time: (i16, i16), // (InterCity exchange time, Exchange time for all other journey types)
@@ -238,7 +238,9 @@ impl DataStorage {
         &self.exchange_times_administration_map
     }
 
-    pub fn exchange_times_journey_map(&self) -> &FxHashMap<(i32, i32, i32), FxHashSet<i32>> {
+    pub fn exchange_times_journey_map(
+        &self,
+    ) -> &FxHashMap<(i32, JourneyId, JourneyId), FxHashSet<i32>> {
         &self.exchange_times_journey_map
     }
 
@@ -400,14 +402,20 @@ fn create_stop_connections_by_stop_id(
 
 fn create_exchange_times_journey_map(
     exchange_times_journey: &ResourceStorage<ExchangeTimeJourney>,
-) -> FxHashMap<(i32, i32, i32), FxHashSet<i32>> {
+) -> FxHashMap<(i32, JourneyId, JourneyId), FxHashSet<i32>> {
     exchange_times_journey.entries().into_iter().fold(
         FxHashMap::default(),
         |mut acc, exchange_time| {
             let key = (
                 exchange_time.stop_id(),
-                exchange_time.journey_id_1(),
-                exchange_time.journey_id_2(),
+                (
+                    exchange_time.journey_legacy_id_1(),
+                    exchange_time.administration_1().to_string(),
+                ),
+                (
+                    exchange_time.journey_legacy_id_2(),
+                    exchange_time.administration_2().to_string(),
+                ),
             );
 
             acc.entry(key).or_default().insert(exchange_time.id());
