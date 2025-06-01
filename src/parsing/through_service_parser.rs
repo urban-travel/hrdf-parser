@@ -14,7 +14,7 @@ use crate::{
 
 pub fn parse(
     path: &str,
-    journeys_pk_type_converter: &FxHashMap<(i32, String), i32>,
+    trips_pk_type_converter: &FxHashMap<(i32, String), i32>,
 ) -> Result<ResourceStorage<ThroughService>, Box<dyn Error>> {
     log::info!("Parsing DURCHBI...");
     #[rustfmt::skip]
@@ -38,7 +38,7 @@ pub fn parse(
         .parse()
         .map(|x| {
             x.and_then(|(_, _, values)| {
-                create_instance(values, &auto_increment, journeys_pk_type_converter)
+                create_instance(values, &auto_increment, trips_pk_type_converter)
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -54,30 +54,30 @@ pub fn parse(
 fn create_instance(
     mut values: Vec<ParsedValue>,
     auto_increment: &AutoIncrement,
-    journeys_pk_type_converter: &FxHashMap<(i32, String), i32>,
+    trips_pk_type_converter: &FxHashMap<(i32, String), i32>,
 ) -> Result<ThroughService, Box<dyn Error>> {
-    let journey_1_id: i32 = values.remove(0).into();
-    let journey_1_administration: String = values.remove(0).into();
-    let journey_1_stop_id: i32 = values.remove(0).into();
-    let journey_2_id: i32 = values.remove(0).into();
-    let journey_2_administration: String = values.remove(0).into();
+    let trip_1_id: i32 = values.remove(0).into();
+    let trip_1_administration: String = values.remove(0).into();
+    let trip_1_stop_id: i32 = values.remove(0).into();
+    let trip_2_id: i32 = values.remove(0).into();
+    let trip_2_administration: String = values.remove(0).into();
     let bit_field_id: i32 = values.remove(0).into();
-    let journey_2_stop_id: Option<i32> = values.remove(0).into();
+    let trip_2_stop_id: Option<i32> = values.remove(0).into();
 
-    let journey_1_id = *journeys_pk_type_converter
-        .get(&(journey_1_id, journey_1_administration))
+    let trip_1_id = *trips_pk_type_converter
+        .get(&(trip_1_id, trip_1_administration))
         .ok_or("Unknown legacy ID")?;
 
-    let journey_2_id = *journeys_pk_type_converter
-        .get(&(journey_2_id, journey_2_administration))
+    let trip_2_id = *trips_pk_type_converter
+        .get(&(trip_2_id, trip_2_administration))
         .ok_or("Unknown legacy ID")?;
 
     Ok(ThroughService::new(
         auto_increment.next(),
-        journey_1_id,
-        journey_1_stop_id,
-        journey_2_id,
-        journey_2_stop_id,
+        trip_1_id,
+        trip_1_stop_id,
+        trip_2_id,
+        trip_2_stop_id,
         bit_field_id,
     ))
 }

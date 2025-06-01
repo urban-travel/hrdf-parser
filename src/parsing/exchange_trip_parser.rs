@@ -6,7 +6,7 @@ use std::error::Error;
 use rustc_hash::FxHashMap;
 
 use crate::{
-    models::{ExchangeTimeJourney, Model},
+    models::{ExchangeTimeTrip, Model},
     parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
     storage::ResourceStorage,
     utils::AutoIncrement,
@@ -14,12 +14,12 @@ use crate::{
 
 pub fn parse(
     path: &str,
-    journeys_pk_type_converter: &FxHashMap<(i32, String), i32>,
-) -> Result<ResourceStorage<ExchangeTimeJourney>, Box<dyn Error>> {
+    trips_pk_type_converter: &FxHashMap<(i32, String), i32>,
+) -> Result<ResourceStorage<ExchangeTimeTrip>, Box<dyn Error>> {
     log::info!("Parsing UMSTEIGZ...");
     #[rustfmt::skip]
     let row_parser = RowParser::new(vec![
-        // This row is used to create a JourneyExchangeTime instance.
+        // This row is used to create a TripExchangeTime instance.
         RowDefinition::from(vec![
             ColumnDefinition::new(1, 7, ExpectedType::Integer32),
             ColumnDefinition::new(9, 14, ExpectedType::Integer32),
@@ -39,11 +39,11 @@ pub fn parse(
         .parse()
         .map(|x| {
             x.and_then(|(_, _, values)| {
-                create_instance(values, &auto_increment, journeys_pk_type_converter)
+                create_instance(values, &auto_increment, trips_pk_type_converter)
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let data = ExchangeTimeJourney::vec_to_map(data);
+    let data = ExchangeTimeTrip::vec_to_map(data);
 
     Ok(ResourceStorage::new(data))
 }
@@ -55,32 +55,32 @@ pub fn parse(
 fn create_instance(
     mut values: Vec<ParsedValue>,
     auto_increment: &AutoIncrement,
-    journeys_pk_type_converter: &FxHashMap<(i32, String), i32>,
-) -> Result<ExchangeTimeJourney, Box<dyn Error>> {
+    trips_pk_type_converter: &FxHashMap<(i32, String), i32>,
+) -> Result<ExchangeTimeTrip, Box<dyn Error>> {
     let stop_id: i32 = values.remove(0).into();
-    let journey_id_1: i32 = values.remove(0).into();
+    let trip_id_1: i32 = values.remove(0).into();
     let administration_1: String = values.remove(0).into();
-    let journey_id_2: i32 = values.remove(0).into();
+    let trip_id_2: i32 = values.remove(0).into();
     let administration_2: String = values.remove(0).into();
     let duration: i16 = values.remove(0).into();
     let is_guaranteed: String = values.remove(0).into();
     let bit_field_id: Option<i32> = values.remove(0).into();
 
-    let journey_id_1 = *journeys_pk_type_converter
-        .get(&(journey_id_1, administration_1))
+    let trip_id_1 = *trips_pk_type_converter
+        .get(&(trip_id_1, administration_1))
         .ok_or("Unknown legacy ID")?;
 
-    let journey_id_2 = *journeys_pk_type_converter
-        .get(&(journey_id_2, administration_2))
+    let trip_id_2 = *trips_pk_type_converter
+        .get(&(trip_id_2, administration_2))
         .ok_or("Unknown legacy ID")?;
 
     let is_guaranteed = is_guaranteed == "!";
 
-    Ok(ExchangeTimeJourney::new(
+    Ok(ExchangeTimeTrip::new(
         auto_increment.next(),
         stop_id,
-        journey_id_1,
-        journey_id_2,
+        trip_id_1,
+        trip_id_2,
         duration,
         is_guaranteed,
         bit_field_id,

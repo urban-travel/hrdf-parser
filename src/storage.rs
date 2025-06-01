@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     models::{
-        Attribute, BitField, Direction, ExchangeTimeAdministration, ExchangeTimeJourney,
-        ExchangeTimeLine, Holiday, InformationText, Journey, JourneyPlatform, Line, Model,
+        Attribute, BitField, Direction, ExchangeTimeAdministration, ExchangeTimeTrip,
+        ExchangeTimeLine, Holiday, InformationText, Trip, TripPlatform, Line, Model,
         Platform, Stop, StopConnection, ThroughService, TimetableMetadataEntry, TransportCompany,
         TransportType, Version,
     },
@@ -39,26 +39,26 @@ pub struct DataStorage {
     stop_connections: ResourceStorage<StopConnection>,
 
     // Timetable data
-    journeys: ResourceStorage<Journey>,
-    journey_platform: ResourceStorage<JourneyPlatform>,
+    trips: ResourceStorage<Trip>,
+    trip_platform: ResourceStorage<TripPlatform>,
     platforms: ResourceStorage<Platform>,
     through_service: ResourceStorage<ThroughService>,
 
     // Exchange times
     exchange_times_administration: ResourceStorage<ExchangeTimeAdministration>,
-    exchange_times_journey: ResourceStorage<ExchangeTimeJourney>,
+    exchange_times_trip: ResourceStorage<ExchangeTimeTrip>,
     exchange_times_line: ResourceStorage<ExchangeTimeLine>,
 
     // Maps
     bit_fields_by_day: FxHashMap<NaiveDate, FxHashSet<i32>>,
     bit_fields_by_stop_id: FxHashMap<i32, FxHashSet<i32>>,
-    journeys_by_stop_id_and_bit_field_id: FxHashMap<(i32, i32), Vec<i32>>,
+    trips_by_stop_id_and_bit_field_id: FxHashMap<(i32, i32), Vec<i32>>,
     stop_connections_by_stop_id: FxHashMap<i32, FxHashSet<i32>>,
     exchange_times_administration_map: FxHashMap<(Option<i32>, String, String), i32>,
-    exchange_times_journey_map: FxHashMap<(i32, i32, i32), FxHashSet<i32>>,
+    exchange_times_trip_map: FxHashMap<(i32, i32, i32), FxHashSet<i32>>,
 
     // Additional global data
-    default_exchange_time: (i16, i16), // (InterCity exchange time, Exchange time for all other journey types)
+    default_exchange_time: (i16, i16), // (InterCity exchange time, Exchange time for all other trip types)
 }
 
 #[allow(unused)]
@@ -83,37 +83,37 @@ impl DataStorage {
         let (stops, default_exchange_time) = parsing::load_stops(version, path)?;
 
         // Timetable data
-        let (journeys, journeys_pk_type_converter) = parsing::load_journeys(
+        let (trips, trips_pk_type_converter) = parsing::load_trips(
             path,
             &transport_types_pk_type_converter,
             &attributes_pk_type_converter,
             &directions_pk_type_converter,
         )?;
-        let (journey_platform, platforms) =
-            parsing::load_platforms(path, &journeys_pk_type_converter)?;
-        let through_service = parsing::load_through_service(path, &journeys_pk_type_converter)?;
+        let (trip_platform, platforms) =
+            parsing::load_platforms(path, &trips_pk_type_converter)?;
+        let through_service = parsing::load_through_service(path, &trips_pk_type_converter)?;
 
         // Exchange times
         let exchange_times_administration = parsing::load_exchange_times_administration(path)?;
-        let exchange_times_journey =
-            parsing::load_exchange_times_journey(path, &journeys_pk_type_converter)?;
+        let exchange_times_trip =
+            parsing::load_exchange_times_trip(path, &trips_pk_type_converter)?;
         let exchange_times_line =
             parsing::load_exchange_times_line(path, &transport_types_pk_type_converter)?;
 
         log::info!("Building bit_fields_by_day...");
         let bit_fields_by_day = create_bit_fields_by_day(&bit_fields, &timetable_metadata)?;
         log::info!("Building bit_fields_by_stop_id...");
-        let bit_fields_by_stop_id = create_bit_fields_by_stop_id(&journeys);
-        log::info!("Building journeys_by_stop_id_and_bit_field_id...");
-        let journeys_by_stop_id_and_bit_field_id =
-            create_journeys_by_stop_id_and_bit_field_id(&journeys);
+        let bit_fields_by_stop_id = create_bit_fields_by_stop_id(&trips);
+        log::info!("Building trips_by_stop_id_and_bit_field_id...");
+        let trips_by_stop_id_and_bit_field_id =
+            create_trips_by_stop_id_and_bit_field_id(&trips);
         log::info!("Building stop_connections_by_stop_id...");
         let stop_connections_by_stop_id = create_stop_connections_by_stop_id(&stop_connections);
         log::info!("Building exchange_times_administration_map...");
         let exchange_times_administration_map =
             create_exchange_times_administration_map(&exchange_times_administration);
-        log::info!("Building exchange_times_journey_map...");
-        let exchange_times_journey_map = create_exchange_times_journey_map(&exchange_times_journey);
+        log::info!("Building exchange_times_trip_map...");
+        let exchange_times_trip_map = create_exchange_times_trip_map(&exchange_times_trip);
 
         let mut data_storage = Self {
             // Time-relevant data
@@ -131,21 +131,21 @@ impl DataStorage {
             stop_connections,
             stops,
             // Timetable data
-            journeys,
-            journey_platform,
+            trips,
+            trip_platform,
             platforms,
             through_service,
             // Exchange times
             exchange_times_administration,
-            exchange_times_journey,
+            exchange_times_trip,
             exchange_times_line,
             // Maps
             bit_fields_by_day,
             bit_fields_by_stop_id,
-            journeys_by_stop_id_and_bit_field_id,
+            trips_by_stop_id_and_bit_field_id,
             stop_connections_by_stop_id,
             exchange_times_administration_map,
-            exchange_times_journey_map,
+            exchange_times_trip_map,
             // Additional global data
             default_exchange_time,
         };
@@ -159,8 +159,8 @@ impl DataStorage {
         &self.bit_fields
     }
 
-    pub fn journeys(&self) -> &ResourceStorage<Journey> {
-        &self.journeys
+    pub fn trips(&self) -> &ResourceStorage<Trip> {
+        &self.trips
     }
 
     pub fn lines(&self) -> &ResourceStorage<Line> {
@@ -191,8 +191,8 @@ impl DataStorage {
         &self.exchange_times_administration
     }
 
-    pub fn exchange_times_journey(&self) -> &ResourceStorage<ExchangeTimeJourney> {
-        &self.exchange_times_journey
+    pub fn exchange_times_trip(&self) -> &ResourceStorage<ExchangeTimeTrip> {
+        &self.exchange_times_trip
     }
 
     pub fn exchange_times_line(&self) -> &ResourceStorage<ExchangeTimeLine> {
@@ -207,8 +207,8 @@ impl DataStorage {
         &self.bit_fields_by_stop_id
     }
 
-    pub fn journeys_by_stop_id_and_bit_field_id(&self) -> &FxHashMap<(i32, i32), Vec<i32>> {
-        &self.journeys_by_stop_id_and_bit_field_id
+    pub fn trips_by_stop_id_and_bit_field_id(&self) -> &FxHashMap<(i32, i32), Vec<i32>> {
+        &self.trips_by_stop_id_and_bit_field_id
     }
 
     pub fn stop_connections_by_stop_id(&self) -> &FxHashMap<i32, FxHashSet<i32>> {
@@ -221,8 +221,8 @@ impl DataStorage {
         &self.exchange_times_administration_map
     }
 
-    pub fn exchange_times_journey_map(&self) -> &FxHashMap<(i32, i32, i32), FxHashSet<i32>> {
-        &self.exchange_times_journey_map
+    pub fn exchange_times_trip_map(&self) -> &FxHashMap<(i32, i32, i32), FxHashSet<i32>> {
+        &self.exchange_times_trip_map
     }
 
     pub fn default_exchange_time(&self) -> (i16, i16) {
@@ -314,34 +314,34 @@ fn create_bit_fields_by_day(
 }
 
 fn create_bit_fields_by_stop_id(
-    journeys: &ResourceStorage<Journey>,
+    trips: &ResourceStorage<Trip>,
 ) -> FxHashMap<i32, FxHashSet<i32>> {
-    journeys
+    trips
         .entries()
         .into_iter()
-        .fold(FxHashMap::default(), |mut acc, journey| {
-            journey.route().iter().for_each(|route_entry| {
+        .fold(FxHashMap::default(), |mut acc, trip| {
+            trip.route().iter().for_each(|route_entry| {
                 acc.entry(route_entry.stop_id())
                     .or_insert(FxHashSet::default())
-                    // If the journey has no bit_field_id, the default value is 0. A value of 0 means that the journey operates every day.
-                    .insert(journey.bit_field_id().unwrap_or(0));
+                    // If the trip has no bit_field_id, the default value is 0. A value of 0 means that the trip operates every day.
+                    .insert(trip.bit_field_id().unwrap_or(0));
             });
             acc
         })
 }
 
-fn create_journeys_by_stop_id_and_bit_field_id(
-    journeys: &ResourceStorage<Journey>,
+fn create_trips_by_stop_id_and_bit_field_id(
+    trips: &ResourceStorage<Trip>,
 ) -> FxHashMap<(i32, i32), Vec<i32>> {
-    journeys
+    trips
         .entries()
         .into_iter()
-        .fold(FxHashMap::default(), |mut acc, journey| {
-            journey.route().iter().for_each(|route_entry| {
-                // If the journey has no bit_field_id, the default value is 0. A value of 0 means that the journey operates every day.
-                acc.entry((route_entry.stop_id(), journey.bit_field_id().unwrap_or(0)))
+        .fold(FxHashMap::default(), |mut acc, trip| {
+            trip.route().iter().for_each(|route_entry| {
+                // If the trip has no bit_field_id, the default value is 0. A value of 0 means that the trip operates every day.
+                acc.entry((route_entry.stop_id(), trip.bit_field_id().unwrap_or(0)))
                     .or_insert(Vec::new())
-                    .push(journey.id());
+                    .push(trip.id());
             });
             acc
         })
@@ -361,16 +361,16 @@ fn create_stop_connections_by_stop_id(
         })
 }
 
-fn create_exchange_times_journey_map(
-    exchange_times_journey: &ResourceStorage<ExchangeTimeJourney>,
+fn create_exchange_times_trip_map(
+    exchange_times_trip: &ResourceStorage<ExchangeTimeTrip>,
 ) -> FxHashMap<(i32, i32, i32), FxHashSet<i32>> {
-    exchange_times_journey.entries().into_iter().fold(
+    exchange_times_trip.entries().into_iter().fold(
         FxHashMap::default(),
         |mut acc, exchange_time| {
             let key = (
                 exchange_time.stop_id(),
-                exchange_time.journey_id_1(),
-                exchange_time.journey_id_2(),
+                exchange_time.trip_id_1(),
+                exchange_time.trip_id_2(),
             );
 
             acc.entry(key)

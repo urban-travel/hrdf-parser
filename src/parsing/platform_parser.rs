@@ -2,13 +2,13 @@
 // File(s) read by the parser:
 // GLEIS, GLEIS_LV95, GLEIS_WGS
 // ---
-// Note: this parser collects both the Platform and JourneyPlatform resources.
+// Note: this parser collects both the Platform and TripPlatform resources.
 use std::error::Error;
 
 use rustc_hash::FxHashMap;
 
 use crate::{
-    models::{CoordinateSystem, Coordinates, JourneyPlatform, Model, Platform},
+    models::{CoordinateSystem, Coordinates, TripPlatform, Model, Platform},
     parsing::{
         ColumnDefinition, ExpectedType, FastRowMatcher, FileParser, ParsedValue, RowDefinition,
         RowParser,
@@ -19,15 +19,15 @@ use crate::{
 
 pub fn parse(
     path: &str,
-    journeys_pk_type_converter: &FxHashMap<(i32, String), i32>,
-) -> Result<(ResourceStorage<JourneyPlatform>, ResourceStorage<Platform>), Box<dyn Error>> {
+    trips_pk_type_converter: &FxHashMap<(i32, String), i32>,
+) -> Result<(ResourceStorage<TripPlatform>, ResourceStorage<Platform>), Box<dyn Error>> {
     log::info!("Parsing GLEIS...");
     const ROW_A: i32 = 1;
     const ROW_B: i32 = 2;
 
     #[rustfmt::skip]
     let row_parser = RowParser::new(vec![
-        // This row is used to create a JourneyPlatform instance.
+        // This row is used to create a TripPlatform instance.
         RowDefinition::new(ROW_A, Box::new(FastRowMatcher::new(9, 1, "#", false)), vec![
             ColumnDefinition::new(1, 7, ExpectedType::Integer32),
             ColumnDefinition::new(9, 14, ExpectedType::Integer32),
@@ -50,14 +50,14 @@ pub fn parse(
     let mut platforms_pk_type_converter = FxHashMap::default();
 
     let mut bytes_offset = 0;
-    let mut journey_platform = Vec::new();
+    let mut trip_platform = Vec::new();
 
     for x in parser.parse() {
         let (id, bytes_read, values) = x?;
         match id {
             ROW_A => {
                 bytes_offset += bytes_read;
-                journey_platform.push(values);
+                trip_platform.push(values);
             }
             ROW_B => {
                 platforms.push(create_platform(
@@ -72,17 +72,17 @@ pub fn parse(
 
     let mut platforms = Platform::vec_to_map(platforms);
 
-    let journey_platform = journey_platform
+    let trip_platform = trip_platform
         .into_iter()
         .map(|values| {
-            create_journey_platform(
+            create_trip_platform(
                 values,
-                journeys_pk_type_converter,
+                trips_pk_type_converter,
                 &platforms_pk_type_converter,
             )
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let journey_platform = JourneyPlatform::vec_to_map(journey_platform);
+    let trip_platform = TripPlatform::vec_to_map(trip_platform);
 
     log::info!("Parsing GLEIS_LV95...");
     #[rustfmt::skip]
@@ -92,7 +92,7 @@ pub fn parse(
     load_coordinates_for_platforms(path, CoordinateSystem::WGS84, bytes_offset, &platforms_pk_type_converter, &mut platforms)?;
 
     Ok((
-        ResourceStorage::new(journey_platform),
+        ResourceStorage::new(trip_platform),
         ResourceStorage::new(platforms),
     ))
 }
@@ -149,20 +149,20 @@ fn load_coordinates_for_platforms(
 // --- Helper Functions
 // ------------------------------------------------------------------------------------------------
 
-fn create_journey_platform(
+fn create_trip_platform(
     mut values: Vec<ParsedValue>,
-    journeys_pk_type_converter: &FxHashMap<(i32, String), i32>,
+    trips_pk_type_converter: &FxHashMap<(i32, String), i32>,
     platforms_pk_type_converter: &FxHashMap<(i32, i32), i32>,
-) -> Result<JourneyPlatform, Box<dyn Error>> {
+) -> Result<TripPlatform, Box<dyn Error>> {
     let stop_id: i32 = values.remove(0).into();
-    let journey_id: i32 = values.remove(0).into();
+    let trip_id: i32 = values.remove(0).into();
     let administration: String = values.remove(0).into();
     let index: i32 = values.remove(0).into();
     let time: Option<i32> = values.remove(0).into();
     let bit_field_id: Option<i32> = values.remove(0).into();
 
-    let journey_id = *journeys_pk_type_converter
-        .get(&(journey_id, administration))
+    let trip_id = *trips_pk_type_converter
+        .get(&(trip_id, administration))
         .ok_or("Unknown legacy ID")?;
 
     let platform_id = *platforms_pk_type_converter
@@ -171,8 +171,8 @@ fn create_journey_platform(
 
     let time = time.map(|x| create_time_from_value(x as u32));
 
-    Ok(JourneyPlatform::new(
-        journey_id,
+    Ok(TripPlatform::new(
+        trip_id,
         platform_id,
         time,
         bit_field_id,

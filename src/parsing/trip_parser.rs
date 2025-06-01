@@ -7,7 +7,7 @@ use chrono::NaiveTime;
 use rustc_hash::FxHashMap;
 
 use crate::{
-    models::{Journey, JourneyMetadataEntry, JourneyMetadataType, JourneyRouteEntry, Model},
+    models::{Trip, TripMetadataEntry, TripMetadataType, TripRouteEntry, Model},
     parsing::{
         ColumnDefinition, ExpectedType, FastRowMatcher, FileParser, ParsedValue, RowDefinition,
         RowParser,
@@ -21,7 +21,7 @@ pub fn parse(
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
     attributes_pk_type_converter: &FxHashMap<String, i32>,
     directions_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<(ResourceStorage<Journey>, FxHashMap<(i32, String), i32>), Box<dyn Error>> {
+) -> Result<(ResourceStorage<Trip>, FxHashMap<(i32, String), i32>), Box<dyn Error>> {
     log::info!("Parsing FPLAN...");
     const ROW_A: i32 = 1;
     const ROW_B: i32 = 2;
@@ -35,7 +35,7 @@ pub fn parse(
 
     #[rustfmt::skip]
     let row_parser = RowParser::new(vec![
-        // This row is used to create a Journey instance.
+        // This row is used to create a Trip instance.
         RowDefinition::new(ROW_A, Box::new(FastRowMatcher::new(1, 2, "*Z", true)), vec![
             ColumnDefinition::new(4, 9, ExpectedType::Integer32),
             ColumnDefinition::new(11, 16, ExpectedType::String),
@@ -114,26 +114,26 @@ pub fn parse(
                 &mut pk_type_converter,
             )),
             _ => {
-                let journey = data.last_mut().ok_or("Type A row missing.")?;
+                let trip = data.last_mut().ok_or("Type A row missing.")?;
 
                 match id {
                     ROW_B => {
-                        set_transport_type(values, journey, &transport_types_pk_type_converter)?
+                        set_transport_type(values, trip, &transport_types_pk_type_converter)?
                     }
-                    ROW_C => set_bit_field(values, journey),
-                    ROW_D => add_attribute(values, journey, &attributes_pk_type_converter)?,
-                    ROW_E => add_information_text(values, journey),
-                    ROW_F => set_line(values, journey)?,
-                    ROW_G => set_direction(values, journey, directions_pk_type_converter)?,
-                    ROW_H => set_boarding_or_disembarking_exchange_time(values, journey),
-                    ROW_I => add_route_entry(values, journey),
+                    ROW_C => set_bit_field(values, trip),
+                    ROW_D => add_attribute(values, trip, &attributes_pk_type_converter)?,
+                    ROW_E => add_information_text(values, trip),
+                    ROW_F => set_line(values, trip)?,
+                    ROW_G => set_direction(values, trip, directions_pk_type_converter)?,
+                    ROW_H => set_boarding_or_disembarking_exchange_time(values, trip),
+                    ROW_I => add_route_entry(values, trip),
                     _ => unreachable!(),
                 }
             }
         }
     }
 
-    let data = Journey::vec_to_map(data);
+    let data = Trip::vec_to_map(data);
 
     Ok((ResourceStorage::new(data), pk_type_converter))
 }
@@ -146,19 +146,19 @@ fn create_instance(
     mut values: Vec<ParsedValue>,
     auto_increment: &AutoIncrement,
     pk_type_converter: &mut FxHashMap<(i32, String), i32>,
-) -> Journey {
+) -> Trip {
     let legacy_id: i32 = values.remove(0).into();
     let administration: String = values.remove(0).into();
 
     let id = auto_increment.next();
 
     pk_type_converter.insert((legacy_id, administration.to_owned()), id);
-    Journey::new(id, administration)
+    Trip::new(id, administration)
 }
 
 fn set_transport_type(
     mut values: Vec<ParsedValue>,
-    journey: &mut Journey,
+    trip: &mut Trip,
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
 ) -> Result<(), Box<dyn Error>> {
     let designation: String = values.remove(0).into();
@@ -169,9 +169,9 @@ fn set_transport_type(
         .get(&designation)
         .ok_or("Unknown legacy ID")?;
 
-    journey.add_metadata_entry(
-        JourneyMetadataType::TransportType,
-        JourneyMetadataEntry::new(
+    trip.add_metadata_entry(
+        TripMetadataType::TransportType,
+        TripMetadataEntry::new(
             from_stop_id,
             until_stop_id,
             Some(transport_type_id),
@@ -186,14 +186,14 @@ fn set_transport_type(
     Ok(())
 }
 
-fn set_bit_field(mut values: Vec<ParsedValue>, journey: &mut Journey) {
+fn set_bit_field(mut values: Vec<ParsedValue>, trip: &mut Trip) {
     let from_stop_id: Option<i32> = values.remove(0).into();
     let until_stop_id: Option<i32> = values.remove(0).into();
     let bit_field_id: Option<i32> = values.remove(0).into();
 
-    journey.add_metadata_entry(
-        JourneyMetadataType::BitField,
-        JourneyMetadataEntry::new(
+    trip.add_metadata_entry(
+        TripMetadataType::BitField,
+        TripMetadataEntry::new(
             from_stop_id,
             until_stop_id,
             None,
@@ -208,7 +208,7 @@ fn set_bit_field(mut values: Vec<ParsedValue>, journey: &mut Journey) {
 
 fn add_attribute(
     mut values: Vec<ParsedValue>,
-    journey: &mut Journey,
+    trip: &mut Trip,
     attributes_pk_type_converter: &FxHashMap<String, i32>,
 ) -> Result<(), Box<dyn Error>> {
     let designation: String = values.remove(0).into();
@@ -219,9 +219,9 @@ fn add_attribute(
         .get(&designation)
         .ok_or("Unknown legacy ID")?;
 
-    journey.add_metadata_entry(
-        JourneyMetadataType::Attribute,
-        JourneyMetadataEntry::new(
+    trip.add_metadata_entry(
+        TripMetadataType::Attribute,
+        TripMetadataEntry::new(
             from_stop_id,
             until_stop_id,
             Some(attribute_id),
@@ -236,7 +236,7 @@ fn add_attribute(
     Ok(())
 }
 
-fn add_information_text(mut values: Vec<ParsedValue>, journey: &mut Journey) {
+fn add_information_text(mut values: Vec<ParsedValue>, trip: &mut Trip) {
     let code: String = values.remove(0).into();
     let from_stop_id: Option<i32> = values.remove(0).into();
     let until_stop_id: Option<i32> = values.remove(0).into();
@@ -248,9 +248,9 @@ fn add_information_text(mut values: Vec<ParsedValue>, journey: &mut Journey) {
     let arrival_time = create_time(arrival_time);
     let departure_time = create_time(departure_time);
 
-    journey.add_metadata_entry(
-        JourneyMetadataType::InformationText,
-        JourneyMetadataEntry::new(
+    trip.add_metadata_entry(
+        TripMetadataType::InformationText,
+        TripMetadataEntry::new(
             from_stop_id,
             until_stop_id,
             Some(information_text_id),
@@ -263,7 +263,7 @@ fn add_information_text(mut values: Vec<ParsedValue>, journey: &mut Journey) {
     );
 }
 
-fn set_line(mut values: Vec<ParsedValue>, journey: &mut Journey) -> Result<(), Box<dyn Error>> {
+fn set_line(mut values: Vec<ParsedValue>, trip: &mut Trip) -> Result<(), Box<dyn Error>> {
     let line_designation: String = values.remove(0).into();
     let from_stop_id: Option<i32> = values.remove(0).into();
     let until_stop_id: Option<i32> = values.remove(0).into();
@@ -283,9 +283,9 @@ fn set_line(mut values: Vec<ParsedValue>, journey: &mut Journey) -> Result<(), B
         (None, Some(line_designation))
     };
 
-    journey.add_metadata_entry(
-        JourneyMetadataType::Line,
-        JourneyMetadataEntry::new(
+    trip.add_metadata_entry(
+        TripMetadataType::Line,
+        TripMetadataEntry::new(
             from_stop_id,
             until_stop_id,
             resource_id,
@@ -302,7 +302,7 @@ fn set_line(mut values: Vec<ParsedValue>, journey: &mut Journey) -> Result<(), B
 
 fn set_direction(
     mut values: Vec<ParsedValue>,
-    journey: &mut Journey,
+    trip: &mut Trip,
     directions_pk_type_converter: &FxHashMap<String, i32>,
 ) -> Result<(), Box<dyn Error>> {
     let direction_type: String = values.remove(0).into();
@@ -324,9 +324,9 @@ fn set_direction(
         Some(id)
     };
 
-    journey.add_metadata_entry(
-        JourneyMetadataType::Direction,
-        JourneyMetadataEntry::new(
+    trip.add_metadata_entry(
+        TripMetadataType::Direction,
+        TripMetadataEntry::new(
             from_stop_id,
             until_stop_id,
             direction_id,
@@ -341,21 +341,21 @@ fn set_direction(
     Ok(())
 }
 
-fn set_boarding_or_disembarking_exchange_time(mut values: Vec<ParsedValue>, journey: &mut Journey) {
+fn set_boarding_or_disembarking_exchange_time(mut values: Vec<ParsedValue>, trip: &mut Trip) {
     let ci_co: String = values.remove(0).into();
     let exchange_time: i32 = values.remove(0).into();
     let from_stop_id: Option<i32> = values.remove(0).into();
     let until_stop_id: Option<i32> = values.remove(0).into();
 
     let metadata_type = if ci_co == "*CI" {
-        JourneyMetadataType::ExchangeTimeBoarding
+        TripMetadataType::ExchangeTimeBoarding
     } else {
-        JourneyMetadataType::ExchangeTimeDisembarking
+        TripMetadataType::ExchangeTimeDisembarking
     };
 
-    journey.add_metadata_entry(
+    trip.add_metadata_entry(
         metadata_type,
-        JourneyMetadataEntry::new(
+        TripMetadataEntry::new(
             from_stop_id,
             until_stop_id,
             None,
@@ -368,7 +368,7 @@ fn set_boarding_or_disembarking_exchange_time(mut values: Vec<ParsedValue>, jour
     );
 }
 
-fn add_route_entry(mut values: Vec<ParsedValue>, journey: &mut Journey) {
+fn add_route_entry(mut values: Vec<ParsedValue>, trip: &mut Trip) {
     let stop_id: i32 = values.remove(0).into();
     let arrival_time: Option<i32> = values.remove(0).into();
     let departure_time: Option<i32> = values.remove(0).into();
@@ -376,7 +376,7 @@ fn add_route_entry(mut values: Vec<ParsedValue>, journey: &mut Journey) {
     let arrival_time = create_time(arrival_time);
     let departure_time = create_time(departure_time);
 
-    journey.add_route_entry(JourneyRouteEntry::new(
+    trip.add_route_entry(TripRouteEntry::new(
         stop_id,
         arrival_time,
         departure_time,

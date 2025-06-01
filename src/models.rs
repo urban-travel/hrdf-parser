@@ -301,28 +301,28 @@ impl ExchangeTimeAdministration {
 }
 
 // ------------------------------------------------------------------------------------------------
-// --- ExchangeTimeJourney
+// --- ExchangeTimeTrip
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ExchangeTimeJourney {
+pub struct ExchangeTimeTrip {
     id: i32,
     stop_id: i32,
-    journey_id_1: i32,
-    journey_id_2: i32,
-    duration: i16, // Exchange time from journey 1 to journey 2 is in minutes.
+    trip_id_1: i32,
+    trip_id_2: i32,
+    duration: i16, // Exchange time from trip 1 to trip 2 is in minutes.
     is_guaranteed: bool,
     bit_field_id: Option<i32>,
 }
 
-impl_Model!(ExchangeTimeJourney);
+impl_Model!(ExchangeTimeTrip);
 
-impl ExchangeTimeJourney {
+impl ExchangeTimeTrip {
     pub fn new(
         id: i32,
         stop_id: i32,
-        journey_id_1: i32,
-        journey_id_2: i32,
+        trip_id_1: i32,
+        trip_id_2: i32,
         duration: i16,
         is_guaranteed: bool,
         bit_field_id: Option<i32>,
@@ -330,8 +330,8 @@ impl ExchangeTimeJourney {
         Self {
             id,
             stop_id,
-            journey_id_1,
-            journey_id_2,
+            trip_id_1,
+            trip_id_2,
             duration,
             is_guaranteed,
             bit_field_id,
@@ -344,12 +344,12 @@ impl ExchangeTimeJourney {
         self.stop_id
     }
 
-    pub fn journey_id_1(&self) -> i32 {
-        self.journey_id_1
+    pub fn trip_id_1(&self) -> i32 {
+        self.trip_id_1
     }
 
-    pub fn journey_id_2(&self) -> i32 {
-        self.journey_id_2
+    pub fn trip_id_2(&self) -> i32 {
+        self.trip_id_2
     }
 
     pub fn duration(&self) -> i16 {
@@ -443,20 +443,20 @@ impl InformationText {
 }
 
 // ------------------------------------------------------------------------------------------------
-// --- Journey
+// --- Trip
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Default, Serialize, Deserialize)]
-pub struct Journey {
+pub struct Trip {
     id: i32,
     administration: String,
-    metadata: FxHashMap<JourneyMetadataType, Vec<JourneyMetadataEntry>>,
-    route: Vec<JourneyRouteEntry>,
+    metadata: FxHashMap<TripMetadataType, Vec<TripMetadataEntry>>,
+    route: Vec<TripRouteEntry>,
 }
 
-impl_Model!(Journey);
+impl_Model!(Trip);
 
-impl Journey {
+impl Trip {
     pub fn new(id: i32, administration: String) -> Self {
         Self {
             id,
@@ -472,27 +472,27 @@ impl Journey {
         &self.administration
     }
 
-    fn metadata(&self) -> &FxHashMap<JourneyMetadataType, Vec<JourneyMetadataEntry>> {
+    fn metadata(&self) -> &FxHashMap<TripMetadataType, Vec<TripMetadataEntry>> {
         &self.metadata
     }
 
-    pub fn route(&self) -> &Vec<JourneyRouteEntry> {
+    pub fn route(&self) -> &Vec<TripRouteEntry> {
         &self.route
     }
 
     // Functions
 
-    pub fn add_metadata_entry(&mut self, k: JourneyMetadataType, v: JourneyMetadataEntry) {
+    pub fn add_metadata_entry(&mut self, k: TripMetadataType, v: TripMetadataEntry) {
         self.metadata.entry(k).or_insert(Vec::new()).push(v);
     }
 
-    pub fn add_route_entry(&mut self, entry: JourneyRouteEntry) {
+    pub fn add_route_entry(&mut self, entry: TripRouteEntry) {
         self.route.push(entry);
     }
 
     pub fn bit_field_id(&self) -> Option<i32> {
         // unwrap: There will always be a BitField entry.
-        let entry = &self.metadata().get(&JourneyMetadataType::BitField).unwrap()[0];
+        let entry = &self.metadata().get(&TripMetadataType::BitField).unwrap()[0];
         entry.bit_field_id
     }
 
@@ -500,7 +500,7 @@ impl Journey {
         // unwrap: There will always be a TransportType entry.
         let entry = &self
             .metadata()
-            .get(&JourneyMetadataType::TransportType)
+            .get(&TripMetadataType::TransportType)
             .unwrap()[0];
         // unwrap: It's guaranteed to have value here.
         entry.resource_id.unwrap()
@@ -654,7 +654,7 @@ impl Journey {
         &self,
         departure_stop_id: i32,
         arrival_stop_id: i32,
-    ) -> Vec<&JourneyRouteEntry> {
+    ) -> Vec<&TripRouteEntry> {
         let mut route_iter = self.route().iter();
 
         while let Some(route_entry) = route_iter.next() {
@@ -678,11 +678,11 @@ impl Journey {
 }
 
 // ------------------------------------------------------------------------------------------------
-// --- JourneyMetadataType
+// --- TripMetadataType
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Clone, Copy, Debug, Default, Display, Eq, Hash, PartialEq, Serialize, Deserialize)]
-pub enum JourneyMetadataType {
+pub enum TripMetadataType {
     #[default]
     Attribute,
     BitField,
@@ -695,11 +695,11 @@ pub enum JourneyMetadataType {
 }
 
 // ------------------------------------------------------------------------------------------------
-// --- JourneyMetadataEntry
+// --- TripMetadataEntry
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct JourneyMetadataEntry {
+pub struct TripMetadataEntry {
     from_stop_id: Option<i32>,
     until_stop_id: Option<i32>,
     resource_id: Option<i32>,
@@ -710,7 +710,7 @@ pub struct JourneyMetadataEntry {
     extra_field_2: Option<i32>,
 }
 
-impl JourneyMetadataEntry {
+impl TripMetadataEntry {
     pub fn new(
         from_stop_id: Option<i32>,
         until_stop_id: Option<i32>,
@@ -735,17 +735,17 @@ impl JourneyMetadataEntry {
 }
 
 // ------------------------------------------------------------------------------------------------
-// --- JourneyRouteEntry
+// --- TripRouteEntry
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct JourneyRouteEntry {
+pub struct TripRouteEntry {
     stop_id: i32,
     arrival_time: Option<NaiveTime>,
     departure_time: Option<NaiveTime>,
 }
 
-impl JourneyRouteEntry {
+impl TripRouteEntry {
     pub fn new(
         stop_id: i32,
         arrival_time: Option<NaiveTime>,
@@ -780,26 +780,26 @@ impl JourneyRouteEntry {
 }
 
 // ------------------------------------------------------------------------------------------------
-// --- JourneyPlatform
+// --- TripPlatform
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct JourneyPlatform {
-    journey_id: i32,
+pub struct TripPlatform {
+    trip_id: i32,
     platform_id: i32,
     time: Option<NaiveTime>,
     bit_field_id: Option<i32>,
 }
 
-impl JourneyPlatform {
+impl TripPlatform {
     pub fn new(
-        journey_id: i32,
+        trip_id: i32,
         platform_id: i32,
         time: Option<NaiveTime>,
         bit_field_id: Option<i32>,
     ) -> Self {
         Self {
-            journey_id,
+            trip_id,
             platform_id,
             time,
             bit_field_id,
@@ -807,11 +807,11 @@ impl JourneyPlatform {
     }
 }
 
-impl Model<JourneyPlatform> for JourneyPlatform {
+impl Model<TripPlatform> for TripPlatform {
     type K = (i32, i32);
 
     fn id(&self) -> Self::K {
-        (self.journey_id, self.platform_id)
+        (self.trip_id, self.platform_id)
     }
 }
 
@@ -938,7 +938,7 @@ pub struct Stop {
     wgs84_coordinates: Option<Coordinates>,
     exchange_priority: i16,
     exchange_flag: i16,
-    exchange_time: Option<(i16, i16)>, // (InterCity exchange time, Exchange time for all other journey types)
+    exchange_time: Option<(i16, i16)>, // (InterCity exchange time, Exchange time for all other trip types)
     restrictions: i16,
     sloid: String,
     boarding_areas: Vec<String>,
@@ -1084,10 +1084,10 @@ impl StopConnection {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ThroughService {
     id: i32,
-    journey_1_id: i32,
-    journey_1_stop_id: i32, // Last stop of journey 1.
-    journey_2_id: i32,
-    journey_2_stop_id: Option<i32>, // First stop of journey 2.
+    trip_1_id: i32,
+    trip_1_stop_id: i32, // Last stop of trip 1.
+    trip_2_id: i32,
+    trip_2_stop_id: Option<i32>, // First stop of trip 2.
     bit_field_id: i32,
 }
 
@@ -1096,18 +1096,18 @@ impl_Model!(ThroughService);
 impl ThroughService {
     pub fn new(
         id: i32,
-        journey_1_id: i32,
-        journey_1_stop_id: i32,
-        journey_2_id: i32,
-        journey_2_stop_id: Option<i32>,
+        trip_1_id: i32,
+        trip_1_stop_id: i32,
+        trip_2_id: i32,
+        trip_2_stop_id: Option<i32>,
         bit_field_id: i32,
     ) -> Self {
         Self {
             id,
-            journey_1_id,
-            journey_1_stop_id,
-            journey_2_id,
-            journey_2_stop_id,
+            trip_1_id,
+            trip_1_stop_id,
+            trip_2_id,
+            trip_2_stop_id,
             bit_field_id,
         }
     }
