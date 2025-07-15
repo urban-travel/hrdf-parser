@@ -66,16 +66,30 @@ fn create_instance(
     let bit_field_id: i32 = values.remove(0).into();
     let journey_2_stop_id: i32 = values.remove(0).into();
 
-    let _journey_1_id = journeys_pk_type_converter
-        .get(&(journey_1_id, journey_1_administration.clone()))
-        .ok_or("Unknown legacy ID")?;
+    // In some recent cases, the pair journey_1_id and journey_1_administration. For instance
+    // 030004 and 007058 does not have a journey associated with it.
+    let journey_1 =
+        journeys_pk_type_converter.get(&(journey_1_id, journey_1_administration.clone()));
+    if journey_1.is_none() {
+        log::warn!(
+            "Unknown legacy ID for journey_1: {journey_1_id}, {}",
+            journey_1_administration
+        );
+    }
 
-    let _journey_2_id = journeys_pk_type_converter
-        .get(&(journey_2_id, journey_2_administration.clone()))
-        .ok_or("Unknown legacy ID")?;
+    let journey_2 =
+        journeys_pk_type_converter.get(&(journey_2_id, journey_2_administration.clone()));
+    if journey_2.is_none() {
+        log::warn!(
+            "Unknown legacy ID for journey_2: {journey_2_id}, {}",
+            journey_2_administration
+        );
+    }
 
     if journey_1_stop_id != journey_2_stop_id {
-        log::info!("{journey_1_stop_id}, {journey_2_stop_id}");
+        log::info!(
+            "Journey 1 last stop does not match journey 2 first stop: {journey_1_stop_id}, {journey_2_stop_id}"
+        );
     }
 
     Ok(ThroughService::new(
