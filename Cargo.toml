@@ -33,6 +33,7 @@ assert-json-diff = "2.0.2"
 native-tls = "0.2.14"
 flate2 = "1.0.35"
 zip = "4.0.0"
+tokio = { version = "1.42.0", features = ["rt", "macros"] }
 
 [profile.dev]
 opt-level=3

@@ -24,14 +24,23 @@ cargo add hrdf-parser
 
 ## Usage
 
-```rs
+```rust,no_run
+# #[tokio::main(flavor = "current_thread")]
+# async fn main() -> Result<(), Box<dyn core::error::Error>> {
+#
+use hrdf_parser::Hrdf;
+use hrdf_parser::Version;
+
 let hrdf = Hrdf::new(
     Version::V_5_40_41_2_0_5,
     "https://opentransportdata.swiss/en/dataset/timetable-54-2024-hrdf/permalink",
     false,
-    true,
+    None,
 )
 .await?;
+
+#   Ok(())
+# }
 ```
 
 ## Supported HRDF format versions
