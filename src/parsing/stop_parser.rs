@@ -9,7 +9,8 @@ use std::vec;
 use rustc_hash::FxHashMap;
 
 use crate::{
-    Error, Result,
+    Result,
+    error::{Error, ErrorKind},
     models::{CoordinateSystem, Coordinates, Model, Stop, Version},
     parsing::{
         ColumnDefinition, ExpectedType, FastRowMatcher, FileParser, ParsedValue, RowDefinition,
@@ -250,7 +251,7 @@ fn set_coordinates(
         (xy1, xy2) = (xy2, xy1);
     }
 
-    let stop = data.get_mut(&stop_id).ok_or(Error::UnknownId)?;
+    let stop = data.get_mut(&stop_id).ok_or(ErrorKind::UnknownId)?;
     let coordinate = Coordinates::new(coordinate_system, xy1, xy2);
 
     match coordinate_system {
@@ -268,7 +269,7 @@ fn set_exchange_priority(
     let stop_id: i32 = values.remove(0).into();
     let exchange_priority: i16 = values.remove(0).into();
 
-    let stop = data.get_mut(&stop_id).ok_or(Error::UnknownId)?;
+    let stop = data.get_mut(&stop_id).ok_or(ErrorKind::UnknownId)?;
     stop.set_exchange_priority(exchange_priority);
 
     Ok(())
@@ -278,7 +279,7 @@ fn set_exchange_flag(mut values: Vec<ParsedValue>, data: &mut FxHashMap<i32, Sto
     let stop_id: i32 = values.remove(0).into();
     let exchange_flag: i16 = values.remove(0).into();
 
-    let stop = data.get_mut(&stop_id).ok_or(Error::UnknownId)?;
+    let stop = data.get_mut(&stop_id).ok_or(ErrorKind::UnknownId)?;
     stop.set_exchange_flag(exchange_flag);
 
     Ok(())
@@ -299,7 +300,7 @@ fn set_exchange_time(
         // It contains default exchange times to be used when a stop has no specific exchange time.
         Ok(exchange_time)
     } else {
-        let stop = data.get_mut(&stop_id).ok_or(Error::UnknownId)?;
+        let stop = data.get_mut(&stop_id).ok_or(ErrorKind::UnknownId)?;
         stop.set_exchange_time(exchange_time);
         Ok(None)
     }
@@ -358,10 +359,10 @@ fn parse_designations(designations: String) -> Result<NameAndAlternatives> {
             let s = s.replace('$', "");
             let mut parts = s.split('<');
 
-            let v = parts.next().ok_or(Error::MissingValuePart)?.to_string();
+            let v = parts.next().ok_or(ErrorKind::MissingValuePart)?.to_string();
             let k = parts
                 .next()
-                .ok_or(Error::MissingValuePart)?
+                .ok_or(ErrorKind::MissingValuePart)?
                 .parse::<i32>()?;
 
             Ok((k, v))
@@ -375,7 +376,7 @@ fn parse_designations(designations: String) -> Result<NameAndAlternatives> {
             },
         )?;
 
-    let name = designations.get(&1).ok_or(Error::MissingStopName)?[0].clone();
+    let name = designations.get(&1).ok_or(ErrorKind::MissingStopName)?[0].clone();
     let long_name = designations.get(&2).map(|x| x[0].clone());
     let abbreviation = designations.get(&3).map(|x| x[0].clone());
     let synonyms = designations.get(&4).cloned();

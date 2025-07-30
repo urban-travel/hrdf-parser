@@ -5,7 +5,8 @@
 use rustc_hash::FxHashMap;
 
 use crate::{
-    Error, Result,
+    Result,
+    error::ErrorKind,
     models::{Model, StopConnection},
     parsing::{
         AdvancedRowMatcher, ColumnDefinition, ExpectedType, FastRowMatcher, FileParser,
@@ -49,7 +50,7 @@ pub fn parse(
         match id {
             ROW_A => data.push(create_instance(values, &auto_increment)),
             _ => {
-                let stop_connection = data.last_mut().ok_or(Error::RowMissing { typ: "A" })?;
+                let stop_connection = data.last_mut().ok_or(ErrorKind::RowMissing { typ: "A" })?;
 
                 match id {
                     ROW_B => set_attribute(values, stop_connection, attributes_pk_type_converter)?,
@@ -85,7 +86,7 @@ fn set_attribute(
     let attribute_designation: String = values.remove(0).into();
     let attribute_id = *attributes_pk_type_converter
         .get(&attribute_designation)
-        .ok_or(Error::UnknownLegacyId)?;
+        .ok_or(ErrorKind::UnknownLegacyId)?;
     current_instance.set_attribute(attribute_id);
     Ok(())
 }

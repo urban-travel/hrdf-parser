@@ -211,7 +211,8 @@ use chrono::NaiveTime;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-    Error, JourneyId, Result,
+    JourneyId, Result,
+    error::ErrorKind,
     models::{Journey, JourneyMetadataEntry, JourneyMetadataType, JourneyRouteEntry, Model},
     parsing::{
         ColumnDefinition, ExpectedType, FastRowMatcher, FileParser, ParsedValue, RowDefinition,
@@ -362,7 +363,7 @@ fn journey_row_converter(
                 &mut pk_type_converter,
             ));
         } else {
-            let journey = data.last_mut().ok_or(Error::RowMissing { typ: "A" })?;
+            let journey = data.last_mut().ok_or(ErrorKind::RowMissing { typ: "A" })?;
 
             if id == RowType::RowB as i32 {
                 set_transport_type(values, journey, transport_types_pk_type_converter)?;
@@ -452,7 +453,7 @@ fn set_transport_type(
     let (designation, from_stop_id, until_stop_id) = row_b_from_parsed_values(values);
     let transport_type_id = *transport_types_pk_type_converter
         .get(&designation)
-        .ok_or(Error::UnknownLegacyId)?;
+        .ok_or(ErrorKind::UnknownLegacyId)?;
 
     journey.add_metadata_entry(
         JourneyMetadataType::TransportType,
@@ -517,7 +518,7 @@ fn add_attribute(
 
     let attribute_id = *attributes_pk_type_converter
         .get(&designation)
-        .ok_or(Error::UnknownLegacyId)?;
+        .ok_or(ErrorKind::UnknownLegacyId)?;
 
     journey.add_metadata_entry(
         JourneyMetadataType::Attribute,
@@ -624,7 +625,7 @@ fn set_line(values: Vec<ParsedValue>, journey: &mut Journey) -> Result<()> {
     let line_designation_first_char = line_designation
         .chars()
         .next()
-        .ok_or(Error::MissingDesignation)?;
+        .ok_or(ErrorKind::MissingDesignation)?;
     let (resource_id, extra_field_1) = if line_designation_first_char == '#' {
         (Some(line_designation[1..].parse::<i32>()?), None)
     } else {
@@ -692,7 +693,7 @@ fn set_direction(
     } else {
         let id = *directions_pk_type_converter
             .get(&direction_id)
-            .ok_or(Error::UnknownLegacyId)?;
+            .ok_or(ErrorKind::UnknownLegacyId)?;
         Some(id)
     };
 

@@ -37,7 +37,8 @@ use std::str::FromStr;
 use rustc_hash::FxHashMap;
 
 use crate::{
-    Error, Result,
+    Result,
+    error::ErrorKind,
     models::{DirectionType, ExchangeTimeLine, LineInfo, Model},
     parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
     storage::ResourceStorage,
@@ -116,7 +117,7 @@ fn create_instance(
 
     let transport_type_id_1 = *transport_types_pk_type_converter
         .get(&transport_type_id_1)
-        .ok_or(Error::UnknownLegacyId)?;
+        .ok_or(ErrorKind::UnknownLegacyId)?;
 
     let line_id_1 = if line_id_1 == "*" {
         None
@@ -132,7 +133,7 @@ fn create_instance(
 
     let transport_type_id_2 = *transport_types_pk_type_converter
         .get(&transport_type_id_2)
-        .ok_or(Error::UnknownLegacyId)?;
+        .ok_or(ErrorKind::UnknownLegacyId)?;
 
     let line_id_2 = if line_id_2 == "*" {
         None

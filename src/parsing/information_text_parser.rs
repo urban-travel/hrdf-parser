@@ -20,7 +20,8 @@
 use rustc_hash::FxHashMap;
 
 use crate::{
-    Error, Result,
+    Result,
+    error::ErrorKind,
     models::{InformationText, Language, Model},
     parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
     storage::ResourceStorage,
@@ -117,7 +118,7 @@ fn set_content(
     let description: String = values.remove(0).into();
 
     data.get_mut(&id)
-        .ok_or(Error::UnknownId)?
+        .ok_or(ErrorKind::UnknownId)?
         .set_content(language, &description);
 
     Ok(())

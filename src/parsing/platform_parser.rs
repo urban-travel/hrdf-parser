@@ -7,7 +7,8 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-    Error, JourneyId, Result, Version,
+    JourneyId, Result, Version,
+    error::ErrorKind,
     models::{CoordinateSystem, Coordinates, JourneyPlatform, Model, Platform},
     parsing::{
         ColumnDefinition, ExpectedType, FastRowMatcher, FileParser, ParsedValue, RowDefinition,
@@ -312,11 +313,11 @@ fn create_journey_platform(
 
     let _journey_id = journeys_pk_type_converter
         .get(&(journey_id, administration.clone()))
-        .ok_or(Error::UnknownLegacyJourneyId)?;
+        .ok_or(ErrorKind::UnknownLegacyJourneyId)?;
 
     let platform_id = *platforms_pk_type_converter
         .get(&(stop_id, index))
-        .ok_or(Error::UnknownLegacyPlatformId)?;
+        .ok_or(ErrorKind::UnknownLegacyPlatformId)?;
 
     let time = time.map(|x| create_time_from_value(x as u32));
 
@@ -364,9 +365,11 @@ fn platform_set_sloid(
 
         let id = pk_type_converter
             .get(&(stop_id, index))
-            .ok_or(Error::UnknownLegacyId)?;
+            .ok_or(ErrorKind::UnknownLegacyId)?;
 
-        data.get_mut(id).ok_or(Error::UnknownId)?.set_sloid(sloid);
+        data.get_mut(id)
+            .ok_or(ErrorKind::UnknownId)?
+            .set_sloid(sloid);
     }
 
     Ok(())
@@ -397,8 +400,8 @@ fn platform_set_coordinates(
 
     let id = &pk_type_converter
         .get(&(stop_id, index))
-        .ok_or(Error::UnknownLegacyId)?;
-    let platform = data.get_mut(id).ok_or(Error::UnknownId)?;
+        .ok_or(ErrorKind::UnknownLegacyId)?;
+    let platform = data.get_mut(id).ok_or(ErrorKind::UnknownId)?;
 
     match coordinate_system {
         CoordinateSystem::LV95 => platform.set_lv95_coordinates(coordinate),
@@ -426,7 +429,7 @@ fn parse_platform_data(mut platform_data: String) -> Result<(String, Option<Stri
     // There should always be a G entry.
     let code = data
         .get("G")
-        .ok_or(Error::EntryMissing { typ: "G" })?
+        .ok_or(ErrorKind::EntryMissing { typ: "G" })?
         .to_string();
     let sectors = data.get("A").map(|s| s.to_string());
 

@@ -18,7 +18,8 @@ use chrono::NaiveDate;
 use rustc_hash::FxHashMap;
 
 use crate::{
-    Error, Result,
+    Result,
+    error::ErrorKind,
     models::{Holiday, Language, Model},
     parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
     storage::ResourceStorage,
@@ -83,8 +84,8 @@ fn parse_name_translations(name_translations: String) -> Result<FxHashMap<Langua
         .map(|s| -> Result<(Language, String)> {
             let mut parts = s.split('<');
 
-            let v = parts.next().ok_or(Error::MissingValuePart)?.to_string();
-            let k = parts.next().ok_or(Error::MissingValuePart)?.to_string();
+            let v = parts.next().ok_or(ErrorKind::MissingValuePart)?.to_string();
+            let k = parts.next().ok_or(ErrorKind::MissingValuePart)?.to_string();
             let k = Language::from_str(&k)?;
 
             Ok((k, v))

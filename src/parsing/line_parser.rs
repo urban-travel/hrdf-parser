@@ -3,7 +3,8 @@
 // LINIE
 
 use crate::{
-    Error, Result,
+    Result,
+    error::ErrorKind,
     models::{Color, Line, Model},
     parsing::{
         ColumnDefinition, ExpectedType, FastRowMatcher, FileParser, ParsedValue, RowDefinition,
@@ -59,7 +60,7 @@ pub fn parse(path: &str) -> Result<ResourceStorage<Line>> {
                 data.push(create_instance(values));
             }
             _ => {
-                let line = data.last_mut().ok_or(Error::RowMissing { typ: "A" })?;
+                let line = data.last_mut().ok_or(ErrorKind::RowMissing { typ: "A" })?;
 
                 match id {
                     ROW_B => set_short_name(values, line),

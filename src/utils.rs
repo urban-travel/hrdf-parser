@@ -6,7 +6,7 @@ use std::cell::RefCell;
 
 use chrono::{Days, NaiveDate, NaiveTime};
 
-use crate::{Error, Result, models::TimetableMetadataEntry, storage::ResourceStorage};
+use crate::{Result, error::ErrorKind, models::TimetableMetadataEntry, storage::ResourceStorage};
 
 pub struct AutoIncrement {
     value: RefCell<i32>,
@@ -56,7 +56,7 @@ pub fn timetable_start_date(
         .data()
         .values()
         .find(|val| val.key() == "start_date")
-        .ok_or(Error::KeyMissing { name: "start_date" })?
+        .ok_or(ErrorKind::KeyMissing { name: "start_date" })?
         .value_as_NaiveDate();
     Ok(result)
 }
@@ -68,7 +68,7 @@ pub fn timetable_end_date(
         .data()
         .values()
         .find(|val| val.key() == "end_date")
-        .ok_or(Error::KeyMissing { name: "end_date" })?
+        .ok_or(ErrorKind::KeyMissing { name: "end_date" })?
         .value_as_NaiveDate();
     Ok(result)
 }

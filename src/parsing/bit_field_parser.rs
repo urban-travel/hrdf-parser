@@ -27,7 +27,8 @@
 use rustc_hash::FxHashMap;
 
 use crate::{
-    Error, Result,
+    Result,
+    error::ErrorKind,
     models::{BitField, Model},
     parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
     storage::ResourceStorage,
@@ -92,7 +93,7 @@ fn convert_hex_number_to_bits(hex_number: String) -> Result<Vec<u8>> {
         .map(|hex_digit| {
             hex_digit
                 .to_digit(16)
-                .ok_or(Error::InvalidHexaDigit)
+                .ok_or(ErrorKind::InvalidHexaDigit.into())
                 .map(|val| (0..4).rev().map(move |i| ((val >> i) & 1) as u8))
         })
         .collect::<Result<Vec<_>>>()?

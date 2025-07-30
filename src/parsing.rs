@@ -41,7 +41,7 @@ use std::{
 
 use regex::Regex;
 
-use crate::{Error, Result};
+use crate::{Result, error::ErrorKind};
 
 pub enum ExpectedType {
     Float,
@@ -278,7 +278,7 @@ impl RowParser {
                     .char_indices()
                     .map(|(i, _)| i)
                     .nth(start)
-                    .ok_or(Error::TheStartColumnIsOutOfRange)?;
+                    .ok_or(ErrorKind::TheStartColumnIsOutOfRange)?;
                 let stop = if let Some(i) = row.char_indices().map(|(i, _)| i).nth(stop) {
                     i
                 } else {
@@ -314,7 +314,7 @@ impl RowParser {
             // unwrap: "row_matcher" is guaranteed to always have a value when there are multiple row definitions.
             .find(|row_definition| row_definition.row_matcher.as_ref().unwrap().match_row(row));
 
-        matched_row_definition.ok_or(Error::UnknownRowType { row: row.into() })
+        matched_row_definition.ok_or(ErrorKind::UnknownRowType { row: row.into() }.into())
     }
 }
 

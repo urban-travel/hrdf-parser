@@ -5,7 +5,8 @@
 use rustc_hash::FxHashMap;
 
 use crate::{
-    Error, Result, Version,
+    Result, Version,
+    error::ErrorKind,
     models::{Language, Model, TransportType},
     parsing::{
         AdvancedRowMatcher, ColumnDefinition, ExpectedType, FastRowMatcher, FileParser,
@@ -99,7 +100,7 @@ pub fn parse(version: Version, path: &str) -> Result<TransportTypeAndTypeConvert
                 data.push(transport_type);
             }
             _ => {
-                let transport_type = data.last_mut().ok_or(Error::RowMissing { typ: "A" })?;
+                let transport_type = data.last_mut().ok_or(ErrorKind::RowMissing { typ: "A" })?;
 
                 match id {
                     ROW_B => update_current_language(values, &mut current_language),

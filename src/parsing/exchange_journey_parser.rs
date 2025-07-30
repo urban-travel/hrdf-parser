@@ -27,7 +27,8 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-    Error, JourneyId, Result,
+    JourneyId, Result,
+    error::ErrorKind,
     models::{ExchangeTimeJourney, Model},
     parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
     storage::ResourceStorage,
@@ -99,11 +100,11 @@ fn create_instance(
 
     let _journey_id_1 = journeys_pk_type_converter
         .get(&(journey_id_1, administration_1.clone()))
-        .ok_or(Error::UnknownLegacyId)?;
+        .ok_or(ErrorKind::UnknownLegacyId)?;
 
     let _journey_id_2 = journeys_pk_type_converter
         .get(&(journey_id_2, administration_2.clone()))
-        .ok_or(Error::UnknownLegacyId)?;
+        .ok_or(ErrorKind::UnknownLegacyId)?;
 
     // TODO: I haven't seen an is_guaranteed field in the doc. Check if this makes sense.
     // It is present in UMSTEIGL. Mabe a copy/paste leftover

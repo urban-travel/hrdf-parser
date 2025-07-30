@@ -51,7 +51,8 @@ use std::str::FromStr;
 use rustc_hash::FxHashMap;
 
 use crate::{
-    Error, Result, Version,
+    Result, Version,
+    error::ErrorKind,
     models::{Attribute, Language, Model},
     parsing::{
         AdvancedRowMatcher, ColumnDefinition, ExpectedType, FastRowMatcher, FileParser,
@@ -209,9 +210,9 @@ fn set_description(
     let (legacy_id, description) = row_d_from_parsed_values(values);
     let id = pk_type_converter
         .get(&legacy_id)
-        .ok_or(Error::UnknownLegacyId)?;
+        .ok_or(ErrorKind::UnknownLegacyId)?;
     data.get_mut(id)
-        .ok_or(Error::UnknownId)?
+        .ok_or(ErrorKind::UnknownId)?
         .set_description(language, &description);
 
     Ok(())

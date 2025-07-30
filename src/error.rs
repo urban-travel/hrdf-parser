@@ -8,8 +8,37 @@ use zip::result::ZipError;
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug, thiserror::Error)]
+#[error(transparent)]
+pub struct Error(#[from] ErrorKind);
+
+macro_rules! impl_from_error {
+    ($( $type:ty ),* $(,)? ) => {
+        $(
+        impl From<$type> for Error {
+            fn from(error: $type) -> Self {
+                Self(error.into())
+            }
+        }
+        )*
+    };
+}
+
+impl_from_error!(
+    io::Error,
+    reqwest::Error,
+    ZipError,
+    bincode::error::EncodeError,
+    bincode::error::DecodeError,
+    regex::Error,
+    ParseIntError,
+    ParseFloatError,
+    strum::ParseError,
+    chrono::ParseError,
+);
+
+#[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
-pub enum Error {
+pub(crate) enum ErrorKind {
     #[error("read/write error")]
     Io(#[from] io::Error),
     #[error("network error")]

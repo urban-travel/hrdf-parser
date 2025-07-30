@@ -6,7 +6,8 @@ use regex::Regex;
 use rustc_hash::FxHashMap;
 
 use crate::{
-    Error, Result,
+    Result,
+    error::ErrorKind,
     models::{Language, Model, TransportCompany},
     parsing::{
         ColumnDefinition, ExpectedType, FastRowMatcher, FileParser, ParsedValue, RowDefinition,
@@ -130,7 +131,7 @@ fn set_designations(
 
     let (short_name, long_name, full_name) = parse_designations(designations);
 
-    let transport_company = data.get_mut(&id).ok_or(Error::UnknownId)?;
+    let transport_company = data.get_mut(&id).ok_or(ErrorKind::UnknownId)?;
     transport_company.set_short_name(language, &short_name);
     transport_company.set_long_name(language, &long_name);
     transport_company.set_full_name(language, &full_name);
