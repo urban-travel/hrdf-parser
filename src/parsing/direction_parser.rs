@@ -11,11 +11,10 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// RICHTUNG
-use std::error::Error;
-
 use rustc_hash::FxHashMap;
 
 use crate::{
+    Result,
     models::{Direction, Model},
     parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
     storage::ResourceStorage,
@@ -33,20 +32,18 @@ fn direction_row_parser() -> RowParser {
         ]),
     ])
 }
-fn direction_row_converter(
-    parser: FileParser,
-) -> Result<FxHashMapsAndTypeConverter, Box<dyn Error>> {
+fn direction_row_converter(parser: FileParser) -> Result<FxHashMapsAndTypeConverter> {
     let mut pk_type_converter = FxHashMap::default();
 
     let data = parser
         .parse()
         .map(|x| x.and_then(|(_, _, values)| create_instance(values, &mut pk_type_converter)))
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>>>()?;
     let data = Direction::vec_to_map(data);
     Ok((data, pk_type_converter))
 }
 
-pub fn parse(path: &str) -> Result<DirectionAndTypeConverter, Box<dyn Error>> {
+pub fn parse(path: &str) -> Result<DirectionAndTypeConverter> {
     log::info!("Parsing RICHTUNG...");
     let row_parser = direction_row_parser();
     let parser = FileParser::new(&format!("{path}/RICHTUNG"), row_parser)?;
@@ -69,7 +66,7 @@ fn row_from_parsed_values(mut values: Vec<ParsedValue>) -> (String, String) {
 fn create_instance(
     values: Vec<ParsedValue>,
     pk_type_converter: &mut FxHashMap<String, i32>,
-) -> Result<Direction, Box<dyn Error>> {
+) -> Result<Direction> {
     let (legacy_id, name) = row_from_parsed_values(values);
 
     let id = remove_first_char(&legacy_id).parse::<i32>()?;

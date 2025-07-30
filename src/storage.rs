@@ -1,11 +1,9 @@
-use std::error::Error;
-
 use chrono::{Days, NaiveDate};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    JourneyId,
+    JourneyId, Result,
     models::{
         Attribute, BitField, Direction, ExchangeTimeAdministration, ExchangeTimeJourney,
         ExchangeTimeLine, Holiday, InformationText, Journey, JourneyPlatform, Line, Model,
@@ -65,7 +63,7 @@ pub struct DataStorage {
 }
 
 impl DataStorage {
-    pub fn new(version: Version, path: &str) -> Result<Self, Box<dyn Error>> {
+    pub fn new(version: Version, path: &str) -> Result<Self> {
         // Time-relevant data
         let bit_fields = parsing::load_bit_fields(path)?;
         let holidays = parsing::load_holidays(path)?;
@@ -288,7 +286,7 @@ impl<M: Model<M>> ResourceStorage<M> {
 fn create_bit_fields_by_day(
     bit_fields: &ResourceStorage<BitField>,
     timetable_metadata: &ResourceStorage<TimetableMetadataEntry>,
-) -> Result<FxHashMap<NaiveDate, FxHashSet<i32>>, Box<dyn Error>> {
+) -> Result<FxHashMap<NaiveDate, FxHashSet<i32>>> {
     let start_date = timetable_start_date(timetable_metadata)?;
     let num_days =
         count_days_between_two_dates(start_date, timetable_end_date(timetable_metadata)?);

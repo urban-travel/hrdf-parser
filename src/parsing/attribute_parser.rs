@@ -46,12 +46,12 @@
 /// Files not used by the parser vor version < 2.0.7:
 /// ATTRIBUT_DE, ATTRIBUT_EN, ATTRIBUT_FR, ATTRIBUT_IT
 /// These files were suppressed in 2.0.7
-use std::{error::Error, str::FromStr};
+use std::str::FromStr;
 
 use rustc_hash::FxHashMap;
 
 use crate::{
-    Version,
+    Error, Result, Version,
     models::{Attribute, Language, Model},
     parsing::{
         AdvancedRowMatcher, ColumnDefinition, ExpectedType, FastRowMatcher, FileParser,
@@ -71,7 +71,7 @@ enum RowType {
     RowD = 4,
 }
 
-fn attribute_row_parser(version: Version) -> Result<RowParser, Box<dyn Error>> {
+fn attribute_row_parser(version: Version) -> Result<RowParser> {
     let row_parser = RowParser::new(vec![
         // This row is used to create an Attribute instance.
         RowDefinition::new(
@@ -119,9 +119,7 @@ fn attribute_row_parser(version: Version) -> Result<RowParser, Box<dyn Error>> {
     Ok(row_parser)
 }
 
-fn attribute_row_converter(
-    parser: FileParser,
-) -> Result<FxHashMapsAndTypeConverter, Box<dyn Error>> {
+fn attribute_row_converter(parser: FileParser) -> Result<FxHashMapsAndTypeConverter> {
     let auto_increment = AutoIncrement::new();
     let mut data = FxHashMap::default();
     let mut pk_type_converter = FxHashMap::default();
@@ -146,7 +144,7 @@ fn attribute_row_converter(
     Ok((data, pk_type_converter))
 }
 
-pub fn parse(version: Version, path: &str) -> Result<AttributeAndTypeConverter, Box<dyn Error>> {
+pub fn parse(version: Version, path: &str) -> Result<AttributeAndTypeConverter> {
     log::info!("Parsing ATTRIBUT...");
     let row_parser = attribute_row_parser(version)?;
     // The ATTRIBUT file is used instead of ATTRIBUT_* for simplicity's sake.
@@ -207,13 +205,13 @@ fn set_description(
     pk_type_converter: &FxHashMap<String, i32>,
     data: &mut FxHashMap<i32, Attribute>,
     language: Language,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let (legacy_id, description) = row_d_from_parsed_values(values);
     let id = pk_type_converter
         .get(&legacy_id)
-        .ok_or("Unknown legacy ID")?;
+        .ok_or(Error::UnknownLegacyId)?;
     data.get_mut(id)
-        .ok_or("Unknown ID")?
+        .ok_or(Error::UnknownId)?
         .set_description(language, &description);
 
     Ok(())
@@ -231,7 +229,7 @@ fn row_c_from_parsed_values(mut values: Vec<ParsedValue>) -> String {
 fn update_current_language(
     values: Vec<ParsedValue>,
     current_language: &mut Language,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let language = row_c_from_parsed_values(values);
     let language = language.replace(['<', '>'], "");
 

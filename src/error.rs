@@ -1,0 +1,61 @@
+use std::{
+    io,
+    num::{ParseFloatError, ParseIntError},
+};
+
+use zip::result::ZipError;
+
+pub type Result<T> = core::result::Result<T, Error>;
+
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum Error {
+    #[error("read/write error")]
+    Io(#[from] io::Error),
+    #[error("network error")]
+    Network(#[from] reqwest::Error),
+    #[error("malformed zip archive")]
+    Zip(#[from] ZipError),
+    #[error("cache creation error")]
+    BincodeEcode(#[from] bincode::error::EncodeError),
+    #[error("cache parsing error")]
+    BincodeDecode(#[from] bincode::error::DecodeError),
+    #[error("malformed regex")]
+    Regex(#[from] regex::Error),
+
+    #[error("invalid interger")]
+    InvalidInt(#[from] ParseIntError),
+    #[error("invalid float")]
+    InvalidFloat(#[from] ParseFloatError),
+    #[error("enum value invalid")]
+    Strum(#[from] strum::ParseError),
+    #[error("date or time value invalid")]
+    DateTime(#[from] chrono::ParseError),
+
+    #[error("invalid hexadecimal digit")]
+    InvalidHexaDigit,
+    #[error("Unknown legacy ID")]
+    UnknownLegacyId,
+    #[error("Unknown legacy journey ID")]
+    UnknownLegacyJourneyId,
+    #[error("Unknown legacy platform ID")]
+    UnknownLegacyPlatformId,
+    #[error("Unknown ID")]
+    UnknownId,
+    #[error("Missing value part")]
+    MissingValuePart,
+    #[error("Missing stop name")]
+    MissingStopName,
+    #[error("Missing designation")]
+    MissingDesignation,
+    #[error("The start column is out of range.")]
+    TheStartColumnIsOutOfRange,
+    #[error("This type of row is unknown:\n{row}")]
+    UnknownRowType { row: String },
+    #[error("Type {typ} row missing.")]
+    RowMissing { typ: &'static str },
+    #[error("Entry of type {typ:?} missing.")]
+    EntryMissing { typ: &'static str },
+    #[error("Key {name:?} missing.")]
+    KeyMissing { name: &'static str },
+}

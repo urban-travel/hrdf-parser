@@ -1,11 +1,11 @@
 // 1 file(s).
 // File(s) read by the parser:
 // ECKDATEN
-use std::error::Error;
 
 use chrono::NaiveDate;
 
 use crate::{
+    Result,
     models::{Model, TimetableMetadataEntry},
     parsing::{
         AdvancedRowMatcher, ColumnDefinition, ExpectedType, FastRowMatcher, FileParser,
@@ -15,7 +15,7 @@ use crate::{
     utils::AutoIncrement,
 };
 
-pub fn parse(path: &str) -> Result<ResourceStorage<TimetableMetadataEntry>, Box<dyn Error>> {
+pub fn parse(path: &str) -> Result<ResourceStorage<TimetableMetadataEntry>> {
     log::info!("Parsing ECKDATEN...");
     const ROW_A: i32 = 1;
     const ROW_B: i32 = 2;
@@ -36,7 +36,7 @@ pub fn parse(path: &str) -> Result<ResourceStorage<TimetableMetadataEntry>, Box<
     let mut data: Vec<ParsedValue> = parser
         .parse()
         .map(|x| x.map(|(_, _, mut values)| values.remove(0)))
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>>>()?;
 
     let start_date: String = data.remove(0).into();
     let end_date: String = data.remove(0).into();

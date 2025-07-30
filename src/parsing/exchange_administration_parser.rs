@@ -22,11 +22,10 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// UMSTEIGV
-use std::error::Error;
-
 use rustc_hash::FxHashMap;
 
 use crate::{
+    Result,
     models::{ExchangeTimeAdministration, Model},
     parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
     storage::ResourceStorage,
@@ -46,18 +45,18 @@ fn exchange_administration_row_parser() -> RowParser {
 }
 fn exchange_administration_row_converter(
     parser: FileParser,
-) -> Result<FxHashMap<i32, ExchangeTimeAdministration>, Box<dyn Error>> {
+) -> Result<FxHashMap<i32, ExchangeTimeAdministration>> {
     let auto_increment = AutoIncrement::new();
 
     let data = parser
         .parse()
         .map(|x| x.map(|(_, _, values)| create_instance(values, &auto_increment)))
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>>>()?;
     let data = ExchangeTimeAdministration::vec_to_map(data);
     Ok(data)
 }
 
-pub fn parse(path: &str) -> Result<ResourceStorage<ExchangeTimeAdministration>, Box<dyn Error>> {
+pub fn parse(path: &str) -> Result<ResourceStorage<ExchangeTimeAdministration>> {
     log::info!("Parsing UMSTEIGV...");
     let row_parser = exchange_administration_row_parser();
     let parser = FileParser::new(&format!("{path}/UMSTEIGV"), row_parser)?;

@@ -24,11 +24,10 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// BITFELD
-use std::error::Error;
-
 use rustc_hash::FxHashMap;
 
 use crate::{
+    Error, Result,
     models::{BitField, Model},
     parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
     storage::ResourceStorage,
@@ -44,16 +43,16 @@ fn bitfield_row_parser() -> RowParser {
     ])
 }
 
-fn bitfield_row_converter(parser: FileParser) -> Result<FxHashMap<i32, BitField>, Box<dyn Error>> {
+fn bitfield_row_converter(parser: FileParser) -> Result<FxHashMap<i32, BitField>> {
     let data = parser
         .parse()
         .map(|x| x.and_then(|(_, _, values)| create_instance(values)))
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>>>()?;
     let data = BitField::vec_to_map(data);
     Ok(data)
 }
 
-pub fn parse(path: &str) -> Result<ResourceStorage<BitField>, Box<dyn Error>> {
+pub fn parse(path: &str) -> Result<ResourceStorage<BitField>> {
     log::info!("Parsing BITFELD...");
     #[rustfmt::skip]
     let row_parser = bitfield_row_parser();
@@ -74,7 +73,7 @@ fn row_from_parsed_values(mut values: Vec<ParsedValue>) -> (i32, String) {
     (id, hex_number)
 }
 
-fn create_instance(values: Vec<ParsedValue>) -> Result<BitField, Box<dyn Error>> {
+fn create_instance(values: Vec<ParsedValue>) -> Result<BitField> {
     let (id, hex_number) = row_from_parsed_values(values);
 
     let bits = convert_hex_number_to_bits(hex_number)?;
@@ -87,16 +86,16 @@ fn create_instance(values: Vec<ParsedValue>) -> Result<BitField, Box<dyn Error>>
 // ------------------------------------------------------------------------------------------------
 
 /// Converts a hexadecimal number into a list of where each item represents a bit.
-fn convert_hex_number_to_bits(hex_number: String) -> Result<Vec<u8>, Box<dyn Error>> {
+fn convert_hex_number_to_bits(hex_number: String) -> Result<Vec<u8>> {
     let result = hex_number
         .chars()
         .map(|hex_digit| {
             hex_digit
                 .to_digit(16)
-                .ok_or("Invalid hexadecimal digit")
+                .ok_or(Error::InvalidHexaDigit)
                 .map(|val| (0..4).rev().map(move |i| ((val >> i) & 1) as u8))
         })
-        .collect::<Result<Vec<_>, _>>()?
+        .collect::<Result<Vec<_>>>()?
         .into_iter()
         .flatten()
         .collect::<Vec<_>>();

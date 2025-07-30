@@ -1,12 +1,11 @@
 // 1 file(s).
 // File(s) read by the parser:
 // DURCHBI
-use std::error::Error;
 
 use rustc_hash::FxHashSet;
 
 use crate::{
-    JourneyId,
+    JourneyId, Result,
     models::{Model, ThroughService},
     parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
     storage::ResourceStorage,
@@ -16,7 +15,7 @@ use crate::{
 pub fn parse(
     path: &str,
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
-) -> Result<ResourceStorage<ThroughService>, Box<dyn Error>> {
+) -> Result<ResourceStorage<ThroughService>> {
     log::info!("Parsing DURCHBI...");
     #[rustfmt::skip]
     let row_parser = RowParser::new(vec![
@@ -43,7 +42,7 @@ pub fn parse(
                 create_instance(values, &auto_increment, journeys_pk_type_converter)
             })
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>>>()?;
     let data = ThroughService::vec_to_map(data);
 
     Ok(ResourceStorage::new(data))
@@ -57,7 +56,7 @@ fn create_instance(
     mut values: Vec<ParsedValue>,
     auto_increment: &AutoIncrement,
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
-) -> Result<ThroughService, Box<dyn Error>> {
+) -> Result<ThroughService> {
     let journey_1_id: i32 = values.remove(0).into();
     let journey_1_administration: String = values.remove(0).into();
     let journey_1_stop_id: i32 = values.remove(0).into();

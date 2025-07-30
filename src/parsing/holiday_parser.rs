@@ -12,12 +12,13 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// FEIERTAG
-use std::{error::Error, str::FromStr};
+use std::str::FromStr;
 
 use chrono::NaiveDate;
 use rustc_hash::FxHashMap;
 
 use crate::{
+    Error, Result,
     models::{Holiday, Language, Model},
     parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
     storage::ResourceStorage,
@@ -34,18 +35,18 @@ fn holiday_row_parser() -> RowParser {
     ])
 }
 
-fn holiday_row_converter(parser: FileParser) -> Result<FxHashMap<i32, Holiday>, Box<dyn Error>> {
+fn holiday_row_converter(parser: FileParser) -> Result<FxHashMap<i32, Holiday>> {
     let auto_increment = AutoIncrement::new();
 
     let data = parser
         .parse()
         .map(|x| x.and_then(|(_, _, values)| create_instance(values, &auto_increment)))
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>>>()?;
     let data = Holiday::vec_to_map(data);
     Ok(data)
 }
 
-pub fn parse(path: &str) -> Result<ResourceStorage<Holiday>, Box<dyn Error>> {
+pub fn parse(path: &str) -> Result<ResourceStorage<Holiday>> {
     log::info!("Parsing FEIERTAG...");
     let row_parser = holiday_row_parser();
     let parser = FileParser::new(&format!("{path}/FEIERTAG"), row_parser)?;
@@ -61,7 +62,7 @@ pub fn parse(path: &str) -> Result<ResourceStorage<Holiday>, Box<dyn Error>> {
 fn create_instance(
     mut values: Vec<ParsedValue>,
     auto_increment: &AutoIncrement,
-) -> Result<Holiday, Box<dyn Error>> {
+) -> Result<Holiday> {
     let date: String = values.remove(0).into();
     let name_translations: String = values.remove(0).into();
 
@@ -75,17 +76,15 @@ fn create_instance(
 // --- Helper Functions
 // ------------------------------------------------------------------------------------------------
 
-fn parse_name_translations(
-    name_translations: String,
-) -> Result<FxHashMap<Language, String>, Box<dyn Error>> {
+fn parse_name_translations(name_translations: String) -> Result<FxHashMap<Language, String>> {
     name_translations
         .split('>')
         .filter(|&s| !s.is_empty())
-        .map(|s| -> Result<(Language, String), Box<dyn Error>> {
+        .map(|s| -> Result<(Language, String)> {
             let mut parts = s.split('<');
 
-            let v = parts.next().ok_or("Missing value part")?.to_string();
-            let k = parts.next().ok_or("Missing value part")?.to_string();
+            let v = parts.next().ok_or(Error::MissingValuePart)?.to_string();
+            let k = parts.next().ok_or(Error::MissingValuePart)?.to_string();
             let k = Language::from_str(&k)?;
 
             Ok((k, v))

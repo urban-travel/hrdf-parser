@@ -1,13 +1,12 @@
 use std::{
     env,
-    error::Error,
     fs::{self, File},
     io::{BufReader, Cursor},
     path::Path,
     time::Instant,
 };
 
-use crate::{models::Version, storage::DataStorage};
+use crate::{Result, models::Version, storage::DataStorage};
 use bincode::config;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -28,7 +27,7 @@ impl Hrdf {
         url_or_path: &str,
         force_rebuild_cache: bool,
         cache_prefix: Option<String>,
-    ) -> Result<Self, Box<dyn Error>> {
+    ) -> Result<Self> {
         let now = Instant::now();
 
         let unique_filename = format!("{:x}", Sha256::digest(url_or_path.as_bytes()));
@@ -116,13 +115,13 @@ impl Hrdf {
 
     // Functions
 
-    pub fn build_cache(&self, path: &str) -> Result<(), Box<dyn Error>> {
+    pub fn build_cache(&self, path: &str) -> Result<()> {
         let data = bincode::serde::encode_to_vec(self, config::standard())?;
         fs::write(path, data)?;
         Ok(())
     }
 
-    pub fn load_from_cache(path: &str) -> Result<Self, Box<dyn Error>> {
+    pub fn load_from_cache(path: &str) -> Result<Self> {
         let data = fs::read(path)?;
         let (hrdf, _) = bincode::serde::decode_from_slice(&data, config::standard())?;
         Ok(hrdf)

@@ -1,12 +1,12 @@
 // 4 file(s).
 // File(s) read by the parser:
 // BETRIEB_DE, BETRIEB_EN, BETRIEB_FR, BETRIEB_IT
-use std::error::Error;
 
 use regex::Regex;
 use rustc_hash::FxHashMap;
 
 use crate::{
+    Error, Result,
     models::{Language, Model, TransportCompany},
     parsing::{
         ColumnDefinition, ExpectedType, FastRowMatcher, FileParser, ParsedValue, RowDefinition,
@@ -15,7 +15,7 @@ use crate::{
     storage::ResourceStorage,
 };
 
-pub fn parse(path: &str) -> Result<ResourceStorage<TransportCompany>, Box<dyn Error>> {
+pub fn parse(path: &str) -> Result<ResourceStorage<TransportCompany>> {
     log::info!("Parsing BETRIEB_DE...");
     log::info!("Parsing BETRIEB_EN...");
     log::info!("Parsing BETRIEB_FR...");
@@ -54,7 +54,7 @@ pub fn parse(path: &str) -> Result<ResourceStorage<TransportCompany>, Box<dyn Er
                 None
             })
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>>>()?;
     // If there are no errors, "None" values are removed.
     let data = data.into_iter().flatten().collect();
     let mut data = TransportCompany::vec_to_map(data);
@@ -71,7 +71,7 @@ fn load_designations(
     path: &str,
     data: &mut FxHashMap<i32, TransportCompany>,
     language: Language,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     const ROW_A: i32 = 1;
     const ROW_B: i32 = 2;
     const ROW_C: i32 = 3;
@@ -124,13 +124,13 @@ fn set_designations(
     mut values: Vec<ParsedValue>,
     data: &mut FxHashMap<i32, TransportCompany>,
     language: Language,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let id: i32 = values.remove(0).into();
     let designations = values.remove(0).into();
 
     let (short_name, long_name, full_name) = parse_designations(designations);
 
-    let transport_company = data.get_mut(&id).ok_or("Unknown ID")?;
+    let transport_company = data.get_mut(&id).ok_or(Error::UnknownId)?;
     transport_company.set_short_name(language, &short_name);
     transport_company.set_long_name(language, &long_name);
     transport_company.set_full_name(language, &full_name);

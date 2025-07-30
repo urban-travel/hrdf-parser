@@ -24,12 +24,10 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// UMSTEIGZ
-use std::error::Error;
-
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-    JourneyId,
+    Error, JourneyId, Result,
     models::{ExchangeTimeJourney, Model},
     parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
     storage::ResourceStorage,
@@ -54,7 +52,7 @@ fn exchange_journey_row_parser() -> RowParser {
 fn exchange_journey_row_converter(
     parser: FileParser,
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
-) -> Result<FxHashMap<i32, ExchangeTimeJourney>, Box<dyn Error>> {
+) -> Result<FxHashMap<i32, ExchangeTimeJourney>> {
     let auto_increment = AutoIncrement::new();
 
     let data = parser
@@ -64,7 +62,7 @@ fn exchange_journey_row_converter(
                 create_instance(values, &auto_increment, journeys_pk_type_converter)
             })
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>>>()?;
     let data = ExchangeTimeJourney::vec_to_map(data);
     Ok(data)
 }
@@ -72,7 +70,7 @@ fn exchange_journey_row_converter(
 pub fn parse(
     path: &str,
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
-) -> Result<ResourceStorage<ExchangeTimeJourney>, Box<dyn Error>> {
+) -> Result<ResourceStorage<ExchangeTimeJourney>> {
     log::info!("Parsing UMSTEIGZ...");
     let row_parser = exchange_journey_row_parser();
     let parser = FileParser::new(&format!("{path}/UMSTEIGZ"), row_parser)?;
@@ -89,7 +87,7 @@ fn create_instance(
     mut values: Vec<ParsedValue>,
     auto_increment: &AutoIncrement,
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
-) -> Result<ExchangeTimeJourney, Box<dyn Error>> {
+) -> Result<ExchangeTimeJourney> {
     let stop_id: i32 = values.remove(0).into();
     let journey_id_1: i32 = values.remove(0).into();
     let administration_1: String = values.remove(0).into();
@@ -101,11 +99,11 @@ fn create_instance(
 
     let _journey_id_1 = journeys_pk_type_converter
         .get(&(journey_id_1, administration_1.clone()))
-        .ok_or("Unknown legacy ID")?;
+        .ok_or(Error::UnknownLegacyId)?;
 
     let _journey_id_2 = journeys_pk_type_converter
         .get(&(journey_id_2, administration_2.clone()))
-        .ok_or("Unknown legacy ID")?;
+        .ok_or(Error::UnknownLegacyId)?;
 
     // TODO: I haven't seen an is_guaranteed field in the doc. Check if this makes sense.
     // It is present in UMSTEIGL. Mabe a copy/paste leftover

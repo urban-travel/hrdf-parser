@@ -1,9 +1,9 @@
 // 1 file(s).
 // File(s) read by the parser:
 // LINIE
-use std::error::Error;
 
 use crate::{
+    Error, Result,
     models::{Color, Line, Model},
     parsing::{
         ColumnDefinition, ExpectedType, FastRowMatcher, FileParser, ParsedValue, RowDefinition,
@@ -12,7 +12,7 @@ use crate::{
     storage::ResourceStorage,
 };
 
-pub fn parse(path: &str) -> Result<ResourceStorage<Line>, Box<dyn Error>> {
+pub fn parse(path: &str) -> Result<ResourceStorage<Line>> {
     log::info!("Parsing LINIE...");
     const ROW_A: i32 = 1;
     const ROW_B: i32 = 2;
@@ -59,7 +59,7 @@ pub fn parse(path: &str) -> Result<ResourceStorage<Line>, Box<dyn Error>> {
                 data.push(create_instance(values));
             }
             _ => {
-                let line = data.last_mut().ok_or("Type A row missing.")?;
+                let line = data.last_mut().ok_or(Error::RowMissing { typ: "A" })?;
 
                 match id {
                     ROW_B => set_short_name(values, line),

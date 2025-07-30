@@ -17,11 +17,10 @@
 /// 4 file(s).
 /// File(s) read by the parser:
 /// INFOTEXT_DE, INFOTEXT_EN, INFOTEXT_FR, INFOTEXT_IT
-use std::error::Error;
-
 use rustc_hash::FxHashMap;
 
 use crate::{
+    Error, Result,
     models::{InformationText, Language, Model},
     parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
     storage::ResourceStorage,
@@ -34,11 +33,11 @@ fn id_row_parser() -> RowParser {
     ])
 }
 
-fn id_row_converter(parser: FileParser) -> Result<FxHashMap<i32, InformationText>, Box<dyn Error>> {
+fn id_row_converter(parser: FileParser) -> Result<FxHashMap<i32, InformationText>> {
     let data = parser
         .parse()
         .map(|x| x.map(|(_, _, values)| create_instance(values)))
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>>>()?;
     let data = InformationText::vec_to_map(data);
     Ok(data)
 }
@@ -57,7 +56,7 @@ fn infotext_row_converter(
     parser: FileParser,
     data: &mut FxHashMap<i32, InformationText>,
     language: Language,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     parser.parse().try_for_each(|x| {
         let (_, _, values) = x?;
         set_content(values, data, language)?;
@@ -65,7 +64,7 @@ fn infotext_row_converter(
     })
 }
 
-pub fn parse(path: &str) -> Result<ResourceStorage<InformationText>, Box<dyn Error>> {
+pub fn parse(path: &str) -> Result<ResourceStorage<InformationText>> {
     log::info!("Parsing INFOTEXT_DE...");
     log::info!("Parsing INFOTEXT_EN...");
     log::info!("Parsing INFOTEXT_FR...");
@@ -87,7 +86,7 @@ fn load_content(
     path: &str,
     data: &mut FxHashMap<i32, InformationText>,
     language: Language,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let row_parser = infotext_row_parser();
     let filename = match language {
         Language::German => "INFOTEXT_DE",
@@ -113,12 +112,12 @@ fn set_content(
     mut values: Vec<ParsedValue>,
     data: &mut FxHashMap<i32, InformationText>,
     language: Language,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let id: i32 = values.remove(0).into();
     let description: String = values.remove(0).into();
 
     data.get_mut(&id)
-        .ok_or("Unknown ID")?
+        .ok_or(Error::UnknownId)?
         .set_content(language, &description);
 
     Ok(())

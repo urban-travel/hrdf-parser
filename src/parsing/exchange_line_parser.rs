@@ -32,11 +32,12 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// UMSTEIGL
-use std::{error::Error, str::FromStr};
+use std::str::FromStr;
 
 use rustc_hash::FxHashMap;
 
 use crate::{
+    Error, Result,
     models::{DirectionType, ExchangeTimeLine, LineInfo, Model},
     parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
     storage::ResourceStorage,
@@ -64,7 +65,7 @@ fn exchange_line_row_parser() -> RowParser {
 fn exchange_line_row_converter(
     parser: FileParser,
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<FxHashMap<i32, ExchangeTimeLine>, Box<dyn Error>> {
+) -> Result<FxHashMap<i32, ExchangeTimeLine>> {
     let auto_increment = AutoIncrement::new();
 
     let data = parser
@@ -74,7 +75,7 @@ fn exchange_line_row_converter(
                 create_instance(values, &auto_increment, transport_types_pk_type_converter)
             })
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>>>()?;
     let data = ExchangeTimeLine::vec_to_map(data);
     Ok(data)
 }
@@ -82,7 +83,7 @@ fn exchange_line_row_converter(
 pub fn parse(
     path: &str,
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<ResourceStorage<ExchangeTimeLine>, Box<dyn Error>> {
+) -> Result<ResourceStorage<ExchangeTimeLine>> {
     log::info!("Parsing UMSTEIGL...");
 
     let row_parser = exchange_line_row_parser();
@@ -100,7 +101,7 @@ fn create_instance(
     mut values: Vec<ParsedValue>,
     auto_increment: &AutoIncrement,
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<ExchangeTimeLine, Box<dyn Error>> {
+) -> Result<ExchangeTimeLine> {
     let stop_id: Option<i32> = values.remove(0).into();
     let administration_1: String = values.remove(0).into();
     let transport_type_id_1: String = values.remove(0).into();
@@ -115,7 +116,7 @@ fn create_instance(
 
     let transport_type_id_1 = *transport_types_pk_type_converter
         .get(&transport_type_id_1)
-        .ok_or("Unknown legacy ID")?;
+        .ok_or(Error::UnknownLegacyId)?;
 
     let line_id_1 = if line_id_1 == "*" {
         None
@@ -131,7 +132,7 @@ fn create_instance(
 
     let transport_type_id_2 = *transport_types_pk_type_converter
         .get(&transport_type_id_2)
-        .ok_or("Unknown legacy ID")?;
+        .ok_or(Error::UnknownLegacyId)?;
 
     let line_id_2 = if line_id_2 == "*" {
         None
