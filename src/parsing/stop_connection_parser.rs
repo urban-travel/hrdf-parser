@@ -86,7 +86,10 @@ fn set_attribute(
     let attribute_designation: String = values.remove(0).into();
     let attribute_id = *attributes_pk_type_converter
         .get(&attribute_designation)
-        .ok_or(ErrorKind::UnknownLegacyId)?;
+        .ok_or(ErrorKind::UnknownLegacyId(
+            "attribute",
+            attribute_designation,
+        ))?;
     current_instance.set_attribute(attribute_id);
     Ok(())
 }

@@ -63,28 +63,42 @@ pub(crate) enum ErrorKind {
 
     #[error("invalid hexadecimal digit")]
     InvalidHexaDigit,
-    #[error("Unknown legacy ID")]
-    UnknownLegacyId,
-    #[error("Unknown legacy journey ID")]
-    UnknownLegacyJourneyId,
-    #[error("Unknown legacy platform ID")]
-    UnknownLegacyPlatformId,
-    #[error("Unknown ID")]
-    UnknownId,
+
+    #[error("Unknown legacy {0} ID: {1:?}")]
+    UnknownLegacyId(&'static str, String),
+    #[error("Unknown legacy {name} ID: {id} #{index}")]
+    UnknownLegacyIdIndex {
+        name: &'static str,
+        id: i32,
+        index: i32,
+    },
+    #[error("Unknown legacy {name} ID: {id} admin={admin:?}")]
+    UnknownLegacyIdAdmin {
+        name: &'static str,
+        id: i32,
+        admin: String,
+    },
+
+    #[error("Unknown ID {0}")]
+    UnknownId(i32),
+
     #[error("Missing value part")]
     MissingValuePart,
-    #[error("Missing stop name")]
+    #[error("Missing stop name (standard name is mandatory)")]
     MissingStopName,
     #[error("Missing designation")]
     MissingDesignation,
-    #[error("The start column is out of range.")]
-    TheStartColumnIsOutOfRange,
-    #[error("This type of row is unknown:\n{row}")]
-    UnknownRowType { row: String },
+
     #[error("Type {typ} row missing.")]
     RowMissing { typ: &'static str },
-    #[error("Entry of type {typ:?} missing.")]
+    #[error("Entry of type {typ} missing.")]
     EntryMissing { typ: &'static str },
+
     #[error("Key {name:?} missing.")]
     KeyMissing { name: &'static str },
+
+    #[error("The start column is out of range.")]
+    TheStartColumnIsOutOfRange,
+    #[error("This type of row is unknown: {row:?}")]
+    UnknownRowType { row: String },
 }

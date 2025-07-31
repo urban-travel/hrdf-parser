@@ -100,11 +100,19 @@ fn create_instance(
 
     let _journey_id_1 = journeys_pk_type_converter
         .get(&(journey_id_1, administration_1.clone()))
-        .ok_or(ErrorKind::UnknownLegacyId)?;
+        .ok_or(ErrorKind::UnknownLegacyIdAdmin {
+            name: "journey",
+            id: journey_id_1,
+            admin: administration_1.clone(),
+        })?;
 
     let _journey_id_2 = journeys_pk_type_converter
         .get(&(journey_id_2, administration_2.clone()))
-        .ok_or(ErrorKind::UnknownLegacyId)?;
+        .ok_or(ErrorKind::UnknownLegacyIdAdmin {
+            name: "journey",
+            id: journey_id_2,
+            admin: administration_2.clone(),
+        })?;
 
     // TODO: I haven't seen an is_guaranteed field in the doc. Check if this makes sense.
     // It is present in UMSTEIGL. Mabe a copy/paste leftover

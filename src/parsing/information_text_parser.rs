@@ -118,7 +118,7 @@ fn set_content(
     let description: String = values.remove(0).into();
 
     data.get_mut(&id)
-        .ok_or(ErrorKind::UnknownId)?
+        .ok_or(ErrorKind::UnknownId(id))?
         .set_content(language, &description);
 
     Ok(())

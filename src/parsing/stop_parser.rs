@@ -251,7 +251,9 @@ fn set_coordinates(
         (xy1, xy2) = (xy2, xy1);
     }
 
-    let stop = data.get_mut(&stop_id).ok_or(ErrorKind::UnknownId)?;
+    let stop = data
+        .get_mut(&stop_id)
+        .ok_or(ErrorKind::UnknownId(stop_id))?;
     let coordinate = Coordinates::new(coordinate_system, xy1, xy2);
 
     match coordinate_system {
@@ -269,7 +271,9 @@ fn set_exchange_priority(
     let stop_id: i32 = values.remove(0).into();
     let exchange_priority: i16 = values.remove(0).into();
 
-    let stop = data.get_mut(&stop_id).ok_or(ErrorKind::UnknownId)?;
+    let stop = data
+        .get_mut(&stop_id)
+        .ok_or(ErrorKind::UnknownId(stop_id))?;
     stop.set_exchange_priority(exchange_priority);
 
     Ok(())
@@ -279,7 +283,9 @@ fn set_exchange_flag(mut values: Vec<ParsedValue>, data: &mut FxHashMap<i32, Sto
     let stop_id: i32 = values.remove(0).into();
     let exchange_flag: i16 = values.remove(0).into();
 
-    let stop = data.get_mut(&stop_id).ok_or(ErrorKind::UnknownId)?;
+    let stop = data
+        .get_mut(&stop_id)
+        .ok_or(ErrorKind::UnknownId(stop_id))?;
     stop.set_exchange_flag(exchange_flag);
 
     Ok(())
@@ -300,7 +306,9 @@ fn set_exchange_time(
         // It contains default exchange times to be used when a stop has no specific exchange time.
         Ok(exchange_time)
     } else {
-        let stop = data.get_mut(&stop_id).ok_or(ErrorKind::UnknownId)?;
+        let stop = data
+            .get_mut(&stop_id)
+            .ok_or(ErrorKind::UnknownId(stop_id))?;
         stop.set_exchange_time(exchange_time);
         Ok(None)
     }

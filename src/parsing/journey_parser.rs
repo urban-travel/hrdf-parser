@@ -453,7 +453,7 @@ fn set_transport_type(
     let (designation, from_stop_id, until_stop_id) = row_b_from_parsed_values(values);
     let transport_type_id = *transport_types_pk_type_converter
         .get(&designation)
-        .ok_or(ErrorKind::UnknownLegacyId)?;
+        .ok_or(ErrorKind::UnknownLegacyId("transport_type", designation))?;
 
     journey.add_metadata_entry(
         JourneyMetadataType::TransportType,
@@ -518,7 +518,7 @@ fn add_attribute(
 
     let attribute_id = *attributes_pk_type_converter
         .get(&designation)
-        .ok_or(ErrorKind::UnknownLegacyId)?;
+        .ok_or(ErrorKind::UnknownLegacyId("attribute", designation))?;
 
     journey.add_metadata_entry(
         JourneyMetadataType::Attribute,
@@ -693,7 +693,7 @@ fn set_direction(
     } else {
         let id = *directions_pk_type_converter
             .get(&direction_id)
-            .ok_or(ErrorKind::UnknownLegacyId)?;
+            .ok_or(ErrorKind::UnknownLegacyId("direction", direction_id))?;
         Some(id)
     };
 

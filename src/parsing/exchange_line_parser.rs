@@ -117,7 +117,10 @@ fn create_instance(
 
     let transport_type_id_1 = *transport_types_pk_type_converter
         .get(&transport_type_id_1)
-        .ok_or(ErrorKind::UnknownLegacyId)?;
+        .ok_or(ErrorKind::UnknownLegacyId(
+            "transport_type",
+            transport_type_id_1,
+        ))?;
 
     let line_id_1 = if line_id_1 == "*" {
         None
@@ -133,7 +136,10 @@ fn create_instance(
 
     let transport_type_id_2 = *transport_types_pk_type_converter
         .get(&transport_type_id_2)
-        .ok_or(ErrorKind::UnknownLegacyId)?;
+        .ok_or(ErrorKind::UnknownLegacyId(
+            "transport_type",
+            transport_type_id_2,
+        ))?;
 
     let line_id_2 = if line_id_2 == "*" {
         None

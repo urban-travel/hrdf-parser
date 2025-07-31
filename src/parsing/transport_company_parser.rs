@@ -131,7 +131,7 @@ fn set_designations(
 
     let (short_name, long_name, full_name) = parse_designations(designations);
 
-    let transport_company = data.get_mut(&id).ok_or(ErrorKind::UnknownId)?;
+    let transport_company = data.get_mut(&id).ok_or(ErrorKind::UnknownId(id))?;
     transport_company.set_short_name(language, &short_name);
     transport_company.set_long_name(language, &long_name);
     transport_company.set_full_name(language, &full_name);

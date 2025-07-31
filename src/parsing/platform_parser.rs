@@ -313,11 +313,19 @@ fn create_journey_platform(
 
     let _journey_id = journeys_pk_type_converter
         .get(&(journey_id, administration.clone()))
-        .ok_or(ErrorKind::UnknownLegacyJourneyId)?;
+        .ok_or(ErrorKind::UnknownLegacyIdAdmin {
+            name: "journey",
+            id: journey_id,
+            admin: administration.clone(),
+        })?;
 
-    let platform_id = *platforms_pk_type_converter
-        .get(&(stop_id, index))
-        .ok_or(ErrorKind::UnknownLegacyPlatformId)?;
+    let platform_id = *platforms_pk_type_converter.get(&(stop_id, index)).ok_or(
+        ErrorKind::UnknownLegacyIdIndex {
+            name: "platform",
+            id: stop_id,
+            index,
+        },
+    )?;
 
     let time = time.map(|x| create_time_from_value(x as u32));
 
@@ -363,12 +371,17 @@ fn platform_set_sloid(
         let index: i32 = values.remove(0).into();
         let sloid: String = values.remove(0).into();
 
-        let id = pk_type_converter
-            .get(&(stop_id, index))
-            .ok_or(ErrorKind::UnknownLegacyId)?;
+        let id =
+            pk_type_converter
+                .get(&(stop_id, index))
+                .ok_or(ErrorKind::UnknownLegacyIdIndex {
+                    name: "stop",
+                    id: stop_id,
+                    index,
+                })?;
 
         data.get_mut(id)
-            .ok_or(ErrorKind::UnknownId)?
+            .ok_or(ErrorKind::UnknownId(*id))?
             .set_sloid(sloid);
     }
 
@@ -398,10 +411,14 @@ fn platform_set_coordinates(
 
     let coordinate = Coordinates::new(coordinate_system, xy1, xy2);
 
-    let id = &pk_type_converter
+    let id = pk_type_converter
         .get(&(stop_id, index))
-        .ok_or(ErrorKind::UnknownLegacyId)?;
-    let platform = data.get_mut(id).ok_or(ErrorKind::UnknownId)?;
+        .ok_or(ErrorKind::UnknownLegacyIdIndex {
+            name: "stop",
+            id: stop_id,
+            index,
+        })?;
+    let platform = data.get_mut(id).ok_or(ErrorKind::UnknownId(*id))?;
 
     match coordinate_system {
         CoordinateSystem::LV95 => platform.set_lv95_coordinates(coordinate),

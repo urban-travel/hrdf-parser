@@ -210,9 +210,9 @@ fn set_description(
     let (legacy_id, description) = row_d_from_parsed_values(values);
     let id = pk_type_converter
         .get(&legacy_id)
-        .ok_or(ErrorKind::UnknownLegacyId)?;
+        .ok_or(ErrorKind::UnknownLegacyId("attribute", legacy_id))?;
     data.get_mut(id)
-        .ok_or(ErrorKind::UnknownId)?
+        .ok_or(ErrorKind::UnknownId(*id))?
         .set_description(language, &description);
 
     Ok(())
