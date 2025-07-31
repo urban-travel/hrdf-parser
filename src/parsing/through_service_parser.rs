@@ -71,17 +71,13 @@ fn create_instance(
     let journey_1 =
         journeys_pk_type_converter.get(&(journey_1_id, journey_1_administration.clone()));
     if journey_1.is_none() {
-        log::warn!(
-            "Unknown legacy ID for journey_1: {journey_1_id}, {journey_1_administration}"
-        );
+        log::warn!("Unknown legacy ID for journey_1: {journey_1_id}, {journey_1_administration}");
     }
 
     let journey_2 =
         journeys_pk_type_converter.get(&(journey_2_id, journey_2_administration.clone()));
     if journey_2.is_none() {
-        log::warn!(
-            "Unknown legacy ID for journey_2: {journey_2_id}, {journey_2_administration}"
-        );
+        log::warn!("Unknown legacy ID for journey_2: {journey_2_id}, {journey_2_administration}");
     }
 
     if journey_1_stop_id != journey_2_stop_id {
