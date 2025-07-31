@@ -103,7 +103,7 @@ impl Hrdf {
 
         let elapsed = now.elapsed();
 
-        log::info!("HRDF data loaded in {:.2?}!", elapsed);
+        log::info!("HRDF data loaded in {elapsed:.2?}!");
 
         Ok(hrdf)
     }

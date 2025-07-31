@@ -311,7 +311,7 @@ fn create_bit_fields_by_day(
     let result = bit_fields.data().keys().fold(map, |mut acc, bit_field_id| {
         let bit_field = bit_fields
             .find(*bit_field_id)
-            .unwrap_or_else(|| panic!("Bitfield id {:?} not found.", bit_field_id));
+            .unwrap_or_else(|| panic!("Bitfield id {bit_field_id:?} not found."));
         let indexes: Vec<usize> = bit_field
             .bits()
             .iter()
