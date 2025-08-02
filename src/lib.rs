@@ -28,7 +28,7 @@ mod tests {
             Ok(_) => panic!("should be an error"),
             Err(err) => {
                 assert!(
-                    err.to_string().contains("404 Not Found"),
+                    err.to_string().to_lowercase().contains("404 not found"),
                     "The error whould be indicate '404 Not Found'"
                 );
             }
