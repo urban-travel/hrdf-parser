@@ -416,7 +416,7 @@ fn platform_set_coordinates(
 fn parse_platform_data(
     mut platform_data: String,
 ) -> Result<(String, Option<String>), Box<dyn Error>> {
-    platform_data = format!("{} ", platform_data);
+    platform_data = format!("{platform_data} ");
     let data = platform_data.split("' ").filter(|&s| !s.is_empty()).fold(
         FxHashMap::default(),
         |mut acc, item| {
