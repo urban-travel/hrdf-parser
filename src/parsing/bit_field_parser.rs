@@ -24,8 +24,24 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// BITFELD
-use std::error::Error;
+use std::{
+    error::Error,
+    fs::File,
+    io::{self, Read, Seek},
+};
 
+use nom::{
+    IResult, Parser,
+    bytes::{take, take_while_m_n},
+    character::{
+        complete::{hex_digit1, space1},
+        digit1, one_of,
+    },
+    combinator::{map, map_res},
+    multi::count,
+    number::be_i32,
+    sequence::separated_pair,
+};
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -44,6 +60,33 @@ fn bitfield_row_parser() -> RowParser {
     ])
 }
 
+fn to_string(v: Vec<char>) -> String {
+    v.iter().collect::<String>()
+}
+
+fn parse_bitfield_row(input: &str) -> IResult<&str, (i32, Vec<u8>)> {
+    separated_pair(
+        map_res(count(one_of("0123456789"), 6), |chars| {
+            to_string(chars).parse::<i32>()
+        }),
+        space1,
+        map_res(count(one_of("0123456789ABCDEF"), 96), |x| {
+            convert_hex_number_to_bits(&to_string(x))
+        }),
+    )
+    .parse(input)
+}
+
+fn read_lines(path: &str, bytes_offset: u64) -> io::Result<Vec<String>> {
+    let mut file = File::open(path)?;
+    file.seek(io::SeekFrom::Start(bytes_offset))?;
+    let mut reader = io::BufReader::new(file);
+    let mut contents = String::new();
+    reader.read_to_string(&mut contents)?;
+    let lines = contents.lines().map(String::from).collect();
+    Ok(lines)
+}
+
 fn bitfield_row_converter(parser: FileParser) -> Result<FxHashMap<i32, BitField>, Box<dyn Error>> {
     let data = parser
         .parse()
@@ -55,12 +98,17 @@ fn bitfield_row_converter(parser: FileParser) -> Result<FxHashMap<i32, BitField>
 
 pub fn parse(path: &str) -> Result<ResourceStorage<BitField>, Box<dyn Error>> {
     log::info!("Parsing BITFELD...");
-    #[rustfmt::skip]
-    let row_parser = bitfield_row_parser();
-    let parser = FileParser::new(&format!("{path}/BITFELD"), row_parser)?;
-
-    let data = bitfield_row_converter(parser)?;
-
+    let lines = read_lines(&format!("{path}/BITFELD"), 0)?;
+    let bitfields = lines
+        .into_iter()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            let (_, (id, bits)) = parse_bitfield_row(&line)
+                .map_err(|e| format!("Failed to parse line '{}': {}", line, e))?;
+            Ok(BitField::new(id, bits))
+        })
+        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+    let data = BitField::vec_to_map(bitfields);
     Ok(ResourceStorage::new(data))
 }
 
@@ -77,7 +125,7 @@ fn row_from_parsed_values(mut values: Vec<ParsedValue>) -> (i32, String) {
 fn create_instance(values: Vec<ParsedValue>) -> Result<BitField, Box<dyn Error>> {
     let (id, hex_number) = row_from_parsed_values(values);
 
-    let bits = convert_hex_number_to_bits(hex_number)?;
+    let bits = convert_hex_number_to_bits(&hex_number)?;
 
     Ok(BitField::new(id, bits))
 }
@@ -87,7 +135,7 @@ fn create_instance(values: Vec<ParsedValue>) -> Result<BitField, Box<dyn Error>>
 // ------------------------------------------------------------------------------------------------
 
 /// Converts a hexadecimal number into a list of where each item represents a bit.
-fn convert_hex_number_to_bits(hex_number: String) -> Result<Vec<u8>, Box<dyn Error>> {
+fn convert_hex_number_to_bits(hex_number: &str) -> Result<Vec<u8>, Box<dyn Error>> {
     let result = hex_number
         .chars()
         .map(|hex_digit| {
@@ -109,6 +157,32 @@ mod tests {
     use super::*;
     use crate::parsing::tests::get_json_values;
     use pretty_assertions::assert_eq;
+
+    #[test]
+    fn successful_bitfield_row() {
+        let input = "000017 FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000";
+        let (_, (id, hex_number)) = parse_bitfield_row(input).unwrap();
+        assert_eq!(17, id);
+        assert_eq!(
+            vec![
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            ],
+            hex_number
+        );
+    }
 
     #[test]
     fn row_parser_v207() {
