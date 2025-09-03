@@ -65,7 +65,7 @@ impl Hrdf {
                 if !Path::new(&compressed_data_path).exists() {
                     // The data must be downloaded.
                     log::info!("Downloading HRDF data to {compressed_data_path}...");
-                    let response = reqwest::get(url_or_path).await?;
+                    let response = reqwest::get(url_or_path).await?.error_for_status()?;
                     let mut file = std::fs::File::create(&compressed_data_path)?;
                     let mut content = Cursor::new(response.bytes().await?);
                     std::io::copy(&mut content, &mut file)?;
@@ -103,7 +103,7 @@ impl Hrdf {
 
         let elapsed = now.elapsed();
 
-        log::info!("HRDF data loaded in {:.2?}!", elapsed);
+        log::info!("HRDF data loaded in {elapsed:.2?}!");
 
         Ok(hrdf)
     }

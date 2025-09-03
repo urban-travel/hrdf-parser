@@ -313,7 +313,7 @@ impl RowParser {
             // unwrap: "row_matcher" is guaranteed to always have a value when there are multiple row definitions.
             .find(|row_definition| row_definition.row_matcher.as_ref().unwrap().match_row(row));
 
-        matched_row_definition.ok_or(format!("This type of row is unknown:\n{}", row).into())
+        matched_row_definition.ok_or(format!("This type of row is unknown:\n{row}").into())
     }
 }
 
