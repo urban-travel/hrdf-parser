@@ -350,7 +350,7 @@ impl FileParser {
         Ok(lines)
     }
 
-    pub fn parse(&self) -> ParsedRowIterator {
+    pub fn parse(&self) -> ParsedRowIterator<'_> {
         ParsedRowIterator {
             rows_iter: self.rows.iter(),
             row_parser: &self.row_parser,
