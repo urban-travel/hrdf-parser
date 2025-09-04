@@ -4,6 +4,7 @@ mod direction_parser;
 mod exchange_administration_parser;
 mod exchange_journey_parser;
 mod exchange_line_parser;
+mod helpers;
 mod holiday_parser;
 mod information_text_parser;
 mod journey_parser;

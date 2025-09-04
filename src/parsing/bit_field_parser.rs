@@ -32,33 +32,17 @@ use std::{
 
 use nom::{
     IResult, Parser,
-    bytes::{take, take_while_m_n},
-    character::{
-        complete::{hex_digit1, space1},
-        digit1, one_of,
-    },
-    combinator::{map, map_res},
+    character::{char, one_of},
+    combinator::map_res,
     multi::count,
-    number::be_i32,
     sequence::separated_pair,
 };
-use rustc_hash::FxHashMap;
 
 use crate::{
     models::{BitField, Model},
-    parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
+    parsing::helpers::i32_from_n_digits_parser,
     storage::ResourceStorage,
 };
-
-fn bitfield_row_parser() -> RowParser {
-    RowParser::new(vec![
-        // This row is used to create a BitField instance.
-        RowDefinition::from(vec![
-            ColumnDefinition::new(1, 6, ExpectedType::Integer32),
-            ColumnDefinition::new(8, 103, ExpectedType::String),
-        ]),
-    ])
-}
 
 fn to_string(v: Vec<char>) -> String {
     v.iter().collect::<String>()
@@ -66,10 +50,8 @@ fn to_string(v: Vec<char>) -> String {
 
 fn parse_bitfield_row(input: &str) -> IResult<&str, (i32, Vec<u8>)> {
     separated_pair(
-        map_res(count(one_of("0123456789"), 6), |chars| {
-            to_string(chars).parse::<i32>()
-        }),
-        space1,
+        i32_from_n_digits_parser(6),
+        char(' '),
         map_res(count(one_of("0123456789ABCDEF"), 96), |x| {
             convert_hex_number_to_bits(&to_string(x))
         }),
@@ -87,15 +69,6 @@ fn read_lines(path: &str, bytes_offset: u64) -> io::Result<Vec<String>> {
     Ok(lines)
 }
 
-fn bitfield_row_converter(parser: FileParser) -> Result<FxHashMap<i32, BitField>, Box<dyn Error>> {
-    let data = parser
-        .parse()
-        .map(|x| x.and_then(|(_, _, values)| create_instance(values)))
-        .collect::<Result<Vec<_>, _>>()?;
-    let data = BitField::vec_to_map(data);
-    Ok(data)
-}
-
 pub fn parse(path: &str) -> Result<ResourceStorage<BitField>, Box<dyn Error>> {
     log::info!("Parsing BITFELD...");
     let lines = read_lines(&format!("{path}/BITFELD"), 0)?;
@@ -110,24 +83,6 @@ pub fn parse(path: &str) -> Result<ResourceStorage<BitField>, Box<dyn Error>> {
         .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     let data = BitField::vec_to_map(bitfields);
     Ok(ResourceStorage::new(data))
-}
-
-// ------------------------------------------------------------------------------------------------
-// --- Data Processing Functions
-// ------------------------------------------------------------------------------------------------
-
-fn row_from_parsed_values(mut values: Vec<ParsedValue>) -> (i32, String) {
-    let id: i32 = values.remove(0).into();
-    let hex_number: String = values.remove(0).into();
-    (id, hex_number)
-}
-
-fn create_instance(values: Vec<ParsedValue>) -> Result<BitField, Box<dyn Error>> {
-    let (id, hex_number) = row_from_parsed_values(values);
-
-    let bits = convert_hex_number_to_bits(&hex_number)?;
-
-    Ok(BitField::new(id, bits))
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -155,7 +110,6 @@ fn convert_hex_number_to_bits(hex_number: &str) -> Result<Vec<u8>, Box<dyn Error
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::parsing::tests::get_json_values;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -185,60 +139,66 @@ mod tests {
     }
 
     #[test]
-    fn row_parser_v207() {
-        let rows = vec![
-            "000017 FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000".to_string(),
-            "425152 FFFFFFFFEFFFFFFFFFFBF7EBD7BF5FFFBFFFFFFFEFBFDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000".to_string()
-        ];
-        let parser = FileParser {
-            row_parser: bitfield_row_parser(),
-            rows,
-        };
-        let mut parser_iterator = parser.parse();
-        let (_, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let (id, hex_number) = row_from_parsed_values(parsed_values);
-        assert_eq!(17, id);
-        assert_eq!(
-            "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000",
-            &hex_number
-        );
-        let (_, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let (id, hex_number) = row_from_parsed_values(parsed_values);
-        assert_eq!(425152, id);
-        assert_eq!(
-            "FFFFFFFFEFFFFFFFFFFBF7EBD7BF5FFFBFFFFFFFEFBFDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000",
-            &hex_number
-        );
+    #[should_panic]
+    fn failed_bitfield_row_num_short() {
+        let input = "00017 FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000";
+        let (_, (_, _)) = parse_bitfield_row(input).unwrap();
     }
 
     #[test]
-    fn type_converter_v207() {
-        let rows = vec![
-            "000017 FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000".to_string(),
-            "425152 FFFFFFFFEFFFFFFFFFFBF7EBD7BF5FFFBFFFFFFFEFBFDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000".to_string()
-        ];
-        let parser = FileParser {
-            row_parser: bitfield_row_parser(),
-            rows,
-        };
-        let data = bitfield_row_converter(parser).unwrap();
-        // First row (id: 1)
-        let attribute = data.get(&17).unwrap();
-        let reference = r#"
-            {
-                "id": 17,
-                "bits": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-            }"#;
-        let (attribute, reference) = get_json_values(attribute, reference).unwrap();
-        assert_eq!(attribute, reference);
-        // Second row (id: 2)
-        let attribute = data.get(&425152).unwrap();
-        let reference = r#"
-            {
-                "id": 425152,
-                "bits": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-            }"#;
-        let (attribute, reference) = get_json_values(attribute, reference).unwrap();
-        assert_eq!(attribute, reference);
+    #[should_panic]
+    fn failed_bitfield_row_num_long() {
+        let input = "0900017 FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000";
+        let (_, (_, _)) = parse_bitfield_row(input).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn failed_bitfield_row_num_invalid() {
+        let input = "0C0017 FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000";
+        let (_, (_, _)) = parse_bitfield_row(input).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn failed_bitfield_row_bitfield_short() {
+        let input = "000017 FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000 ";
+        let (_, (_, _)) = parse_bitfield_row(input).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn failed_bitfield_row_bitfield_long() {
+        let input = "000017 FAFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000";
+        let (res, (_, _)) = parse_bitfield_row(input).unwrap();
+        assert!(res.is_empty());
+    }
+
+    #[test]
+    #[should_panic]
+    fn failed_bitfield_row_bitfield_invalid() {
+        let input = "000017 FbFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000";
+        let (_, (_, _)) = parse_bitfield_row(input).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn failed_bitfield_row_bitfield_invalid_spacing1() {
+        let input = "000017  FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000";
+        let (_, (_, _)) = parse_bitfield_row(input).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn failed_bitfield_row_bitfield_invalid_spacing2() {
+        let input = "000017,FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000";
+        let (_, (_, _)) = parse_bitfield_row(input).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn failed_bitfield_row_bitfield_invalid_spacing3() {
+        let input = "000017 ,FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000";
+        let (_, (_, _)) = parse_bitfield_row(input).unwrap();
     }
 }

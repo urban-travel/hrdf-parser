@@ -210,14 +210,27 @@
 use std::error::Error;
 
 use chrono::NaiveTime;
+use nom::{
+    IResult, Parser,
+    bytes::tag,
+    character::char,
+    combinator::opt,
+    sequence::{preceded, separated_pair},
+};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     JourneyId,
     models::{Journey, JourneyMetadataEntry, JourneyMetadataType, JourneyRouteEntry, Model},
     parsing::{
-        ColumnDefinition, ExpectedType, FastRowMatcher, FileParser, ParsedValue, RowDefinition,
-        RowParser,
+        ColumnDefinition,
+        ExpectedType,
+        FastRowMatcher,
+        FileParser,
+        ParsedValue,
+        RowDefinition,
+        RowParser, // helpers::{i32_from_six_digits_parser, string_from_six_chars_parser},
+        helpers::{i32_from_n_digits_parser, string_from_n_chars_parser},
     },
     storage::ResourceStorage,
     utils::{AutoIncrement, create_time_from_value},
@@ -235,6 +248,65 @@ enum RowType {
     RowG = 7,
     RowH = 8,
     RowI = 9,
+}
+
+fn row_z_parser(input: &str) -> IResult<&str, (i32, String)> {
+    preceded(
+        tag("*Z "),
+        separated_pair(
+            i32_from_n_digits_parser(6),
+            char(' '),
+            string_from_n_chars_parser(6),
+        ),
+    )
+    .parse(input)
+}
+
+fn row_g_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>)> {
+    let (res, (offer, _, stop_from_id, _, stop_to_id)) = preceded(
+        tag("*G "),
+        (
+            string_from_n_chars_parser(3),
+            char(' '),
+            opt(i32_from_n_digits_parser(7)),
+            char(' '),
+            opt(i32_from_n_digits_parser(7)),
+        ),
+    )
+    .parse(input)?;
+    Ok((res, (offer, stop_from_id, stop_to_id)))
+}
+
+fn row_a_ve_parser(input: &str) -> IResult<&str, (Option<i32>, Option<i32>, Option<i32>)> {
+    let (res, (stop_from_id, _, stop_to_id, _, reference)) = preceded(
+        tag("*A VE "),
+        (
+            opt(i32_from_n_digits_parser(7)),
+            char(' '),
+            opt(i32_from_n_digits_parser(7)),
+            char(' '),
+            opt(i32_from_n_digits_parser(7)),
+        ),
+    )
+    .parse(input)?;
+    Ok((res, (stop_from_id, stop_to_id, reference)))
+}
+
+fn row_a_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>, Option<i32>)> {
+    let (res, (offer, _, stop_from_id, _, stop_to_id, _, reference)) = preceded(
+        tag("*A "),
+        (
+            string_from_n_chars_parser(3), // we may need to trim the result
+            char(' '),
+            opt(i32_from_n_digits_parser(7)),
+            char(' '),
+            opt(i32_from_n_digits_parser(7)),
+            char(' '),
+            opt(i32_from_n_digits_parser(7)),
+        ),
+    )
+    .parse(input)?;
+    Ok((res, (offer, stop_from_id, stop_to_id, reference)))
 }
 
 fn journey_row_parser() -> RowParser {
