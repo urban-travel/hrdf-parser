@@ -4,6 +4,49 @@
 ///
 /// This file contains:
 ///
+/// 1 file(s).
+/// File(s) read by the parser:
+/// FPLAN
+use std::error::Error;
+
+use chrono::NaiveTime;
+use nom::{
+    IResult, Parser,
+    bytes::tag,
+    character::{char, complete::space1},
+    combinator::map,
+    sequence::preceded,
+};
+use rustc_hash::{FxHashMap, FxHashSet};
+
+use crate::{
+    JourneyId,
+    models::{Journey, JourneyMetadataEntry, JourneyMetadataType, JourneyRouteEntry, Model},
+    parsing::{
+        ColumnDefinition, ExpectedType, FastRowMatcher, FileParser, ParsedValue, RowDefinition,
+        RowParser,
+        helpers::{
+            i32_from_n_digits_parser, optional_i32_from_n_digits_parser, string_from_n_chars_parser,
+        },
+    },
+    storage::ResourceStorage,
+    utils::{AutoIncrement, create_time_from_value},
+};
+
+type JourneyAndTypeConverter = (ResourceStorage<Journey>, FxHashSet<JourneyId>);
+
+enum RowType {
+    RowA = 1,
+    RowB = 2,
+    RowC = 3,
+    RowD = 4,
+    RowE = 5,
+    RowF = 6,
+    RowG = 7,
+    RowH = 8,
+    RowI = 9,
+}
+
 /// ## Z-lines
 ///
 /// - *Z lines: as header information for the run. Further details on this topic and its implementation in Switzerland can be found in the RV. It includes:
@@ -22,7 +65,47 @@
 /// ...
 /// *Z 123456 000011   101 012 060 % Fahrtnummer 123456, für TU 11 (SBB), mit Variante 101 (ignore), 12 mal, alle 60 Minuten
 /// ...
-/// `
+fn row_z_parser(input: &str) -> IResult<&str, (i32, String, i32, Option<i32>, Option<i32>)> {
+    let (
+        res,
+        (
+            journey_id,
+            _,
+            transport_company_id,
+            _,
+            transport_variant,
+            _,
+            num_cycles,
+            _,
+            cycle_dura_min,
+        ),
+    ) = preceded(
+        tag("*Z "),
+        (
+            i32_from_n_digits_parser(6),
+            char(' '),
+            string_from_n_chars_parser(6),
+            space1,
+            i32_from_n_digits_parser(3), // Maybe need to make optional
+            char(' '),
+            optional_i32_from_n_digits_parser(3),
+            char(' '),
+            optional_i32_from_n_digits_parser(3),
+        ),
+    )
+    .parse(input)?;
+    Ok((
+        res,
+        (
+            journey_id,
+            transport_company_id,
+            transport_variant,
+            num_cycles,
+            cycle_dura_min,
+        ),
+    ))
+}
+
 /// ## G-lines
 ///
 /// - *G-lines: Reference to the offer category (s. ZUGART file). It includes:
@@ -38,6 +121,21 @@
 /// ...
 /// `
 ///
+fn row_g_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>)> {
+    let (res, (offer, _, stop_from_id, _, stop_to_id)) = preceded(
+        tag("*G "),
+        (
+            string_from_n_chars_parser(3),
+            char(' '),
+            optional_i32_from_n_digits_parser(7),
+            char(' '),
+            optional_i32_from_n_digits_parser(7),
+        ),
+    )
+    .parse(input)?;
+    Ok((res, (offer, stop_from_id, stop_to_id)))
+}
+
 /// ## A VE-lines
 ///
 /// - *A VE lines: Reference to the validity information (see file BITFELD). Further details on this topic and its implementation in Switzerland can be found in the RV. It includes:
@@ -54,6 +152,21 @@
 /// ...
 /// `
 ///
+fn row_a_ve_parser(input: &str) -> IResult<&str, (Option<i32>, Option<i32>, Option<i32>)> {
+    let (res, (stop_from_id, _, stop_to_id, _, reference)) = preceded(
+        tag("*A VE "),
+        (
+            optional_i32_from_n_digits_parser(7),
+            char(' '),
+            optional_i32_from_n_digits_parser(7),
+            char(' '),
+            optional_i32_from_n_digits_parser(6),
+        ),
+    )
+    .parse(input)?;
+    Ok((res, (stop_from_id, stop_to_id, reference)))
+}
+
 /// ## A *-lines
 ///
 /// - *A *-lines: Reference to offers (s. file ATTRIBUT). It includes:
@@ -75,6 +188,23 @@
 /// ...
 /// `
 ///
+fn row_a_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>, Option<i32>)> {
+    let (res, (offer, _, stop_from_id, _, stop_to_id, _, reference)) = preceded(
+        tag("*A "),
+        (
+            string_from_n_chars_parser(2),
+            char(' '),
+            optional_i32_from_n_digits_parser(7),
+            char(' '),
+            optional_i32_from_n_digits_parser(7),
+            char(' '),
+            optional_i32_from_n_digits_parser(6),
+        ),
+    )
+    .parse(input)?;
+    Ok((res, (offer, stop_from_id, stop_to_id, reference)))
+}
+
 /// ## I-lines
 ///
 /// - *I-lines: Reference to notes (s. INFOTEXT file). Further details on this topic and its implementation in Switzerland can be found in the RV. It includes:
@@ -100,256 +230,6 @@
 /// ...
 /// `
 ///
-/// ## L-lines
-///
-/// - *L lines: Line information or reference to the line information (see file LINIE). It includes:
-///     - Line information, reference to external file if necessary.
-///     - Stop from which the line is valid
-///     - Stop to which the line is valid
-///     - Departure time
-///     - Time of arrival
-///
-/// ### Example (excerpt):
-///
-/// `
-/// *Z ...
-/// *G ...
-/// *A VE ...
-/// *A ...
-/// *I ...
-/// *L 8        8578157 8589334 01126 01159 % Linie 8 ab HS-Nr. 8578157 bis HS-Nr. 8589334 Abfahrt 11:26 Ankunft 11:59
-/// *L #0000022 8589601 8589913             % Referenz auf Linie No. 22 ab HS-Nr. 8589601 bis HS-Nr. 8589913
-/// ...
-/// `
-///
-/// ## R-lines
-///
-/// - *R lines: Reference to the direction text (see file RICHTUNG / DIRECTION). It includes:
-///     - Direction (H=forward,R=backward)
-///     - Reference to direction code
-///     - Stop from which the direction applies
-///     - Stop to which the direction applies
-///     - Departure time
-///     - Time of arrival
-///     - Comments:
-///         - R without information = no direction
-///
-/// ### Example (excerpt):
-///
-/// `
-/// *Z ...
-/// *G ...
-/// *A VE ...
-/// *A ...
-/// *I ...
-/// *L ...
-/// *R H                         % gilt für die gesamte Hin-Richtung
-/// *R R R000063 1300146 8574808 % gilt für Rück-Richtung 63 ab HS-Nr. 1300146 bis HS-Nr. 8574808
-/// ...
-/// `
-///
-/// ## GR/SH-lines
-///
-/// - *GR lines: supported but not available in Switzerland.
-/// - *SH lines: supported but not available in Switzerland.
-///
-/// ## CI/CO lines
-///
-/// - *CI/CO lines: It includes:
-///     - Number of minutes at check-in(CI)/out(CO)
-///     - Stop from which the direction applies
-///     - Stop to which the direction applies
-///     - Departure time
-///     - Time of arrival
-///
-/// ### Example (excerpt):
-///
-/// `
-/// *Z ...
-/// *G ...
-/// *A VE ...
-/// *A ...
-/// *I ...
-/// *L ...
-/// *R ...
-/// *CI 0002 8507000 8507000 % Check-in 2 Min. ab HS-Nr. 8507000 bis HS-Nr. 8507000
-/// ...
-/// *CO 0002 8507000 8507000 % Check-out 2 Min. ab HS-Nr. 8507000 bis HS-Nr. 8507000
-/// ...
-/// `
-///
-/// ## Journey description
-///
-/// - Once all the lines described have been defined, the run is described with the journey times:
-///     - Stop (s. BAHNHOF and others)
-///     - Arrival time: Negative = No possibility to get out
-///     - Departure time: Negative = No boarding option
-///     - Journey number
-///     - Administration
-///
-/// ### Example (excerpt):
-///
-/// `
-/// *Z ...
-/// *G ...
-/// *A VE ...
-/// *A ...
-/// *I ...
-/// *L ...
-/// *R ...
-/// *CI ...
-/// *CO ...
-/// 0053301 S Wannsee DB               02014               % HS-Nr. 0053301 Ankunft N/A,   Abfahrt 20:14
-/// 0053291 Wannseebrücke        02015 02015 052344 80____ % HS-Nr. 0053291 Ankunft 20:15, Abfahrt 20:15, Fahrtnummer 052344, Verwaltung 80____ (DB)
-/// 0053202 Am Kl. Wannsee/Am Gr 02016 02016               %
-/// `
-///
-/// 1 file(s).
-/// File(s) read by the parser:
-/// FPLAN
-use std::error::Error;
-
-use chrono::NaiveTime;
-use nom::{
-    IResult, Parser,
-    bytes::tag,
-    character::char,
-    combinator::opt,
-    sequence::{preceded, separated_pair},
-};
-use rustc_hash::{FxHashMap, FxHashSet};
-
-use crate::{
-    JourneyId,
-    models::{Journey, JourneyMetadataEntry, JourneyMetadataType, JourneyRouteEntry, Model},
-    parsing::{
-        ColumnDefinition,
-        ExpectedType,
-        FastRowMatcher,
-        FileParser,
-        ParsedValue,
-        RowDefinition,
-        RowParser, // helpers::{i32_from_six_digits_parser, string_from_six_chars_parser},
-        helpers::{i32_from_n_digits_parser, string_from_n_chars_parser},
-    },
-    storage::ResourceStorage,
-    utils::{AutoIncrement, create_time_from_value},
-};
-
-type JourneyAndTypeConverter = (ResourceStorage<Journey>, FxHashSet<JourneyId>);
-
-enum RowType {
-    RowA = 1,
-    RowB = 2,
-    RowC = 3,
-    RowD = 4,
-    RowE = 5,
-    RowF = 6,
-    RowG = 7,
-    RowH = 8,
-    RowI = 9,
-}
-
-/// - *Z lines: as header information for the run. Further details on this topic and its implementation in Switzerland can be found in the RV. It includes:
-///     - The journey number (primary key with the TU code)
-///     - Transport company (TU) code (see File BETRIEB_*)
-///         - For the TU code = 801, the region information must also be taken into account. This information is contained in line *I with the INFOTEXTCODE RN.
-///     - Option
-///         - NOT PART OF HRDF. 3-digit means of transport variant code without technical meaning
-///     - (optional) Number of cycles
-///     - (optional) Cycle time in minutes
-
-/// *Z 000003 000011   101         % Fahrtnummer 3, für TU 11 (SBB), mit Variante 101 (ignore)
-/// ...
-/// *Z 123456 000011   101 012 060 % Fahrtnummer 123456, für TU 11 (SBB), mit Variante 101 (ignore), 12 mal, alle 60 Minuten
-fn row_z_parser(input: &str) -> IResult<&str, (i32, String, i32, Option<i32>, Option<i32>)> {
-    let (
-        res,
-        (
-            journey_id,
-            _,
-            transport_company_id,
-            _,
-            transport_variant,
-            _,
-            num_cycles,
-            _,
-            cycle_dura_min,
-        ),
-    ) = preceded(
-        tag("*Z "),
-        (
-            i32_from_n_digits_parser(6),
-            char(' '),
-            string_from_n_chars_parser(6),
-            char(' '),
-            i32_from_n_digits_parser(3), // Maybe need to make optional
-            char(' '),
-            opt(i32_from_n_digits_parser(3)),
-            char(' '),
-            opt(i32_from_n_digits_parser(3)),
-        ),
-    )
-    .parse(input)?;
-    Ok((
-        res,
-        (
-            journey_id,
-            transport_company_id,
-            transport_variant,
-            num_cycles,
-            cycle_dura_min,
-        ),
-    ))
-}
-
-fn row_g_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>)> {
-    let (res, (offer, _, stop_from_id, _, stop_to_id)) = preceded(
-        tag("*G "),
-        (
-            string_from_n_chars_parser(3),
-            char(' '),
-            opt(i32_from_n_digits_parser(7)),
-            char(' '),
-            opt(i32_from_n_digits_parser(7)),
-        ),
-    )
-    .parse(input)?;
-    Ok((res, (offer, stop_from_id, stop_to_id)))
-}
-
-fn row_a_ve_parser(input: &str) -> IResult<&str, (Option<i32>, Option<i32>, Option<i32>)> {
-    let (res, (stop_from_id, _, stop_to_id, _, reference)) = preceded(
-        tag("*A VE "),
-        (
-            opt(i32_from_n_digits_parser(7)),
-            char(' '),
-            opt(i32_from_n_digits_parser(7)),
-            char(' '),
-            opt(i32_from_n_digits_parser(7)),
-        ),
-    )
-    .parse(input)?;
-    Ok((res, (stop_from_id, stop_to_id, reference)))
-}
-
-fn row_a_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>, Option<i32>)> {
-    let (res, (offer, _, stop_from_id, _, stop_to_id, _, reference)) = preceded(
-        tag("*A "),
-        (
-            string_from_n_chars_parser(3), // we may need to trim the result
-            char(' '),
-            opt(i32_from_n_digits_parser(7)),
-            char(' '),
-            opt(i32_from_n_digits_parser(7)),
-            char(' '),
-            opt(i32_from_n_digits_parser(7)),
-        ),
-    )
-    .parse(input)?;
-    Ok((res, (offer, stop_from_id, stop_to_id, reference)))
-}
-
 fn row_i_parser(
     input: &str,
 ) -> IResult<
@@ -377,26 +257,26 @@ fn row_i_parser(
             _,
             info_ref,
             _,
-            departue_time,
+            departure_time,
             _,
-            arrical_time,
+            arrival_time,
         ),
     ) = preceded(
         tag("*I "),
         (
-            string_from_n_chars_parser(2), // we may need to trim the result
+            string_from_n_chars_parser(2),
             char(' '),
-            opt(i32_from_n_digits_parser(7)),
+            optional_i32_from_n_digits_parser(7),
             char(' '),
-            opt(i32_from_n_digits_parser(7)),
+            optional_i32_from_n_digits_parser(7),
             char(' '),
-            opt(i32_from_n_digits_parser(5)),
+            optional_i32_from_n_digits_parser(5),
             char(' '),
             i32_from_n_digits_parser(9),
             char(' '),
-            opt(i32_from_n_digits_parser(5)),
+            optional_i32_from_n_digits_parser(5),
             char(' '),
-            opt(i32_from_n_digits_parser(5)),
+            optional_i32_from_n_digits_parser(5),
         ),
     )
     .parse(input)?;
@@ -408,10 +288,210 @@ fn row_i_parser(
             stop_to_id,
             validity_ref,
             info_ref,
-            departue_time,
-            arrical_time,
+            departure_time,
+            arrival_time,
         ),
     ))
+}
+
+/// ## L-lines
+///
+/// - *L lines: Line information or reference to the line information (see file LINIE). It includes:
+///     - Line information, reference to external file if necessary.
+///     - Stop from which the line is valid
+///     - Stop to which the line is valid
+///     - Departure time
+///     - Time of arrival
+///
+/// ### Example (excerpt):
+///
+/// `
+/// *Z ...
+/// *G ...
+/// *A VE ...
+/// *A ...
+/// *I ...
+/// *L 8        8578157 8589334 01126 01159 % Linie 8 ab HS-Nr. 8578157 bis HS-Nr. 8589334 Abfahrt 11:26 Ankunft 11:59
+/// *L #0000022 8589601 8589913             % Referenz auf Linie No. 22 ab HS-Nr. 8589601 bis HS-Nr. 8589913
+/// ...
+/// `
+fn row_l_parser(
+    input: &str,
+) -> IResult<&str, (String, Option<i32>, Option<i32>, Option<i32>, Option<i32>)> {
+    let (res, (line_info, _, stop_from_id, _, stop_to_id, _, departure_time, _, arrival_time)) =
+        preceded(
+            tag("*L "),
+            (
+                string_from_n_chars_parser(8),
+                char(' '),
+                optional_i32_from_n_digits_parser(7),
+                char(' '),
+                optional_i32_from_n_digits_parser(7),
+                char(' '),
+                optional_i32_from_n_digits_parser(5),
+                char(' '),
+                optional_i32_from_n_digits_parser(5),
+            ),
+        )
+        .parse(input)?;
+    Ok((
+        res,
+        (
+            line_info,
+            stop_from_id,
+            stop_to_id,
+            departure_time,
+            arrival_time,
+        ),
+    ))
+}
+
+/// ## R-lines
+///
+/// - *R lines: Reference to the direction text (see file RICHTUNG / DIRECTION). It includes:
+///     - Direction (H=forward,R=backward)
+///     - Reference to direction code
+///     - Stop from which the direction applies
+///     - Stop to which the direction applies
+///     - Departure time
+///     - Time of arrival
+///     - Comments:
+///         - R without information = no direction
+///
+/// ### Example (excerpt):
+///
+/// `
+/// *Z ...
+/// *G ...
+/// *A VE ...
+/// *A ...
+/// *I ...
+/// *L ...
+/// *R H                                     % gilt für die gesamte Hin-Richtung
+/// *R R R000063 1300146 8574808             % gilt für Rück-Richtung 63 ab HS-Nr. 1300146 bis HS-Nr. 8574808
+/// ...
+/// `
+fn row_r_parser(
+    input: &str,
+) -> IResult<
+    &str,
+    (
+        String,
+        String,
+        Option<i32>,
+        Option<i32>,
+        Option<i32>,
+        Option<i32>,
+    ),
+> {
+    let (
+        res,
+        (
+            direction,
+            _,
+            ref_direction_code,
+            _,
+            stop_from_id,
+            _,
+            stop_to_id,
+            _,
+            departure_time,
+            _,
+            arrival_time,
+        ),
+    ) = preceded(
+        tag("*R "),
+        (
+            string_from_n_chars_parser(1),
+            char(' '),
+            string_from_n_chars_parser(7),
+            char(' '),
+            optional_i32_from_n_digits_parser(7),
+            char(' '),
+            optional_i32_from_n_digits_parser(7),
+            char(' '),
+            optional_i32_from_n_digits_parser(5),
+            char(' '),
+            optional_i32_from_n_digits_parser(5),
+        ),
+    )
+    .parse(input)?;
+    Ok((
+        res.trim(), // res contains the comments that are useful to determine the direction
+        (
+            direction,
+            ref_direction_code,
+            stop_from_id,
+            stop_to_id,
+            departure_time,
+            arrival_time,
+        ),
+    ))
+}
+
+/// ## GR/SH-lines
+///
+/// - *GR lines: supported but not available in Switzerland.
+/// - *SH lines: supported but not available in Switzerland.
+fn row_gr_sh_paser() {
+    todo!()
+}
+
+/// ## CI/CO lines
+///
+/// - *CI/CO lines: It includes:
+///     - Number of minutes at check-in(CI)/out(CO)
+///     - Stop from which the direction applies
+///     - Stop to which the direction applies
+///     - Departure time
+///     - Time of arrival
+///
+/// ### Example (excerpt):
+///
+/// `
+/// *Z ...
+/// *G ...
+/// *A VE ...
+/// *A ...
+/// *I ...
+/// *L ...
+/// *R ...
+/// *CI 0002 8507000 8507000 % Check-in 2 Min. ab HS-Nr. 8507000 bis HS-Nr. 8507000
+/// ...
+/// *CO 0002 8507000 8507000 % Check-out 2 Min. ab HS-Nr. 8507000 bis HS-Nr. 8507000
+/// ...
+/// `
+fn row_ci_co_paser() {
+    todo!()
+}
+
+/// ## Journey description
+///
+/// - Once all the lines described have been defined, the run is described with the journey times:
+///     - Stop (s. BAHNHOF and others)
+///     - Arrival time: Negative = No possibility to get out
+///     - Departure time: Negative = No boarding option
+///     - Journey number
+///     - Administration
+///
+/// ### Example (excerpt):
+///
+/// `
+/// *Z ...
+/// *G ...
+/// *A VE ...
+/// *A ...
+/// *I ...
+/// *L ...
+/// *R ...
+/// *CI ...
+/// *CO ...
+/// 0053301 S Wannsee DB               02014               % HS-Nr. 0053301 Ankunft N/A,   Abfahrt 20:14
+/// 0053291 Wannseebrücke        02015 02015 052344 80____ % HS-Nr. 0053291 Ankunft 20:15, Abfahrt 20:15, Fahrtnummer 052344, Verwaltung 80____ (DB)
+/// 0053202 Am Kl. Wannsee/Am Gr 02016 02016               %
+/// `
+fn journey_description_parser() {
+    todo!()
 }
 
 fn journey_row_parser() -> RowParser {
@@ -1260,41 +1340,269 @@ mod tests {
         }
     }
 
-    // #[test]
-    // fn type_converter_row_a_v207() {
-    //     let rows = vec![
-    //         "GK 0   4  5".to_string(),
-    //         "<deu>".to_string(),
-    //         "GK  Zollkontrolle möglich, mehr Zeit einrechnen".to_string(),
-    //         "<fra>".to_string(),
-    //         "GK  Contrôle douanier possible, prévoir davantage de temps".to_string(),
-    //         "<ita>".to_string(),
-    //         "GK  Possibile controllo doganale, prevedere più tempo".to_string(),
-    //         "<eng>".to_string(),
-    //         "GK  Possible customs check, please allow extra time".to_string(),
-    //     ];
-    //     let parser = FileParser {
-    //         row_parser: attribute_row_parser(Version::V_5_40_41_2_0_7).unwrap(),
-    //         rows,
-    //     };
-    //     let (data, pk_type_converter) = attribute_row_converter(parser).unwrap();
-    //     assert_eq!(*pk_type_converter.get("GK").unwrap(), 1);
-    //     let attribute = data.get(&1).unwrap();
-    //     let reference = r#"
-    //         {
-    //             "id":1,
-    //             "designation":"GK",
-    //             "stop_scope":0,
-    //             "main_sorting_priority":4,
-    //             "secondary_sorting_priority":5,
-    //             "description":{
-    //                 "German":"Zollkontrolle möglich, mehr Zeit einrechnen",
-    //                 "English":"Possible customs check, please allow extra time",
-    //                 "French":"Contrôle douanier possible, prévoir davantage de temps",
-    //                 "Italian":"Possibile controllo doganale, prevedere più tempo"
-    //             }
-    //         }"#;
-    //     let (attribute, reference) = get_json_values(attribute, reference).unwrap();
-    //     assert_eq!(attribute, reference);
-    // }
+    mod row_z {
+        // Note this useful idiom: importing names from outer (for mod tests) scope.
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn success_no_options() {
+            let input = "*Z 000003 000011   101         % Fahrtnummer 3, für TU 11 (SBB), mit Variante 101 (ignore)";
+            let (
+                _,
+                (journey_id, transport_company_id, transport_variant, num_cycles, cycle_dura_min),
+            ) = row_z_parser(input).unwrap();
+            assert_eq!(3, journey_id);
+            assert_eq!("000011", transport_company_id);
+            assert_eq!(101, transport_variant);
+            assert_eq!(None, num_cycles);
+            assert_eq!(None, cycle_dura_min);
+        }
+
+        #[test]
+        fn success_with_options() {
+            let input = "*Z 123456 000011   101 012 060 % Fahrtnummer 123456, für TU 11 (SBB), mit Variante 101 (ignore), 12 mal, alle 60 Minuten";
+            let (
+                _,
+                (journey_id, transport_company_id, transport_variant, num_cycles, cycle_dura_min),
+            ) = row_z_parser(input).unwrap();
+            assert_eq!(123456, journey_id);
+            assert_eq!("000011", transport_company_id);
+            assert_eq!(101, transport_variant);
+            assert_eq!(Some(12), num_cycles);
+            assert_eq!(Some(60), cycle_dura_min);
+        }
+    }
+
+    mod row_g {
+        // Note this useful idiom: importing names from outer (for mod tests) scope.
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn success_with_options() {
+            let input = "*G ICE 8500090 8503000 % Angebotskategorie ICE gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000";
+
+            let (_, (offer, stop_from_id, stop_to_id)) = row_g_parser(input).unwrap();
+            assert_eq!("ICE", offer);
+            assert_eq!(Some(8500090), stop_from_id);
+            assert_eq!(Some(8503000), stop_to_id);
+        }
+
+        #[test]
+        fn success_no_options() {
+            let input = "*G ICE                 % Angebotskategorie ICE gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000";
+
+            let (_, (offer, stop_from_id, stop_to_id)) = row_g_parser(input).unwrap();
+            assert_eq!("ICE", offer);
+            assert_eq!(None, stop_from_id);
+            assert_eq!(None, stop_to_id);
+        }
+    }
+
+    mod row_a_ve {
+        // Note this useful idiom: importing names from outer (for mod tests) scope.
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn success_with_options() {
+            let input = "*A VE 8500090 8503000 001417 % Ab HS-Nr. 8500090 bis HS-Nr. 8503000, gelten die Gültigkeitstage 001417 (Bitfeld für bspw. alle Montage)";
+            let (_, (stop_from_id, stop_to_id, reference)) = row_a_ve_parser(input).unwrap();
+
+            assert_eq!(Some(8500090), stop_from_id);
+            assert_eq!(Some(8503000), stop_to_id);
+            assert_eq!(Some(1417), reference);
+        }
+
+        #[test]
+        fn success_no_options() {
+            let input = "*A VE                        % Ab HS-Nr. 8500090 bis HS-Nr. 8503000, gelten die Gültigkeitstage 001417 (Bitfeld für bspw. alle Montage)";
+            let (_, (stop_from_id, stop_to_id, reference)) = row_a_ve_parser(input).unwrap();
+
+            assert_eq!(None, stop_from_id);
+            assert_eq!(None, stop_to_id);
+            assert_eq!(None, reference);
+        }
+    }
+
+    mod row_a {
+        // Note this useful idiom: importing names from outer (for mod tests) scope.
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn success_with_partial_options1() {
+            let input = "*A R  8500090 8503000        % Attribut R gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000";
+            let (_, (offer, stop_from_id, stop_to_id, reference)) = row_a_parser(input).unwrap();
+
+            assert_eq!("R", offer);
+            assert_eq!(Some(8500090), stop_from_id);
+            assert_eq!(Some(8503000), stop_to_id);
+            assert_eq!(None, reference);
+        }
+
+        #[test]
+        fn success_partial_options() {
+            let input = "*A VR 8500090 8503000        % Attribut VR gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000";
+            let (_, (offer, stop_from_id, stop_to_id, reference)) = row_a_parser(input).unwrap();
+
+            assert_eq!("VR", offer);
+            assert_eq!(Some(8500090), stop_from_id);
+            assert_eq!(Some(8503000), stop_to_id);
+            assert_eq!(None, reference);
+        }
+
+        #[test]
+        fn success_with_options() {
+            let input = "*A WR 8500090 8503000 047873 % Attribut WR gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000 mit den Gültigkeitstagen 047873";
+            let (_, (offer, stop_from_id, stop_to_id, reference)) = row_a_parser(input).unwrap();
+
+            assert_eq!("WR", offer);
+            assert_eq!(Some(8500090), stop_from_id);
+            assert_eq!(Some(8503000), stop_to_id);
+            assert_eq!(Some(47873), reference);
+        }
+    }
+
+    mod row_i {
+        // Note this useful idiom: importing names from outer (for mod tests) scope.
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn success_with_partial_options() {
+            let input = "*I hi 8573602 8587744       000018040             % Hinweis auf Infotext (hi) ab HS-Nr. 8573602 bis HS-Nr. 8587744  mit Infotext 18040";
+            let (
+                _,
+                (
+                    info_code,
+                    stop_from_id,
+                    stop_to_id,
+                    validity_ref,
+                    info_ref,
+                    departure_time,
+                    arrival_time,
+                ),
+            ) = row_i_parser(input).unwrap();
+            assert_eq!("hi", info_code);
+            assert_eq!(Some(8573602), stop_from_id);
+            assert_eq!(Some(8587744), stop_to_id);
+            assert_eq!(None, validity_ref);
+            assert_eq!(18040, info_ref);
+            assert_eq!(None, departure_time);
+            assert_eq!(None, arrival_time);
+        }
+
+        #[test]
+        fn success_with_options() {
+            let input = "*I hi 8578157 8589334       000018037 01126 01159 % Hinweis auf Infotext (hi) ab HS-Nr. 8578157 bis HS-Nr. 8589334 mit Infotext 18037 Abfahrt 11:26 Ankunft 11:59";
+            let (
+                _,
+                (
+                    info_code,
+                    stop_from_id,
+                    stop_to_id,
+                    validity_ref,
+                    info_ref,
+                    departure_time,
+                    arrival_time,
+                ),
+            ) = row_i_parser(input).unwrap();
+            assert_eq!("hi", info_code);
+            assert_eq!(Some(8578157), stop_from_id);
+            assert_eq!(Some(8589334), stop_to_id);
+            assert_eq!(None, validity_ref);
+            assert_eq!(18037, info_ref);
+            assert_eq!(Some(1126), departure_time);
+            assert_eq!(Some(1159), arrival_time);
+        }
+    }
+
+    mod row_l {
+        // Note this useful idiom: importing names from outer (for mod tests) scope.
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn success_with_options() {
+            let input = "*L 8        8578157 8589334 01126 01159 % Linie 8 ab HS-Nr. 8578157 bis HS-Nr. 8589334 Abfahrt 11:26 Ankunft 11:59";
+            let (_, (line_info, stop_from_id, stop_to_id, departure_time, arrival_time)) =
+                row_l_parser(input).unwrap();
+            assert_eq!("8", line_info);
+            assert_eq!(Some(8578157), stop_from_id);
+            assert_eq!(Some(8589334), stop_to_id);
+            assert_eq!(Some(1126), departure_time);
+            assert_eq!(Some(1159), arrival_time);
+        }
+
+        #[test]
+        fn success_with_partial_options() {
+            let input = "*L #0000022 8589601 8589913             % Referenz auf Linie No. 22 ab HS-Nr. 8589601 bis HS-Nr. 8589913";
+            let (_, (line_info, stop_from_id, stop_to_id, departure_time, arrival_time)) =
+                row_l_parser(input).unwrap();
+            assert_eq!("#0000022", line_info);
+            assert_eq!(Some(8589601), stop_from_id);
+            assert_eq!(Some(8589913), stop_to_id);
+            assert_eq!(None, departure_time);
+            assert_eq!(None, arrival_time);
+        }
+    }
+
+    mod row_r {
+        // Note this useful idiom: importing names from outer (for mod tests) scope.
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn success_with_options() {
+            let input = "*R R R000063 1300146 8574808             % gilt für Rück-Richtung 63 ab HS-Nr. 1300146 bis HS-Nr. 8574808";
+            let (
+                res, // res contains the comments that are useful to determine the direction
+                (
+                    direction,
+                    ref_direction_code,
+                    stop_from_id,
+                    stop_to_id,
+                    departure_time,
+                    arrival_time,
+                ),
+            ) = row_r_parser(input).unwrap();
+
+            assert_eq!("R", direction);
+            assert_eq!("R000063", ref_direction_code);
+            assert_eq!(Some(1300146), stop_from_id);
+            assert_eq!(Some(8574808), stop_to_id);
+            assert_eq!(None, departure_time);
+            assert_eq!(None, arrival_time);
+            assert_eq!(
+                "% gilt für Rück-Richtung 63 ab HS-Nr. 1300146 bis HS-Nr. 8574808",
+                res
+            );
+        }
+
+        #[test]
+        fn success_with_partial_options() {
+            let input =
+                "*R H                                     % gilt für die gesamte Hin-Richtung";
+            let (
+                res, // res contains the comments that are useful to determine the direction
+                (
+                    direction,
+                    ref_direction_code,
+                    stop_from_id,
+                    stop_to_id,
+                    departure_time,
+                    arrival_time,
+                ),
+            ) = row_r_parser(input).unwrap();
+            assert_eq!("H", direction);
+            assert_eq!("", ref_direction_code);
+            assert_eq!(None, stop_from_id);
+            assert_eq!(None, stop_to_id);
+            assert_eq!(None, departure_time);
+            assert_eq!(None, arrival_time);
+            assert_eq!("% gilt für die gesamte Hin-Richtung", res);
+        }
+    }
 }
