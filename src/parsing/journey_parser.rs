@@ -250,16 +250,57 @@ enum RowType {
     RowI = 9,
 }
 
-fn row_z_parser(input: &str) -> IResult<&str, (i32, String)> {
-    preceded(
+/// - *Z lines: as header information for the run. Further details on this topic and its implementation in Switzerland can be found in the RV. It includes:
+///     - The journey number (primary key with the TU code)
+///     - Transport company (TU) code (see File BETRIEB_*)
+///         - For the TU code = 801, the region information must also be taken into account. This information is contained in line *I with the INFOTEXTCODE RN.
+///     - Option
+///         - NOT PART OF HRDF. 3-digit means of transport variant code without technical meaning
+///     - (optional) Number of cycles
+///     - (optional) Cycle time in minutes
+
+/// *Z 000003 000011   101         % Fahrtnummer 3, für TU 11 (SBB), mit Variante 101 (ignore)
+/// ...
+/// *Z 123456 000011   101 012 060 % Fahrtnummer 123456, für TU 11 (SBB), mit Variante 101 (ignore), 12 mal, alle 60 Minuten
+fn row_z_parser(input: &str) -> IResult<&str, (i32, String, i32, Option<i32>, Option<i32>)> {
+    let (
+        res,
+        (
+            journey_id,
+            _,
+            transport_company_id,
+            _,
+            transport_variant,
+            _,
+            num_cycles,
+            _,
+            cycle_dura_min,
+        ),
+    ) = preceded(
         tag("*Z "),
-        separated_pair(
+        (
             i32_from_n_digits_parser(6),
             char(' '),
             string_from_n_chars_parser(6),
+            char(' '),
+            i32_from_n_digits_parser(3), // Maybe need to make optional
+            char(' '),
+            opt(i32_from_n_digits_parser(3)),
+            char(' '),
+            opt(i32_from_n_digits_parser(3)),
         ),
     )
-    .parse(input)
+    .parse(input)?;
+    Ok((
+        res,
+        (
+            journey_id,
+            transport_company_id,
+            transport_variant,
+            num_cycles,
+            cycle_dura_min,
+        ),
+    ))
 }
 
 fn row_g_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>)> {
@@ -307,6 +348,70 @@ fn row_a_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>,
     )
     .parse(input)?;
     Ok((res, (offer, stop_from_id, stop_to_id, reference)))
+}
+
+fn row_i_parser(
+    input: &str,
+) -> IResult<
+    &str,
+    (
+        String,
+        Option<i32>,
+        Option<i32>,
+        Option<i32>,
+        i32,
+        Option<i32>,
+        Option<i32>,
+    ),
+> {
+    let (
+        res,
+        (
+            info_code,
+            _,
+            stop_from_id,
+            _,
+            stop_to_id,
+            _,
+            validity_ref,
+            _,
+            info_ref,
+            _,
+            departue_time,
+            _,
+            arrical_time,
+        ),
+    ) = preceded(
+        tag("*I "),
+        (
+            string_from_n_chars_parser(2), // we may need to trim the result
+            char(' '),
+            opt(i32_from_n_digits_parser(7)),
+            char(' '),
+            opt(i32_from_n_digits_parser(7)),
+            char(' '),
+            opt(i32_from_n_digits_parser(5)),
+            char(' '),
+            i32_from_n_digits_parser(9),
+            char(' '),
+            opt(i32_from_n_digits_parser(5)),
+            char(' '),
+            opt(i32_from_n_digits_parser(5)),
+        ),
+    )
+    .parse(input)?;
+    Ok((
+        res,
+        (
+            info_code,
+            stop_from_id,
+            stop_to_id,
+            validity_ref,
+            info_ref,
+            departue_time,
+            arrical_time,
+        ),
+    ))
 }
 
 fn journey_row_parser() -> RowParser {
