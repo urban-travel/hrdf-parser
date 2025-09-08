@@ -1422,7 +1422,7 @@ mod tests {
         fn success_no_options() {
             let input = "*Z 000003 000011   101         % Fahrtnummer 3, für TU 11 (SBB), mit Variante 101 (ignore)";
             let (
-                _,
+                res,
                 (journey_id, transport_company_id, transport_variant, num_cycles, cycle_dura_min),
             ) = row_z_parser(input).unwrap();
             assert_eq!(3, journey_id);
@@ -1430,13 +1430,17 @@ mod tests {
             assert_eq!(101, transport_variant);
             assert_eq!(None, num_cycles);
             assert_eq!(None, cycle_dura_min);
+            assert_eq!(
+                res.trim(),
+                "% Fahrtnummer 3, für TU 11 (SBB), mit Variante 101 (ignore)"
+            );
         }
 
         #[test]
         fn success_with_options() {
             let input = "*Z 123456 000011   101 012 060 % Fahrtnummer 123456, für TU 11 (SBB), mit Variante 101 (ignore), 12 mal, alle 60 Minuten";
             let (
-                _,
+                res,
                 (journey_id, transport_company_id, transport_variant, num_cycles, cycle_dura_min),
             ) = row_z_parser(input).unwrap();
             assert_eq!(123456, journey_id);
@@ -1444,6 +1448,10 @@ mod tests {
             assert_eq!(101, transport_variant);
             assert_eq!(Some(12), num_cycles);
             assert_eq!(Some(60), cycle_dura_min);
+            assert_eq!(
+                res.trim(),
+                "% Fahrtnummer 123456, für TU 11 (SBB), mit Variante 101 (ignore), 12 mal, alle 60 Minuten"
+            );
         }
     }
 
@@ -1456,20 +1464,28 @@ mod tests {
         fn success_with_options() {
             let input = "*G ICE 8500090 8503000 % Angebotskategorie ICE gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000";
 
-            let (_, (offer, stop_from_id, stop_to_id)) = row_g_parser(input).unwrap();
+            let (res, (offer, stop_from_id, stop_to_id)) = row_g_parser(input).unwrap();
             assert_eq!("ICE", offer);
             assert_eq!(Some(8500090), stop_from_id);
             assert_eq!(Some(8503000), stop_to_id);
+            assert_eq!(
+                res.trim(),
+                "% Angebotskategorie ICE gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000"
+            );
         }
 
         #[test]
         fn success_no_options() {
             let input = "*G ICE                 % Angebotskategorie ICE gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000";
 
-            let (_, (offer, stop_from_id, stop_to_id)) = row_g_parser(input).unwrap();
+            let (res, (offer, stop_from_id, stop_to_id)) = row_g_parser(input).unwrap();
             assert_eq!("ICE", offer);
             assert_eq!(None, stop_from_id);
             assert_eq!(None, stop_to_id);
+            assert_eq!(
+                res.trim(),
+                "% Angebotskategorie ICE gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000"
+            );
         }
     }
 
@@ -1481,21 +1497,29 @@ mod tests {
         #[test]
         fn success_with_options() {
             let input = "*A VE 8500090 8503000 001417 % Ab HS-Nr. 8500090 bis HS-Nr. 8503000, gelten die Gültigkeitstage 001417 (Bitfeld für bspw. alle Montage)";
-            let (_, (stop_from_id, stop_to_id, reference)) = row_a_ve_parser(input).unwrap();
+            let (res, (stop_from_id, stop_to_id, reference)) = row_a_ve_parser(input).unwrap();
 
             assert_eq!(Some(8500090), stop_from_id);
             assert_eq!(Some(8503000), stop_to_id);
             assert_eq!(Some(1417), reference);
+            assert_eq!(
+                res.trim(),
+                "% Ab HS-Nr. 8500090 bis HS-Nr. 8503000, gelten die Gültigkeitstage 001417 (Bitfeld für bspw. alle Montage)"
+            );
         }
 
         #[test]
         fn success_no_options() {
             let input = "*A VE                        % Ab HS-Nr. 8500090 bis HS-Nr. 8503000, gelten die Gültigkeitstage 001417 (Bitfeld für bspw. alle Montage)";
-            let (_, (stop_from_id, stop_to_id, reference)) = row_a_ve_parser(input).unwrap();
+            let (res, (stop_from_id, stop_to_id, reference)) = row_a_ve_parser(input).unwrap();
 
             assert_eq!(None, stop_from_id);
             assert_eq!(None, stop_to_id);
             assert_eq!(None, reference);
+            assert_eq!(
+                res.trim(),
+                "% Ab HS-Nr. 8500090 bis HS-Nr. 8503000, gelten die Gültigkeitstage 001417 (Bitfeld für bspw. alle Montage)"
+            );
         }
     }
 
@@ -1507,34 +1531,46 @@ mod tests {
         #[test]
         fn success_with_partial_options1() {
             let input = "*A R  8500090 8503000        % Attribut R gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000";
-            let (_, (offer, stop_from_id, stop_to_id, reference)) = row_a_parser(input).unwrap();
+            let (res, (offer, stop_from_id, stop_to_id, reference)) = row_a_parser(input).unwrap();
 
             assert_eq!("R", offer);
             assert_eq!(Some(8500090), stop_from_id);
             assert_eq!(Some(8503000), stop_to_id);
             assert_eq!(None, reference);
+            assert_eq!(
+                res.trim(),
+                "% Attribut R gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000"
+            );
         }
 
         #[test]
         fn success_partial_options() {
             let input = "*A VR 8500090 8503000        % Attribut VR gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000";
-            let (_, (offer, stop_from_id, stop_to_id, reference)) = row_a_parser(input).unwrap();
+            let (res, (offer, stop_from_id, stop_to_id, reference)) = row_a_parser(input).unwrap();
 
             assert_eq!("VR", offer);
             assert_eq!(Some(8500090), stop_from_id);
             assert_eq!(Some(8503000), stop_to_id);
             assert_eq!(None, reference);
+            assert_eq!(
+                res.trim(),
+                "% Attribut VR gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000"
+            );
         }
 
         #[test]
         fn success_with_options() {
             let input = "*A WR 8500090 8503000 047873 % Attribut WR gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000 mit den Gültigkeitstagen 047873";
-            let (_, (offer, stop_from_id, stop_to_id, reference)) = row_a_parser(input).unwrap();
+            let (res, (offer, stop_from_id, stop_to_id, reference)) = row_a_parser(input).unwrap();
 
             assert_eq!("WR", offer);
             assert_eq!(Some(8500090), stop_from_id);
             assert_eq!(Some(8503000), stop_to_id);
             assert_eq!(Some(47873), reference);
+            assert_eq!(
+                res.trim(),
+                "% Attribut WR gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000 mit den Gültigkeitstagen 047873"
+            );
         }
     }
 
@@ -1547,7 +1583,7 @@ mod tests {
         fn success_with_partial_options() {
             let input = "*I hi 8573602 8587744       000018040             % Hinweis auf Infotext (hi) ab HS-Nr. 8573602 bis HS-Nr. 8587744  mit Infotext 18040";
             let (
-                _,
+                res,
                 (
                     info_code,
                     stop_from_id,
@@ -1565,13 +1601,17 @@ mod tests {
             assert_eq!(18040, info_ref);
             assert_eq!(None, departure_time);
             assert_eq!(None, arrival_time);
+            assert_eq!(
+                res.trim(),
+                "% Hinweis auf Infotext (hi) ab HS-Nr. 8573602 bis HS-Nr. 8587744  mit Infotext 18040"
+            );
         }
 
         #[test]
         fn success_with_options() {
             let input = "*I hi 8578157 8589334       000018037 01126 01159 % Hinweis auf Infotext (hi) ab HS-Nr. 8578157 bis HS-Nr. 8589334 mit Infotext 18037 Abfahrt 11:26 Ankunft 11:59";
             let (
-                _,
+                res,
                 (
                     info_code,
                     stop_from_id,
@@ -1589,6 +1629,10 @@ mod tests {
             assert_eq!(18037, info_ref);
             assert_eq!(Some(1126), departure_time);
             assert_eq!(Some(1159), arrival_time);
+            assert_eq!(
+                res.trim(),
+                "% Hinweis auf Infotext (hi) ab HS-Nr. 8578157 bis HS-Nr. 8589334 mit Infotext 18037 Abfahrt 11:26 Ankunft 11:59"
+            );
         }
     }
 
@@ -1600,25 +1644,33 @@ mod tests {
         #[test]
         fn success_with_options() {
             let input = "*L 8        8578157 8589334 01126 01159 % Linie 8 ab HS-Nr. 8578157 bis HS-Nr. 8589334 Abfahrt 11:26 Ankunft 11:59";
-            let (_, (line_info, stop_from_id, stop_to_id, departure_time, arrival_time)) =
+            let (res, (line_info, stop_from_id, stop_to_id, departure_time, arrival_time)) =
                 row_l_parser(input).unwrap();
             assert_eq!("8", line_info);
             assert_eq!(Some(8578157), stop_from_id);
             assert_eq!(Some(8589334), stop_to_id);
             assert_eq!(Some(1126), departure_time);
             assert_eq!(Some(1159), arrival_time);
+            assert_eq!(
+                "% Linie 8 ab HS-Nr. 8578157 bis HS-Nr. 8589334 Abfahrt 11:26 Ankunft 11:59",
+                res.trim()
+            );
         }
 
         #[test]
         fn success_with_partial_options() {
             let input = "*L #0000022 8589601 8589913             % Referenz auf Linie No. 22 ab HS-Nr. 8589601 bis HS-Nr. 8589913";
-            let (_, (line_info, stop_from_id, stop_to_id, departure_time, arrival_time)) =
+            let (res, (line_info, stop_from_id, stop_to_id, departure_time, arrival_time)) =
                 row_l_parser(input).unwrap();
             assert_eq!("#0000022", line_info);
             assert_eq!(Some(8589601), stop_from_id);
             assert_eq!(Some(8589913), stop_to_id);
             assert_eq!(None, departure_time);
             assert_eq!(None, arrival_time);
+            assert_eq!(
+                "% Referenz auf Linie No. 22 ab HS-Nr. 8589601 bis HS-Nr. 8589913",
+                res.trim()
+            );
         }
     }
 
