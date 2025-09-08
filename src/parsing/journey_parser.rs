@@ -12,6 +12,7 @@ use std::error::Error;
 use chrono::NaiveTime;
 use nom::{
     IResult, Parser,
+    branch::alt,
     bytes::tag,
     character::{char, complete::space1},
     combinator::map,
@@ -429,14 +430,6 @@ fn row_r_parser(
     ))
 }
 
-/// ## GR/SH-lines
-///
-/// - *GR lines: supported but not available in Switzerland.
-/// - *SH lines: supported but not available in Switzerland.
-fn row_gr_sh_paser() {
-    todo!()
-}
-
 /// ## CI/CO lines
 ///
 /// - *CI/CO lines: It includes:
@@ -456,13 +449,52 @@ fn row_gr_sh_paser() {
 /// *I ...
 /// *L ...
 /// *R ...
-/// *CI 0002 8507000 8507000 % Check-in 2 Min. ab HS-Nr. 8507000 bis HS-Nr. 8507000
+/// *CI 0002 8507000 8507000                                   % Check-in 2 Min. ab HS-Nr. 8507000 bis HS-Nr. 8507000
 /// ...
-/// *CO 0002 8507000 8507000 % Check-out 2 Min. ab HS-Nr. 8507000 bis HS-Nr. 8507000
+/// *CO 0002 8507000 8507000                                   % Check-out 2 Min. ab HS-Nr. 8507000 bis HS-Nr. 8507000
 /// ...
 /// `
-fn row_ci_co_paser() {
-    todo!()
+fn row_ci_co_parser(
+    input: &str,
+) -> IResult<
+    &str,
+    (
+        &str,
+        i32,
+        Option<i32>,
+        Option<i32>,
+        Option<i32>,
+        Option<i32>,
+    ),
+> {
+    let (
+        res,
+        (ci_co, _, num_minutes, _, stop_from_id, _, stop_to_id, _, departure_time, _, arrival_time),
+    ) = (
+        alt((tag("*CI"), tag("*CO"))),
+        char(' '),
+        i32_from_n_digits_parser(4),
+        char(' '),
+        optional_i32_from_n_digits_parser(7),
+        char(' '),
+        optional_i32_from_n_digits_parser(7),
+        char(' '),
+        optional_i32_from_n_digits_parser(5),
+        char(' '),
+        optional_i32_from_n_digits_parser(5),
+    )
+        .parse(input)?;
+    Ok((
+        res,
+        (
+            ci_co,
+            num_minutes,
+            stop_from_id,
+            stop_to_id,
+            departure_time,
+            arrival_time,
+        ),
+    ))
 }
 
 /// ## Journey description
@@ -490,8 +522,49 @@ fn row_ci_co_paser() {
 /// 0053291 Wannseebrücke        02015 02015 052344 80____ % HS-Nr. 0053291 Ankunft 20:15, Abfahrt 20:15, Fahrtnummer 052344, Verwaltung 80____ (DB)
 /// 0053202 Am Kl. Wannsee/Am Gr 02016 02016               %
 /// `
-fn journey_description_parser() {
-    todo!()
+fn row_journey_description_parser(
+    input: &str,
+) -> IResult<&str, (i32, String, Option<i32>, Option<i32>, Option<i32>, String)> {
+    let (
+        res,
+        (
+            stop_id,
+            _,
+            stop_name,
+            _,
+            arrival_time,
+            _,
+            departure_time,
+            _,
+            journey_id,
+            _,
+            administration,
+        ),
+    ) = (
+        i32_from_n_digits_parser(7),
+        char(' '),
+        string_from_n_chars_parser(20),
+        char(' '),
+        optional_i32_from_n_digits_parser(5),
+        char(' '),
+        optional_i32_from_n_digits_parser(5),
+        char(' '),
+        optional_i32_from_n_digits_parser(6),
+        char(' '),
+        string_from_n_chars_parser(6),
+    )
+        .parse(input)?;
+    Ok((
+        res,
+        (
+            stop_id,
+            stop_name,
+            arrival_time,
+            departure_time,
+            journey_id,
+            administration,
+        ),
+    ))
 }
 
 fn journey_row_parser() -> RowParser {
@@ -1603,6 +1676,109 @@ mod tests {
             assert_eq!(None, departure_time);
             assert_eq!(None, arrival_time);
             assert_eq!("% gilt für die gesamte Hin-Richtung", res);
+        }
+    }
+
+    mod row_ci_co {
+        // Note this useful idiom: importing names from outer (for mod tests) scope.
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn success_ci_options() {
+            let input = "*CI 0002 8507000 8507000                                   % Check-in 2 Min. ab HS-Nr. 8507000 bis HS-Nr. 8507000";
+            let (res, (ci_co, num_minutes, stop_from_id, stop_to_id, departure_time, arrival_time)) =
+                row_ci_co_parser(input).unwrap();
+
+            assert_eq!("*CI", ci_co);
+            assert_eq!(2, num_minutes);
+            assert_eq!(Some(8507000), stop_from_id);
+            assert_eq!(Some(8507000), stop_to_id);
+            assert_eq!(None, departure_time);
+            assert_eq!(None, arrival_time);
+            assert_eq!(
+                "% Check-in 2 Min. ab HS-Nr. 8507000 bis HS-Nr. 8507000",
+                res.trim()
+            );
+        }
+
+        #[test]
+        fn success_with_partial_options() {
+            let input = "*CO 0002 8507000 8507000                                   % Check-out 2 Min. ab HS-Nr. 8507000 bis HS-Nr. 8507000";
+            let (res, (ci_co, num_minutes, stop_from_id, stop_to_id, departure_time, arrival_time)) =
+                row_ci_co_parser(input).unwrap();
+
+            assert_eq!("*CO", ci_co);
+            assert_eq!(2, num_minutes);
+            assert_eq!(Some(8507000), stop_from_id);
+            assert_eq!(Some(8507000), stop_to_id);
+            assert_eq!(None, departure_time);
+            assert_eq!(None, arrival_time);
+            assert_eq!(
+                "% Check-out 2 Min. ab HS-Nr. 8507000 bis HS-Nr. 8507000",
+                res.trim()
+            );
+        }
+    }
+
+    mod row_journey_description {
+        // Note this useful idiom: importing names from outer (for mod tests) scope.
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn success_journey_options1() {
+            let input = "0053301 S Wannsee DB               02014               % HS-Nr. 0053301 Ankunft N/A,   Abfahrt 20:14";
+            // let input = "0053291 Wannseebrücke        02015 02015 052344 80____ % HS-Nr. 0053291 Ankunft 20:15, Abfahrt 20:15, Fahrtnummer 052344, Verwaltung 80____ (DB)";
+            let (
+                res,
+                (stop_id, stop_name, arrival_time, departure_time, journey_id, administration),
+            ) = row_journey_description_parser(input).unwrap();
+
+            assert_eq!(53301, stop_id);
+            assert_eq!("S Wannsee DB", stop_name);
+            assert_eq!(None, arrival_time);
+            assert_eq!(Some(2014), departure_time);
+            assert_eq!(None, journey_id);
+            assert_eq!("", administration);
+            assert_eq!("% HS-Nr. 0053301 Ankunft N/A,   Abfahrt 20:14", res.trim());
+        }
+
+        #[test]
+        fn success_journey_options2() {
+            let input = "0053202 Am Kl. Wannsee/Am Gr 02016 02016               %";
+            let (
+                res,
+                (stop_id, stop_name, arrival_time, departure_time, journey_id, administration),
+            ) = row_journey_description_parser(input).unwrap();
+
+            assert_eq!(53202, stop_id);
+            assert_eq!("Am Kl. Wannsee/Am Gr", stop_name);
+            assert_eq!(Some(2016), arrival_time);
+            assert_eq!(Some(2016), departure_time);
+            assert_eq!(None, journey_id);
+            assert_eq!("", administration);
+            assert_eq!("%", res.trim());
+        }
+
+        #[test]
+        fn success_journey_all_options() {
+            let input = "0053291 Wannseebrücke        02015 02015 052344 80____ % HS-Nr. 0053291 Ankunft 20:15, Abfahrt 20:15, Fahrtnummer 052344, Verwaltung 80____ (DB)";
+            let (
+                res,
+                (stop_id, stop_name, arrival_time, departure_time, journey_id, administration),
+            ) = row_journey_description_parser(input).unwrap();
+
+            assert_eq!(53291, stop_id);
+            assert_eq!("Wannseebrücke", stop_name);
+            assert_eq!(Some(2015), arrival_time);
+            assert_eq!(Some(2015), departure_time);
+            assert_eq!(Some(52344), journey_id);
+            assert_eq!("80____", administration);
+            assert_eq!(
+                "% HS-Nr. 0053291 Ankunft 20:15, Abfahrt 20:15, Fahrtnummer 052344, Verwaltung 80____ (DB)",
+                res.trim()
+            );
         }
     }
 }
