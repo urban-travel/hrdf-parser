@@ -66,6 +66,36 @@ enum RowType {
 /// ...
 /// *Z 123456 000011   101 012 060 % Fahrtnummer 123456, für TU 11 (SBB), mit Variante 101 (ignore), 12 mal, alle 60 Minuten
 /// ...
+fn row_z_combinator<'a>() -> impl Parser<
+    &'a str,
+    Output = (
+        i32,
+        char,
+        String,
+        &'a str,
+        i32,
+        char,
+        Option<i32>,
+        char,
+        Option<i32>,
+    ),
+    Error = nom::error::Error<&'a str>,
+> {
+    preceded(
+        tag("*Z "),
+        (
+            i32_from_n_digits_parser(6),
+            char(' '),
+            string_from_n_chars_parser(6),
+            space1,
+            i32_from_n_digits_parser(3), // Maybe need to make optional
+            char(' '),
+            optional_i32_from_n_digits_parser(3),
+            char(' '),
+            optional_i32_from_n_digits_parser(3),
+        ),
+    )
+}
 fn row_z_parser(input: &str) -> IResult<&str, (i32, String, i32, Option<i32>, Option<i32>)> {
     let (
         res,
@@ -80,21 +110,7 @@ fn row_z_parser(input: &str) -> IResult<&str, (i32, String, i32, Option<i32>, Op
             _,
             cycle_dura_min,
         ),
-    ) = preceded(
-        tag("*Z "),
-        (
-            i32_from_n_digits_parser(6),
-            char(' '),
-            string_from_n_chars_parser(6),
-            space1,
-            i32_from_n_digits_parser(3), // Maybe need to make optional
-            char(' '),
-            optional_i32_from_n_digits_parser(3),
-            char(' '),
-            optional_i32_from_n_digits_parser(3),
-        ),
-    )
-    .parse(input)?;
+    ) = row_z_combinator().parse(input)?;
     Ok((
         res,
         (
