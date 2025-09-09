@@ -7,7 +7,11 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// FPLAN
-use std::error::Error;
+use std::{
+    error::Error,
+    fs::File,
+    io::{self, Read, Seek},
+};
 
 use chrono::NaiveTime;
 use nom::{
@@ -138,8 +142,12 @@ fn row_z_parser(input: &str) -> IResult<&str, (i32, String, i32, Option<i32>, Op
 /// ...
 /// `
 ///
-fn row_g_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>)> {
-    let (res, (offer, _, stop_from_id, _, stop_to_id)) = preceded(
+fn row_g_combinator<'a>() -> impl Parser<
+    &'a str,
+    Output = (String, char, Option<i32>, char, Option<i32>),
+    Error = nom::error::Error<&'a str>,
+> {
+    preceded(
         tag("*G "),
         (
             string_from_n_chars_parser(3),
@@ -149,7 +157,9 @@ fn row_g_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>)
             optional_i32_from_n_digits_parser(7),
         ),
     )
-    .parse(input)?;
+}
+fn row_g_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>)> {
+    let (res, (offer, _, stop_from_id, _, stop_to_id)) = row_g_combinator().parse(input)?;
     Ok((res, (offer, stop_from_id, stop_to_id)))
 }
 
@@ -169,8 +179,13 @@ fn row_g_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>)
 /// ...
 /// `
 ///
-fn row_a_ve_parser(input: &str) -> IResult<&str, (Option<i32>, Option<i32>, Option<i32>)> {
-    let (res, (stop_from_id, _, stop_to_id, _, reference)) = preceded(
+
+fn row_a_ve_combinator<'a>() -> impl Parser<
+    &'a str,
+    Output = (Option<i32>, char, Option<i32>, char, Option<i32>),
+    Error = nom::error::Error<&'a str>,
+> {
+    preceded(
         tag("*A VE "),
         (
             optional_i32_from_n_digits_parser(7),
@@ -180,7 +195,9 @@ fn row_a_ve_parser(input: &str) -> IResult<&str, (Option<i32>, Option<i32>, Opti
             optional_i32_from_n_digits_parser(6),
         ),
     )
-    .parse(input)?;
+}
+fn row_a_ve_parser(input: &str) -> IResult<&str, (Option<i32>, Option<i32>, Option<i32>)> {
+    let (res, (stop_from_id, _, stop_to_id, _, reference)) = row_a_ve_combinator().parse(input)?;
     Ok((res, (stop_from_id, stop_to_id, reference)))
 }
 
@@ -205,8 +222,20 @@ fn row_a_ve_parser(input: &str) -> IResult<&str, (Option<i32>, Option<i32>, Opti
 /// ...
 /// `
 ///
-fn row_a_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>, Option<i32>)> {
-    let (res, (offer, _, stop_from_id, _, stop_to_id, _, reference)) = preceded(
+fn row_a_combinator<'a>() -> impl Parser<
+    &'a str,
+    Output = (
+        String,
+        char,
+        Option<i32>,
+        char,
+        Option<i32>,
+        char,
+        Option<i32>,
+    ),
+    Error = nom::error::Error<&'a str>,
+> {
+    preceded(
         tag("*A "),
         (
             string_from_n_chars_parser(2),
@@ -218,7 +247,10 @@ fn row_a_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>,
             optional_i32_from_n_digits_parser(6),
         ),
     )
-    .parse(input)?;
+}
+fn row_a_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>, Option<i32>)> {
+    let (res, (offer, _, stop_from_id, _, stop_to_id, _, reference)) =
+        row_a_combinator().parse(input)?;
     Ok((res, (offer, stop_from_id, stop_to_id, reference)))
 }
 
@@ -247,6 +279,44 @@ fn row_a_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>,
 /// ...
 /// `
 ///
+fn row_i_combinator<'a>() -> impl Parser<
+    &'a str,
+    Output = (
+        String,
+        char,
+        Option<i32>,
+        char,
+        Option<i32>,
+        char,
+        Option<i32>,
+        char,
+        i32,
+        char,
+        Option<i32>,
+        char,
+        Option<i32>,
+    ),
+    Error = nom::error::Error<&'a str>,
+> {
+    preceded(
+        tag("*I "),
+        (
+            string_from_n_chars_parser(2),
+            char(' '),
+            optional_i32_from_n_digits_parser(7),
+            char(' '),
+            optional_i32_from_n_digits_parser(7),
+            char(' '),
+            optional_i32_from_n_digits_parser(5),
+            char(' '),
+            i32_from_n_digits_parser(9),
+            char(' '),
+            optional_i32_from_n_digits_parser(5),
+            char(' '),
+            optional_i32_from_n_digits_parser(5),
+        ),
+    )
+}
 fn row_i_parser(
     input: &str,
 ) -> IResult<
@@ -278,25 +348,7 @@ fn row_i_parser(
             _,
             arrival_time,
         ),
-    ) = preceded(
-        tag("*I "),
-        (
-            string_from_n_chars_parser(2),
-            char(' '),
-            optional_i32_from_n_digits_parser(7),
-            char(' '),
-            optional_i32_from_n_digits_parser(7),
-            char(' '),
-            optional_i32_from_n_digits_parser(5),
-            char(' '),
-            i32_from_n_digits_parser(9),
-            char(' '),
-            optional_i32_from_n_digits_parser(5),
-            char(' '),
-            optional_i32_from_n_digits_parser(5),
-        ),
-    )
-    .parse(input)?;
+    ) = row_i_combinator().parse(input)?;
     Ok((
         res,
         (
@@ -332,25 +384,41 @@ fn row_i_parser(
 /// *L #0000022 8589601 8589913             % Referenz auf Linie No. 22 ab HS-Nr. 8589601 bis HS-Nr. 8589913
 /// ...
 /// `
+fn row_l_combinator<'a>() -> impl Parser<
+    &'a str,
+    Output = (
+        String,
+        char,
+        Option<i32>,
+        char,
+        Option<i32>,
+        char,
+        Option<i32>,
+        char,
+        Option<i32>,
+    ),
+    Error = nom::error::Error<&'a str>,
+> {
+    preceded(
+        tag("*L "),
+        (
+            string_from_n_chars_parser(8),
+            char(' '),
+            optional_i32_from_n_digits_parser(7),
+            char(' '),
+            optional_i32_from_n_digits_parser(7),
+            char(' '),
+            optional_i32_from_n_digits_parser(5),
+            char(' '),
+            optional_i32_from_n_digits_parser(5),
+        ),
+    )
+}
 fn row_l_parser(
     input: &str,
 ) -> IResult<&str, (String, Option<i32>, Option<i32>, Option<i32>, Option<i32>)> {
     let (res, (line_info, _, stop_from_id, _, stop_to_id, _, departure_time, _, arrival_time)) =
-        preceded(
-            tag("*L "),
-            (
-                string_from_n_chars_parser(8),
-                char(' '),
-                optional_i32_from_n_digits_parser(7),
-                char(' '),
-                optional_i32_from_n_digits_parser(7),
-                char(' '),
-                optional_i32_from_n_digits_parser(5),
-                char(' '),
-                optional_i32_from_n_digits_parser(5),
-            ),
-        )
-        .parse(input)?;
+        row_l_combinator().parse(input)?;
     Ok((
         res,
         (
@@ -388,6 +456,41 @@ fn row_l_parser(
 /// *R R R000063 1300146 8574808             % gilt für Rück-Richtung 63 ab HS-Nr. 1300146 bis HS-Nr. 8574808
 /// ...
 /// `
+fn row_r_combinator<'a>() -> impl Parser<
+    &'a str,
+    Output = (
+        String,
+        char,
+        String,
+        char,
+        Option<i32>,
+        char,
+        Option<i32>,
+        char,
+        Option<i32>,
+        char,
+        Option<i32>,
+    ),
+    Error = nom::error::Error<&'a str>,
+> {
+    preceded(
+        tag("*R "),
+        (
+            string_from_n_chars_parser(1),
+            char(' '),
+            string_from_n_chars_parser(7),
+            char(' '),
+            optional_i32_from_n_digits_parser(7),
+            char(' '),
+            optional_i32_from_n_digits_parser(7),
+            char(' '),
+            optional_i32_from_n_digits_parser(5),
+            char(' '),
+            optional_i32_from_n_digits_parser(5),
+        ),
+    )
+}
+
 fn row_r_parser(
     input: &str,
 ) -> IResult<
@@ -416,23 +519,7 @@ fn row_r_parser(
             _,
             arrival_time,
         ),
-    ) = preceded(
-        tag("*R "),
-        (
-            string_from_n_chars_parser(1),
-            char(' '),
-            string_from_n_chars_parser(7),
-            char(' '),
-            optional_i32_from_n_digits_parser(7),
-            char(' '),
-            optional_i32_from_n_digits_parser(7),
-            char(' '),
-            optional_i32_from_n_digits_parser(5),
-            char(' '),
-            optional_i32_from_n_digits_parser(5),
-        ),
-    )
-    .parse(input)?;
+    ) = row_r_combinator().parse(input)?;
     Ok((
         res.trim(), // res contains the comments that are useful to determine the direction
         (
@@ -470,6 +557,37 @@ fn row_r_parser(
 /// *CO 0002 8507000 8507000                                   % Check-out 2 Min. ab HS-Nr. 8507000 bis HS-Nr. 8507000
 /// ...
 /// `
+fn row_ci_co_combinator<'a>() -> impl Parser<
+    &'a str,
+    Output = (
+        &'a str,
+        char,
+        i32,
+        char,
+        Option<i32>,
+        char,
+        Option<i32>,
+        char,
+        Option<i32>,
+        char,
+        Option<i32>,
+    ),
+    Error = nom::error::Error<&'a str>,
+> {
+    (
+        alt((tag("*CI"), tag("*CO"))),
+        char(' '),
+        i32_from_n_digits_parser(4),
+        char(' '),
+        optional_i32_from_n_digits_parser(7),
+        char(' '),
+        optional_i32_from_n_digits_parser(7),
+        char(' '),
+        optional_i32_from_n_digits_parser(5),
+        char(' '),
+        optional_i32_from_n_digits_parser(5),
+    )
+}
 fn row_ci_co_parser(
     input: &str,
 ) -> IResult<
@@ -486,20 +604,7 @@ fn row_ci_co_parser(
     let (
         res,
         (ci_co, _, num_minutes, _, stop_from_id, _, stop_to_id, _, departure_time, _, arrival_time),
-    ) = (
-        alt((tag("*CI"), tag("*CO"))),
-        char(' '),
-        i32_from_n_digits_parser(4),
-        char(' '),
-        optional_i32_from_n_digits_parser(7),
-        char(' '),
-        optional_i32_from_n_digits_parser(7),
-        char(' '),
-        optional_i32_from_n_digits_parser(5),
-        char(' '),
-        optional_i32_from_n_digits_parser(5),
-    )
-        .parse(input)?;
+    ) = row_ci_co_combinator().parse(input)?;
     Ok((
         res,
         (
@@ -538,6 +643,38 @@ fn row_ci_co_parser(
 /// 0053291 Wannseebrücke        02015 02015 052344 80____ % HS-Nr. 0053291 Ankunft 20:15, Abfahrt 20:15, Fahrtnummer 052344, Verwaltung 80____ (DB)
 /// 0053202 Am Kl. Wannsee/Am Gr 02016 02016               %
 /// `
+///
+fn row_journey_description_combinator<'a>() -> impl Parser<
+    &'a str,
+    Output = (
+        i32,
+        char,
+        String,
+        char,
+        Option<i32>,
+        char,
+        Option<i32>,
+        char,
+        Option<i32>,
+        char,
+        String,
+    ),
+    Error = nom::error::Error<&'a str>,
+> {
+    (
+        i32_from_n_digits_parser(7),
+        char(' '),
+        string_from_n_chars_parser(20),
+        char(' '),
+        optional_i32_from_n_digits_parser(5),
+        char(' '),
+        optional_i32_from_n_digits_parser(5),
+        char(' '),
+        optional_i32_from_n_digits_parser(6),
+        char(' '),
+        string_from_n_chars_parser(6),
+    )
+}
 fn row_journey_description_parser(
     input: &str,
 ) -> IResult<&str, (i32, String, Option<i32>, Option<i32>, Option<i32>, String)> {
@@ -556,20 +693,7 @@ fn row_journey_description_parser(
             _,
             administration,
         ),
-    ) = (
-        i32_from_n_digits_parser(7),
-        char(' '),
-        string_from_n_chars_parser(20),
-        char(' '),
-        optional_i32_from_n_digits_parser(5),
-        char(' '),
-        optional_i32_from_n_digits_parser(5),
-        char(' '),
-        optional_i32_from_n_digits_parser(6),
-        char(' '),
-        string_from_n_chars_parser(6),
-    )
-        .parse(input)?;
+    ) = row_journey_description_combinator().parse(input)?;
     Ok((
         res,
         (
@@ -691,6 +815,35 @@ fn journey_row_parser() -> RowParser {
     ])
 }
 
+pub fn old_parse(
+    path: &str,
+    transport_types_pk_type_converter: &FxHashMap<String, i32>,
+    attributes_pk_type_converter: &FxHashMap<String, i32>,
+    directions_pk_type_converter: &FxHashMap<String, i32>,
+) -> Result<JourneyAndTypeConverter, Box<dyn Error>> {
+    log::info!("Parsing FPLAN...");
+    let row_parser = journey_row_parser();
+    let parser = FileParser::new(&format!("{path}/FPLAN"), row_parser)?;
+
+    let (data, pk_type_converter) = journey_row_converter(
+        parser,
+        transport_types_pk_type_converter,
+        attributes_pk_type_converter,
+        directions_pk_type_converter,
+    )?;
+    Ok((ResourceStorage::new(data), pk_type_converter))
+}
+
+fn read_lines(path: &str, bytes_offset: u64) -> io::Result<Vec<String>> {
+    let mut file = File::open(path)?;
+    file.seek(io::SeekFrom::Start(bytes_offset))?;
+    let mut reader = io::BufReader::new(file);
+    let mut contents = String::new();
+    reader.read_to_string(&mut contents)?;
+    let lines = contents.lines().map(String::from).collect();
+    Ok(lines)
+}
+
 fn journey_row_converter(
     parser: FileParser,
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
@@ -738,7 +891,6 @@ fn journey_row_converter(
 
     Ok((data, pk_type_converter))
 }
-
 pub fn parse(
     path: &str,
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
@@ -746,15 +898,86 @@ pub fn parse(
     directions_pk_type_converter: &FxHashMap<String, i32>,
 ) -> Result<JourneyAndTypeConverter, Box<dyn Error>> {
     log::info!("Parsing FPLAN...");
-    let row_parser = journey_row_parser();
-    let parser = FileParser::new(&format!("{path}/FPLAN"), row_parser)?;
+    let lines = read_lines(&format!("{path}/FPLAN"), 0)?;
 
-    let (data, pk_type_converter) = journey_row_converter(
-        parser,
-        transport_types_pk_type_converter,
-        attributes_pk_type_converter,
-        directions_pk_type_converter,
-    )?;
+    let auto_increment = AutoIncrement::new();
+    let mut data = Vec::new();
+    let mut pk_type_converter = FxHashSet::default();
+
+    lines
+        .into_iter()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            alt((
+                map(
+                    row_z_combinator(),
+                    |(
+                        journey_id,
+                        _,
+                        transport_company_id,
+                        _,
+                        _transport_variant,
+                        _,
+                        _num_cycles,
+                        _,
+                        _cycle_dura_min,
+                    )| {
+                        let id = auto_increment.next();
+
+                        pk_type_converter.insert((journey_id, transport_company_id.to_owned()));
+                        data.push(Journey::new(id, journey_id, transport_company_id));
+                        Ok::<(), Box<dyn Error>>(())
+                    },
+                ),
+                map(
+                    row_g_combinator(),
+                    |(offer, _, stop_from_id, _, stop_to_id)| {
+                        let journey = data.last_mut().ok_or("Type A row missing.")?;
+                        let transport_type_id = *transport_types_pk_type_converter
+                            .get(&offer)
+                            .ok_or("Unknown legacy ID")
+                            .unwrap();
+
+                        journey.add_metadata_entry(
+                            JourneyMetadataType::TransportType,
+                            JourneyMetadataEntry::new(
+                                stop_from_id,
+                                stop_to_id,
+                                Some(transport_type_id),
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                            ),
+                        );
+                        Ok::<(), Box<dyn Error>>(())
+                    },
+                ),
+                map(
+                    row_a_ve_combinator(),
+                    |(stop_from_id, _, stop_to_id, _, bit_field_id)| {
+                        let journey = data.last_mut().ok_or("Type A row missing.")?;
+                        journey.add_metadata_entry(
+                            JourneyMetadataType::BitField,
+                            JourneyMetadataEntry::new(
+                                stop_from_id,
+                                stop_to_id,
+                                None,
+                                bit_field_id,
+                                None,
+                                None,
+                                None,
+                                None,
+                            ),
+                        );
+                        Ok::<(), Box<dyn Error>>(())
+                    },
+                ),
+            ))
+        });
+
+    let data = Journey::vec_to_map(data);
     Ok((ResourceStorage::new(data), pk_type_converter))
 }
 
