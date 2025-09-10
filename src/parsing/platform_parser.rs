@@ -311,9 +311,10 @@ fn create_journey_platform(
     let time: Option<i32> = values.remove(0).into();
     let bit_field_id: Option<i32> = values.remove(0).into();
 
-    let _journey_id = journeys_pk_type_converter
-        .get(&(journey_id, administration.clone()))
-        .ok_or("Unknown legacy journey ID")?;
+    let key = (journey_id, administration.clone());
+    let _journey_id = journeys_pk_type_converter.get(&key).ok_or(format!(
+        "Unknown legacy journey ID: {journey_id}, {administration}"
+    ))?;
 
     let platform_id = *platforms_pk_type_converter
         .get(&(stop_id, index))

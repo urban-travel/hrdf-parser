@@ -8,9 +8,11 @@
 /// File(s) read by the parser:
 /// FPLAN
 use std::{
+    cell::RefCell,
     error::Error,
     fs::File,
     io::{self, Read, Seek},
+    rc::Rc,
 };
 
 use chrono::NaiveTime;
@@ -178,8 +180,6 @@ fn row_g_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>)
 /// *A VE 8500090 8503000 001417 % Ab HS-Nr. 8500090 bis HS-Nr. 8503000, gelten die Gültigkeitstage 001417 (Bitfeld für bspw. alle Montage)
 /// ...
 /// `
-///
-
 fn row_a_ve_combinator<'a>() -> impl Parser<
     &'a str,
     Output = (Option<i32>, char, Option<i32>, char, Option<i32>),
@@ -274,8 +274,9 @@ fn row_a_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>,
 /// *G ...
 /// *A VE ...
 /// *A ...
-/// *I hi 8573602 8587744       000018040             % Hinweis auf Infotext (hi) ab HS-Nr. 8573602 bis HS-Nr. 8587744  mit Infotext 18040
-/// *I hi 8578157 8589334       000018037 01126 01159 % Hinweis auf Infotext (hi) ab HS-Nr. 8578157 bis HS-Nr. 8589334 mit Infotext 18037 Abfahrt 11:26 Ankunft 11:59
+/// *I hi 8573602 8587744        000018040             % Hinweis auf Infotext (hi) ab HS-Nr. 8573602 bis HS-Nr. 8587744  mit Infotext 18040
+/// *I hi 8578157 8589334        000018037 01126 01159 % Hinweis auf Infotext (hi) ab HS-Nr. 8578157 bis HS-Nr. 8589334 mit Infotext 18037 Abfahrt 11:26 Ankunft 11:59
+/// *I JY                        000000000                     %"
 /// ...
 /// `
 ///
@@ -307,13 +308,13 @@ fn row_i_combinator<'a>() -> impl Parser<
             char(' '),
             optional_i32_from_n_digits_parser(7),
             char(' '),
-            optional_i32_from_n_digits_parser(5),
+            optional_i32_from_n_digits_parser(6),
             char(' '),
             i32_from_n_digits_parser(9),
             char(' '),
-            optional_i32_from_n_digits_parser(5),
+            optional_i32_from_n_digits_parser(6),
             char(' '),
-            optional_i32_from_n_digits_parser(5),
+            optional_i32_from_n_digits_parser(6),
         ),
     )
 }
@@ -408,9 +409,9 @@ fn row_l_combinator<'a>() -> impl Parser<
             char(' '),
             optional_i32_from_n_digits_parser(7),
             char(' '),
-            optional_i32_from_n_digits_parser(5),
+            optional_i32_from_n_digits_parser(6),
             char(' '),
-            optional_i32_from_n_digits_parser(5),
+            optional_i32_from_n_digits_parser(6),
         ),
     )
 }
@@ -484,9 +485,9 @@ fn row_r_combinator<'a>() -> impl Parser<
             char(' '),
             optional_i32_from_n_digits_parser(7),
             char(' '),
-            optional_i32_from_n_digits_parser(5),
+            optional_i32_from_n_digits_parser(6),
             char(' '),
-            optional_i32_from_n_digits_parser(5),
+            optional_i32_from_n_digits_parser(6),
         ),
     )
 }
@@ -583,9 +584,9 @@ fn row_ci_co_combinator<'a>() -> impl Parser<
         char(' '),
         optional_i32_from_n_digits_parser(7),
         char(' '),
-        optional_i32_from_n_digits_parser(5),
+        optional_i32_from_n_digits_parser(6),
         char(' '),
-        optional_i32_from_n_digits_parser(5),
+        optional_i32_from_n_digits_parser(6),
     )
 }
 fn row_ci_co_parser(
@@ -639,9 +640,9 @@ fn row_ci_co_parser(
 /// *R ...
 /// *CI ...
 /// *CO ...
-/// 0053301 S Wannsee DB               02014               % HS-Nr. 0053301 Ankunft N/A,   Abfahrt 20:14
-/// 0053291 Wannseebrücke        02015 02015 052344 80____ % HS-Nr. 0053291 Ankunft 20:15, Abfahrt 20:15, Fahrtnummer 052344, Verwaltung 80____ (DB)
-/// 0053202 Am Kl. Wannsee/Am Gr 02016 02016               %
+/// 0053301 S Wannsee DB                 02014               % HS-Nr. 0053301 Ankunft N/A,   Abfahrt 20:14
+/// 0053291 Wannseebrücke         02015  02015 052344 80____ % HS-Nr. 0053291 Ankunft 20:15, Abfahrt 20:15, Fahrtnummer 052344, Verwaltung 80____ (DB)
+/// 0053202 Am Kl. Wannsee/Am Gr  02016  02016               %
 /// `
 ///
 fn row_journey_description_combinator<'a>() -> impl Parser<
@@ -666,9 +667,9 @@ fn row_journey_description_combinator<'a>() -> impl Parser<
         char(' '),
         string_from_n_chars_parser(20),
         char(' '),
-        optional_i32_from_n_digits_parser(5),
+        optional_i32_from_n_digits_parser(6),
         char(' '),
-        optional_i32_from_n_digits_parser(5),
+        optional_i32_from_n_digits_parser(6),
         char(' '),
         optional_i32_from_n_digits_parser(6),
         char(' '),
@@ -901,14 +902,14 @@ pub fn parse(
     let lines = read_lines(&format!("{path}/FPLAN"), 0)?;
 
     let auto_increment = AutoIncrement::new();
-    let mut data = Vec::new();
-    let mut pk_type_converter = FxHashSet::default();
+    let data = Rc::new(RefCell::new(Vec::new()));
+    let pk_type_converter = Rc::new(RefCell::new(FxHashSet::default()));
 
     lines
         .into_iter()
         .filter(|line| !line.trim().is_empty())
-        .map(|line| {
-            alt((
+        .for_each(|line| {
+            let _res = alt((
                 map(
                     row_z_combinator(),
                     |(
@@ -922,21 +923,30 @@ pub fn parse(
                         _,
                         _cycle_dura_min,
                     )| {
+                        let local_data = Rc::clone(&data);
                         let id = auto_increment.next();
 
-                        pk_type_converter.insert((journey_id, transport_company_id.to_owned()));
-                        data.push(Journey::new(id, journey_id, transport_company_id));
+                        pk_type_converter
+                            .borrow_mut()
+                            .insert((journey_id, transport_company_id.to_owned()));
+
+                        local_data.borrow_mut().push(Journey::new(
+                            id,
+                            journey_id,
+                            transport_company_id,
+                        ));
                         Ok::<(), Box<dyn Error>>(())
                     },
                 ),
                 map(
                     row_g_combinator(),
                     |(offer, _, stop_from_id, _, stop_to_id)| {
-                        let journey = data.last_mut().ok_or("Type A row missing.")?;
+                        let local_data = Rc::clone(&data);
+                        let mut local_data = local_data.borrow_mut();
+                        let journey = local_data.last_mut().ok_or("Type A row missing.")?;
                         let transport_type_id = *transport_types_pk_type_converter
                             .get(&offer)
-                            .ok_or("Unknown legacy ID")
-                            .unwrap();
+                            .ok_or("Unknown legacy ID")?;
 
                         journey.add_metadata_entry(
                             JourneyMetadataType::TransportType,
@@ -957,7 +967,9 @@ pub fn parse(
                 map(
                     row_a_ve_combinator(),
                     |(stop_from_id, _, stop_to_id, _, bit_field_id)| {
-                        let journey = data.last_mut().ok_or("Type A row missing.")?;
+                        let local_data = Rc::clone(&data);
+                        let mut local_data = local_data.borrow_mut();
+                        let journey = local_data.last_mut().ok_or("Type A row missing.")?;
                         journey.add_metadata_entry(
                             JourneyMetadataType::BitField,
                             JourneyMetadataEntry::new(
@@ -974,8 +986,250 @@ pub fn parse(
                         Ok::<(), Box<dyn Error>>(())
                     },
                 ),
+                map(
+                    row_a_combinator(),
+                    |(offer, _, stop_from_id, _, stop_to_id, _, _reference)| {
+                        let local_data = Rc::clone(&data);
+                        let mut local_data = local_data.borrow_mut();
+                        let journey = local_data.last_mut().ok_or("Type A row missing.")?;
+                        let attribute_id = *attributes_pk_type_converter
+                            .get(&offer)
+                            .ok_or("Unknown legacy ID")?;
+
+                        journey.add_metadata_entry(
+                            JourneyMetadataType::Attribute,
+                            JourneyMetadataEntry::new(
+                                stop_from_id,
+                                stop_to_id,
+                                Some(attribute_id),
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                            ),
+                        );
+                        Ok::<(), Box<dyn Error>>(())
+                    },
+                ),
+                map(
+                    row_i_combinator(),
+                    |(
+                        info_code,
+                        _,
+                        stop_from_id,
+                        _,
+                        stop_to_id,
+                        _,
+                        validity_ref,
+                        _,
+                        info_ref,
+                        _,
+                        departure_time,
+                        _,
+                        arrival_time,
+                    )| {
+                        let local_data = Rc::clone(&data);
+                        let mut local_data = local_data.borrow_mut();
+                        let journey = local_data.last_mut().ok_or("Type A row missing.")?;
+                        let arrival_time = create_time(arrival_time);
+                        let departure_time = create_time(departure_time);
+
+                        journey.add_metadata_entry(
+                            JourneyMetadataType::InformationText,
+                            JourneyMetadataEntry::new(
+                                stop_from_id,
+                                stop_to_id,
+                                Some(info_ref),
+                                validity_ref,
+                                departure_time,
+                                arrival_time,
+                                Some(info_code),
+                                None,
+                            ),
+                        );
+                        Ok::<(), Box<dyn Error>>(())
+                    },
+                ),
+                map(
+                    row_l_combinator(),
+                    |(
+                        mut line_info,
+                        _,
+                        stop_from_id,
+                        _,
+                        stop_to_id,
+                        _,
+                        departure_time,
+                        _,
+                        arrival_time,
+                    )| {
+                        let local_data = Rc::clone(&data);
+                        let mut local_data = local_data.borrow_mut();
+                        let journey = local_data.last_mut().ok_or("Type A row missing.")?;
+                        let arrival_time = create_time(arrival_time);
+                        let departure_time = create_time(departure_time);
+
+                        let line_info_first_char = line_info
+                            .chars()
+                            .next()
+                            .ok_or("Missing line info (the string is empty).")?;
+
+                        line_info.drain(..line_info_first_char.len_utf8());
+                        let (resource_id, extra_field_1) = if line_info_first_char == '#' {
+                            (Some(line_info.parse::<i32>()?), None)
+                        } else {
+                            (None, Some(line_info))
+                        };
+
+                        journey.add_metadata_entry(
+                            JourneyMetadataType::Line,
+                            JourneyMetadataEntry::new(
+                                stop_from_id,
+                                stop_to_id,
+                                resource_id,
+                                None,
+                                departure_time,
+                                arrival_time,
+                                extra_field_1,
+                                None,
+                            ),
+                        );
+
+                        Ok::<(), Box<dyn Error>>(())
+                    },
+                ),
+                // set_direction(values, journey, directions_pk_type_converter)?;
+                map(
+                    row_r_combinator(),
+                    |(
+                        direction,
+                        _,
+                        ref_direction_code,
+                        _,
+                        stop_from_id,
+                        _,
+                        stop_to_id,
+                        _,
+                        departure_time,
+                        _,
+                        arrival_time,
+                    )| {
+                        let local_data = Rc::clone(&data);
+                        let mut local_data = local_data.borrow_mut();
+                        let journey = local_data.last_mut().ok_or("Type A row missing.")?;
+                        let arrival_time = create_time(arrival_time);
+                        let departure_time = create_time(departure_time);
+
+                        let direction_id = if ref_direction_code.is_empty() {
+                            None
+                        } else {
+                            let id = *directions_pk_type_converter
+                                .get(&ref_direction_code)
+                                .ok_or("Unknown legacy ID")?;
+                            Some(id)
+                        };
+
+                        journey.add_metadata_entry(
+                            JourneyMetadataType::Direction,
+                            JourneyMetadataEntry::new(
+                                stop_from_id,
+                                stop_to_id,
+                                direction_id,
+                                None,
+                                departure_time,
+                                arrival_time,
+                                Some(direction),
+                                None,
+                            ),
+                        );
+                        Ok::<(), Box<dyn Error>>(())
+                    },
+                ),
+                // set_boarding_or_disembarking_exchange_time(values, journey);
+                map(
+                    row_ci_co_combinator(),
+                    |(
+                        ci_co,
+                        _,
+                        num_minutes,
+                        _,
+                        stop_from_id,
+                        _,
+                        stop_to_id,
+                        _,
+                        departure_time,
+                        _,
+                        arrival_time,
+                    )| {
+                        let local_data = Rc::clone(&data);
+                        let mut local_data = local_data.borrow_mut();
+                        let journey = local_data.last_mut().ok_or("Type A row missing.")?;
+                        let arrival_time = create_time(arrival_time);
+                        let departure_time = create_time(departure_time);
+
+                        let metadata_type = if ci_co == "*CI" {
+                            JourneyMetadataType::ExchangeTimeBoarding
+                        } else {
+                            JourneyMetadataType::ExchangeTimeDisembarking
+                        };
+
+                        journey.add_metadata_entry(
+                            metadata_type,
+                            JourneyMetadataEntry::new(
+                                stop_from_id,
+                                stop_to_id,
+                                None,
+                                None,
+                                departure_time,
+                                arrival_time,
+                                None,
+                                Some(num_minutes),
+                            ),
+                        );
+                        Ok::<(), Box<dyn Error>>(())
+                    },
+                ),
+                map(
+                    row_journey_description_combinator(),
+                    |(
+                        stop_id,
+                        _,
+                        _stop_name,
+                        _,
+                        arrival_time,
+                        _,
+                        departure_time,
+                        _,
+                        _journey_id,
+                        _,
+                        _administration,
+                    )| {
+                        let local_data = Rc::clone(&data);
+                        let mut local_data = local_data.borrow_mut();
+                        let journey = local_data.last_mut().ok_or("Type A row missing.")?;
+                        let arrival_time = create_time(arrival_time);
+                        let departure_time = create_time(departure_time);
+
+                        journey.add_route_entry(JourneyRouteEntry::new(
+                            stop_id,
+                            arrival_time,
+                            departure_time,
+                        ));
+
+                        Ok::<(), Box<dyn Error>>(())
+                    },
+                ),
             ))
+            .parse(&line)
+            .unwrap();
         });
+
+    let data =
+        RefCell::<Vec<Journey>>::into_inner(Rc::into_inner(data).ok_or("Unable to get data")?);
+    let pk_type_converter = RefCell::<FxHashSet<JourneyId>>::into_inner(
+        Rc::into_inner(pk_type_converter).ok_or("Unable to get pk_type_converter")?,
+    );
 
     let data = Journey::vec_to_map(data);
     Ok((ResourceStorage::new(data), pk_type_converter))
@@ -1820,7 +2074,7 @@ mod tests {
 
         #[test]
         fn success_with_partial_options() {
-            let input = "*I hi 8573602 8587744       000018040             % Hinweis auf Infotext (hi) ab HS-Nr. 8573602 bis HS-Nr. 8587744  mit Infotext 18040";
+            let input = "*I hi 8573602 8587744        000018040             % Hinweis auf Infotext (hi) ab HS-Nr. 8573602 bis HS-Nr. 8587744  mit Infotext 18040";
             let (
                 res,
                 (
@@ -1848,7 +2102,7 @@ mod tests {
 
         #[test]
         fn success_with_options() {
-            let input = "*I hi 8578157 8589334       000018037 01126 01159 % Hinweis auf Infotext (hi) ab HS-Nr. 8578157 bis HS-Nr. 8589334 mit Infotext 18037 Abfahrt 11:26 Ankunft 11:59";
+            let input = "*I hi 8578157 8589334        000018037  01126  01159 % Hinweis auf Infotext (hi) ab HS-Nr. 8578157 bis HS-Nr. 8589334 mit Infotext 18037 Abfahrt 11:26 Ankunft 11:59";
             let (
                 res,
                 (
@@ -1882,7 +2136,7 @@ mod tests {
 
         #[test]
         fn success_with_options() {
-            let input = "*L 8        8578157 8589334 01126 01159 % Linie 8 ab HS-Nr. 8578157 bis HS-Nr. 8589334 Abfahrt 11:26 Ankunft 11:59";
+            let input = "*L 8        8578157 8589334  01126  01159 % Linie 8 ab HS-Nr. 8578157 bis HS-Nr. 8589334 Abfahrt 11:26 Ankunft 11:59";
             let (res, (line_info, stop_from_id, stop_to_id, departure_time, arrival_time)) =
                 row_l_parser(input).unwrap();
             assert_eq!("8", line_info);
@@ -2019,7 +2273,7 @@ mod tests {
 
         #[test]
         fn success_journey_options1() {
-            let input = "0053301 S Wannsee DB               02014               % HS-Nr. 0053301 Ankunft N/A,   Abfahrt 20:14";
+            let input = "0053301 S Wannsee DB                02014                % HS-Nr. 0053301 Ankunft N/A,   Abfahrt 20:14";
             // let input = "0053291 Wannseebrücke        02015 02015 052344 80____ % HS-Nr. 0053291 Ankunft 20:15, Abfahrt 20:15, Fahrtnummer 052344, Verwaltung 80____ (DB)";
             let (
                 res,
@@ -2037,7 +2291,7 @@ mod tests {
 
         #[test]
         fn success_journey_options2() {
-            let input = "0053202 Am Kl. Wannsee/Am Gr 02016 02016               %";
+            let input = "0053202 Am Kl. Wannsee/Am Gr  02016  02016               %";
             let (
                 res,
                 (stop_id, stop_name, arrival_time, departure_time, journey_id, administration),
@@ -2054,7 +2308,7 @@ mod tests {
 
         #[test]
         fn success_journey_all_options() {
-            let input = "0053291 Wannseebrücke        02015 02015 052344 80____ % HS-Nr. 0053291 Ankunft 20:15, Abfahrt 20:15, Fahrtnummer 052344, Verwaltung 80____ (DB)";
+            let input = "0053291 Wannseebrücke         02015  02015 052344 80____ % HS-Nr. 0053291 Ankunft 20:15, Abfahrt 20:15, Fahrtnummer 052344, Verwaltung 80____ (DB)";
             let (
                 res,
                 (stop_id, stop_name, arrival_time, departure_time, journey_id, administration),
@@ -2070,6 +2324,24 @@ mod tests {
                 "% HS-Nr. 0053291 Ankunft 20:15, Abfahrt 20:15, Fahrtnummer 052344, Verwaltung 80____ (DB)",
                 res.trim()
             );
+        }
+        // 0000175 Hauenstein-Basistunn -00833 -00833                 %
+        #[test]
+        fn success_journey_negative_time() {
+            // let input = "0053291 Wannseebrücke        02015 02015 052344 80____ % HS-Nr. 0053291 Ankunft 20:15, Abfahrt 20:15, Fahrtnummer 052344, Verwaltung 80____ (DB)";
+            let input = "0000175 Hauenstein-Basistunn -00833 -00833                 %";
+            let (
+                res,
+                (stop_id, stop_name, arrival_time, departure_time, journey_id, administration),
+            ) = row_journey_description_parser(input).unwrap();
+
+            assert_eq!(175, stop_id);
+            assert_eq!("Hauenstein-Basistunn", stop_name);
+            assert_eq!(Some(-833), arrival_time);
+            assert_eq!(Some(-833), departure_time);
+            assert_eq!(None, journey_id);
+            assert_eq!("", administration);
+            assert_eq!("%", res.trim());
         }
     }
 }

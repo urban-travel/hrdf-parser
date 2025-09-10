@@ -24,8 +24,12 @@ pub(crate) fn i32_from_n_digits_parser<'a>(
     n_digits: usize,
 ) -> impl Parser<&'a str, Output = i32, Error = nom::error::Error<&'a str>> {
     map_res(
-        count(one_of("0123456789"), n_digits),
-        |digits: Vec<char>| to_string(digits).parse(),
+        // Take exactly n_digits bytes
+        nom::bytes::take(n_digits),
+        |n_chars: &str| {
+            // Trim spaces and parse to i32
+            n_chars.trim().parse::<i32>()
+        },
     )
 }
 

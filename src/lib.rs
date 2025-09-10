@@ -47,16 +47,16 @@ mod tests {
     //     .await
     //     .unwrap();
     // }
-    //
-    // #[test(tokio::test)]
-    // async fn parsing_2025() {
-    //     let _hrdf = Hrdf::new(
-    //         Version::V_5_40_41_2_0_7,
-    //         "https://data.opentransportdata.swiss/en/dataset/timetable-54-2025-hrdf/permalink",
-    //         true,
-    //         None,
-    //     )
-    //     .await
-    //     .unwrap();
-    // }
+
+    #[test(tokio::test)]
+    async fn parsing_2025() {
+        let _hrdf = Hrdf::new(
+            Version::V_5_40_41_2_0_7,
+            "https://data.opentransportdata.swiss/en/dataset/timetable-54-2025-hrdf/permalink",
+            true,
+            None,
+        )
+        .await
+        .unwrap();
+    }
 }
