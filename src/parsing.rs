@@ -25,6 +25,7 @@ pub use exchange_journey_parser::parse as load_exchange_times_journey;
 pub use exchange_line_parser::parse as load_exchange_times_line;
 pub use holiday_parser::parse as load_holidays;
 pub use information_text_parser::parse as load_information_texts;
+pub use journey_parser::old_parse as old_load_journeys;
 pub use journey_parser::parse as load_journeys;
 pub use line_parser::parse as load_lines;
 pub use platform_parser::parse as load_platforms;

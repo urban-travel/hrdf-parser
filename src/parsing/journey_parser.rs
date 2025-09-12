@@ -1075,8 +1075,8 @@ pub fn parse(
                             .next()
                             .ok_or("Missing line info (the string is empty).")?;
 
-                        line_info.drain(..line_info_first_char.len_utf8());
                         let (resource_id, extra_field_1) = if line_info_first_char == '#' {
+                            line_info.drain(..line_info_first_char.len_utf8());
                             (Some(line_info.parse::<i32>()?), None)
                         } else {
                             (None, Some(line_info))
@@ -2164,6 +2164,19 @@ mod tests {
                 "% Referenz auf Linie No. 22 ab HS-Nr. 8589601 bis HS-Nr. 8589913",
                 res.trim()
             );
+        }
+
+        #[test]
+        fn success_with_partial_options61() {
+            let input = "*L 61       8500010 8507492                                %";
+            let (res, (line_info, stop_from_id, stop_to_id, departure_time, arrival_time)) =
+                row_l_parser(input).unwrap();
+            assert_eq!("61", line_info);
+            assert_eq!(Some(8500010), stop_from_id);
+            assert_eq!(Some(8507492), stop_to_id);
+            assert_eq!(None, departure_time);
+            assert_eq!(None, arrival_time);
+            assert_eq!("%", res.trim());
         }
     }
 
