@@ -8,6 +8,7 @@ use std::{
 use nom::{
     Parser,
     branch::alt,
+    bytes::complete::take_till,
     character::{anychar, one_of},
     combinator::{map, map_res, opt},
     multi::count,
@@ -27,6 +28,11 @@ pub(crate) fn string_from_n_chars_parser<'a>(
     map(count(anychar, n_chars), |chars| {
         to_string(chars).trim().to_string()
     })
+}
+
+pub(crate) fn string_till_eol_parser<'a>()
+-> impl Parser<&'a str, Output = String, Error = nom::error::Error<&'a str>> {
+    map(take_till(is_newline), |c: &str| c.to_string())
 }
 
 pub(crate) fn i32_from_n_digits_parser<'a>(

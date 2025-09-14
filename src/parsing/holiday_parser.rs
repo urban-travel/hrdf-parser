@@ -15,21 +15,12 @@
 use std::{error::Error, str::FromStr};
 
 use chrono::NaiveDate;
-use nom::{
-    IResult, Parser,
-    bytes::complete::{take_till, take_until},
-    character::char,
-    combinator::map,
-    sequence::separated_pair,
-};
+use nom::{IResult, Parser, character::char, sequence::separated_pair};
 use rustc_hash::FxHashMap;
 
 use crate::{
     models::{Holiday, Language, Model},
-    parsing::{
-        ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser,
-        helpers::{is_newline, read_lines, string_from_n_chars_parser},
-    },
+    parsing::helpers::{read_lines, string_from_n_chars_parser, string_till_eol_parser},
     storage::ResourceStorage,
     utils::AutoIncrement,
 };
@@ -38,7 +29,7 @@ fn parse_holiday_row(input: &str) -> IResult<&str, (String, String)> {
     separated_pair(
         string_from_n_chars_parser(10),
         char(' '),
-        map(take_till(is_newline), |c: &str| c.to_string()),
+        string_till_eol_parser(),
     )
     .parse(input)
 }
