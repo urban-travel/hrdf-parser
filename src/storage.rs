@@ -84,6 +84,7 @@ impl DataStorage {
         // Time-relevant data
         let bit_fields = parsing::load_bit_fields(path)?;
         let holidays = parsing::load_holidays(path)?;
+
         let timetable_metadata = parsing::load_timetable_metadata(path)?;
 
         // Basic data
@@ -107,53 +108,45 @@ impl DataStorage {
             &directions_pk_type_converter,
         )?;
 
-        let (old_journeys, old_journeys_pk_type_converter) = parsing::old_load_journeys(
-            path,
-            &transport_types_pk_type_converter,
-            &attributes_pk_type_converter,
-            &directions_pk_type_converter,
-        )?;
-
-        let mut keys = journeys.data().keys().copied().collect::<Vec<_>>();
-        keys.sort();
-        let mut old_keys: Vec<i32> = old_journeys.data().keys().copied().collect();
-        old_keys.sort();
-
-        let bla = keys
-            .into_iter()
-            .zip(old_keys)
-            .filter(|(lhs, rhs)| {
-                let vlhs = journeys.data().get(lhs).unwrap();
-                let vrhs: &Journey = old_journeys.data().get(rhs).unwrap();
-                let (new, old) = get_json_values_complete(vlhs, vrhs).unwrap();
-                let cond = new != old;
-                if cond {
-                    log::info!("=================================");
-                    log::info!("{new},\n {old}");
-                }
-                cond
-            })
-            .collect::<Vec<_>>();
-        let mut keys = journeys_pk_type_converter.into_iter().collect::<Vec<_>>();
-        keys.sort();
-        let mut old_keys = old_journeys_pk_type_converter
-            .into_iter()
-            .collect::<Vec<_>>();
-        old_keys.sort();
-
-        let bla2 = keys
-            .into_iter()
-            .zip(old_keys)
-            .filter(|(lhs, rhs)| {
-                let cond = lhs != rhs;
-                if cond {
-                    log::info!("{lhs:?}, {rhs:?}");
-                }
-                cond
-            })
-            .collect::<Vec<_>>();
-        return Err(format!("{:?}\n {:?} \n", bla, bla2).into());
-
+        // let mut keys = journeys.data().keys().copied().collect::<Vec<_>>();
+        // keys.sort();
+        // let mut old_keys: Vec<i32> = old_journeys.data().keys().copied().collect();
+        // old_keys.sort();
+        //
+        // let bla = keys
+        //     .into_iter()
+        //     .zip(old_keys)
+        //     .filter(|(lhs, rhs)| {
+        //         let vlhs = journeys.data().get(lhs).unwrap();
+        //         let vrhs: &Journey = old_journeys.data().get(rhs).unwrap();
+        //         let (new, old) = get_json_values_complete(vlhs, vrhs).unwrap();
+        //         let cond = new != old;
+        //         if cond {
+        //             log::info!("=================================");
+        //             log::info!("{new},\n {old}");
+        //         }
+        //         cond
+        //     })
+        //     .collect::<Vec<_>>();
+        // let mut keys = journeys_pk_type_converter.into_iter().collect::<Vec<_>>();
+        // keys.sort();
+        // let mut old_keys = old_journeys_pk_type_converter
+        //     .into_iter()
+        //     .collect::<Vec<_>>();
+        // old_keys.sort();
+        //
+        // let bla2 = keys
+        //     .into_iter()
+        //     .zip(old_keys)
+        //     .filter(|(lhs, rhs)| {
+        //         let cond = lhs != rhs;
+        //         if cond {
+        //             log::info!("{lhs:?}, {rhs:?}");
+        //         }
+        //         cond
+        //     })
+        //     .collect::<Vec<_>>();
+        // return Err(format!("{:?}\n {:?} \n", bla, bla2).into());
         let (journey_platform, platforms) =
             parsing::load_platforms(version, path, &journeys_pk_type_converter)?;
         let through_service = parsing::load_through_service(path, &journeys_pk_type_converter)?;

@@ -24,11 +24,7 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// BITFELD
-use std::{
-    error::Error,
-    fs::File,
-    io::{self, Read, Seek},
-};
+use std::error::Error;
 
 use nom::{
     IResult, Parser,
@@ -40,7 +36,7 @@ use nom::{
 
 use crate::{
     models::{BitField, Model},
-    parsing::helpers::i32_from_n_digits_parser,
+    parsing::helpers::{i32_from_n_digits_parser, read_lines},
     storage::ResourceStorage,
 };
 
@@ -57,16 +53,6 @@ fn parse_bitfield_row(input: &str) -> IResult<&str, (i32, Vec<u8>)> {
         }),
     )
     .parse(input)
-}
-
-fn read_lines(path: &str, bytes_offset: u64) -> io::Result<Vec<String>> {
-    let mut file = File::open(path)?;
-    file.seek(io::SeekFrom::Start(bytes_offset))?;
-    let mut reader = io::BufReader::new(file);
-    let mut contents = String::new();
-    reader.read_to_string(&mut contents)?;
-    let lines = contents.lines().map(String::from).collect();
-    Ok(lines)
 }
 
 pub fn parse(path: &str) -> Result<ResourceStorage<BitField>, Box<dyn Error>> {

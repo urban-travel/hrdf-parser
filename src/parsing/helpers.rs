@@ -1,3 +1,8 @@
+use std::{
+    fs::File,
+    io::{self, Read, Seek},
+};
+
 /// Here we will define all the parsing Helper functions
 /// Such as primitive parsers
 use nom::{
@@ -7,6 +12,10 @@ use nom::{
     combinator::{map, map_res, opt},
     multi::count,
 };
+
+pub(crate) fn is_newline(c: char) -> bool {
+    c == '\n' || c == '\r'
+}
 
 pub(crate) fn to_string(v: Vec<char>) -> String {
     v.into_iter().collect::<String>()
@@ -46,4 +55,14 @@ pub(crate) fn optional_i32_from_n_digits_parser<'a>(
         exaclty_n_spaces_parser(n_digits),
         opt(i32_from_n_digits_parser(n_digits)),
     ))
+}
+
+pub(crate) fn read_lines(path: &str, bytes_offset: u64) -> io::Result<Vec<String>> {
+    let mut file = File::open(path)?;
+    file.seek(io::SeekFrom::Start(bytes_offset))?;
+    let mut reader = io::BufReader::new(file);
+    let mut contents = String::new();
+    reader.read_to_string(&mut contents)?;
+    let lines = contents.lines().map(String::from).collect();
+    Ok(lines)
 }
