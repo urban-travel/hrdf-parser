@@ -7,21 +7,15 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// FPLAN
-use std::{
-    cell::RefCell,
-    error::Error,
-    fs::File,
-    io::{self, Read, Seek},
-    rc::Rc,
-};
+use std::{cell::RefCell, error::Error, rc::Rc};
 
 use chrono::NaiveTime;
 use nom::{
-    IResult, Parser,
+    Parser,
     branch::alt,
     bytes::tag,
     character::{char, complete::space1},
-    combinator::map,
+    combinator::{map, map_res},
     sequence::preceded,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -29,13 +23,9 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{
     JourneyId,
     models::{Journey, JourneyMetadataEntry, JourneyMetadataType, JourneyRouteEntry, Model},
-    parsing::{
-        ColumnDefinition, ExpectedType, FastRowMatcher, FileParser, ParsedValue, RowDefinition,
-        RowParser,
-        helpers::{
-            i32_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
-            string_from_n_chars_parser,
-        },
+    parsing::helpers::{
+        i32_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
+        string_from_n_chars_parser,
     },
     storage::ResourceStorage,
     utils::{AutoIncrement, create_time_from_value},
@@ -92,33 +82,6 @@ fn row_z_combinator<'a>() -> impl Parser<
     )
 }
 
-fn row_z_parser(input: &str) -> IResult<&str, (i32, String, i32, Option<i32>, Option<i32>)> {
-    let (
-        res,
-        (
-            journey_id,
-            _,
-            transport_company_id,
-            _,
-            transport_variant,
-            _,
-            num_cycles,
-            _,
-            cycle_dura_min,
-        ),
-    ) = row_z_combinator().parse(input)?;
-    Ok((
-        res,
-        (
-            journey_id,
-            transport_company_id,
-            transport_variant,
-            num_cycles,
-            cycle_dura_min,
-        ),
-    ))
-}
-
 /// ## G-lines
 ///
 /// - *G-lines: Reference to the offer category (s. ZUGART file). It includes:
@@ -149,10 +112,6 @@ fn row_g_combinator<'a>() -> impl Parser<
             optional_i32_from_n_digits_parser(7),
         ),
     )
-}
-fn row_g_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>)> {
-    let (res, (offer, _, stop_from_id, _, stop_to_id)) = row_g_combinator().parse(input)?;
-    Ok((res, (offer, stop_from_id, stop_to_id)))
 }
 
 /// ## A VE-lines
@@ -185,10 +144,6 @@ fn row_a_ve_combinator<'a>() -> impl Parser<
             optional_i32_from_n_digits_parser(6),
         ),
     )
-}
-fn row_a_ve_parser(input: &str) -> IResult<&str, (Option<i32>, Option<i32>, Option<i32>)> {
-    let (res, (stop_from_id, _, stop_to_id, _, reference)) = row_a_ve_combinator().parse(input)?;
-    Ok((res, (stop_from_id, stop_to_id, reference)))
 }
 
 /// ## A *-lines
@@ -237,11 +192,6 @@ fn row_a_combinator<'a>() -> impl Parser<
             optional_i32_from_n_digits_parser(6),
         ),
     )
-}
-fn row_a_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>, Option<i32>)> {
-    let (res, (offer, _, stop_from_id, _, stop_to_id, _, reference)) =
-        row_a_combinator().parse(input)?;
-    Ok((res, (offer, stop_from_id, stop_to_id, reference)))
 }
 
 /// ## I-lines
@@ -308,51 +258,6 @@ fn row_i_combinator<'a>() -> impl Parser<
         ),
     )
 }
-fn row_i_parser(
-    input: &str,
-) -> IResult<
-    &str,
-    (
-        String,
-        Option<i32>,
-        Option<i32>,
-        Option<i32>,
-        i32,
-        Option<i32>,
-        Option<i32>,
-    ),
-> {
-    let (
-        res,
-        (
-            info_code,
-            _,
-            stop_from_id,
-            _,
-            stop_to_id,
-            _,
-            validity_ref,
-            _,
-            info_ref,
-            _,
-            departure_time,
-            _,
-            arrival_time,
-        ),
-    ) = row_i_combinator().parse(input)?;
-    Ok((
-        res,
-        (
-            info_code,
-            stop_from_id,
-            stop_to_id,
-            validity_ref,
-            info_ref,
-            departure_time,
-            arrival_time,
-        ),
-    ))
-}
 
 /// ## L-lines
 ///
@@ -404,22 +309,6 @@ fn row_l_combinator<'a>() -> impl Parser<
             optional_i32_from_n_digits_parser(6),
         ),
     )
-}
-fn row_l_parser(
-    input: &str,
-) -> IResult<&str, (String, Option<i32>, Option<i32>, Option<i32>, Option<i32>)> {
-    let (res, (line_info, _, stop_from_id, _, stop_to_id, _, departure_time, _, arrival_time)) =
-        row_l_combinator().parse(input)?;
-    Ok((
-        res,
-        (
-            line_info,
-            stop_from_id,
-            stop_to_id,
-            departure_time,
-            arrival_time,
-        ),
-    ))
 }
 
 /// ## R-lines
@@ -482,48 +371,6 @@ fn row_r_combinator<'a>() -> impl Parser<
     )
 }
 
-fn row_r_parser(
-    input: &str,
-) -> IResult<
-    &str,
-    (
-        String,
-        String,
-        Option<i32>,
-        Option<i32>,
-        Option<i32>,
-        Option<i32>,
-    ),
-> {
-    let (
-        res,
-        (
-            direction,
-            _,
-            ref_direction_code,
-            _,
-            stop_from_id,
-            _,
-            stop_to_id,
-            _,
-            departure_time,
-            _,
-            arrival_time,
-        ),
-    ) = row_r_combinator().parse(input)?;
-    Ok((
-        res.trim(), // res contains the comments that are useful to determine the direction
-        (
-            direction,
-            ref_direction_code,
-            stop_from_id,
-            stop_to_id,
-            departure_time,
-            arrival_time,
-        ),
-    ))
-}
-
 /// ## CI/CO lines
 ///
 /// - *CI/CO lines: It includes:
@@ -578,35 +425,6 @@ fn row_ci_co_combinator<'a>() -> impl Parser<
         char(' '),
         optional_i32_from_n_digits_parser(6),
     )
-}
-fn row_ci_co_parser(
-    input: &str,
-) -> IResult<
-    &str,
-    (
-        &str,
-        i32,
-        Option<i32>,
-        Option<i32>,
-        Option<i32>,
-        Option<i32>,
-    ),
-> {
-    let (
-        res,
-        (ci_co, _, num_minutes, _, stop_from_id, _, stop_to_id, _, departure_time, _, arrival_time),
-    ) = row_ci_co_combinator().parse(input)?;
-    Ok((
-        res,
-        (
-            ci_co,
-            num_minutes,
-            stop_from_id,
-            stop_to_id,
-            departure_time,
-            arrival_time,
-        ),
-    ))
 }
 
 /// ## Journey description
@@ -666,36 +484,327 @@ fn row_journey_description_combinator<'a>() -> impl Parser<
         string_from_n_chars_parser(6),
     )
 }
-fn row_journey_description_parser(
-    input: &str,
-) -> IResult<&str, (i32, String, Option<i32>, Option<i32>, Option<i32>, String)> {
-    let (
-        res,
-        (
-            stop_id,
-            _,
-            stop_name,
-            _,
-            arrival_time,
-            _,
-            departure_time,
-            _,
-            journey_id,
-            _,
-            administration,
+
+fn parse_line(
+    line: &str,
+    data: &Rc<RefCell<Vec<Journey>>>,
+    pk_type_converter: &Rc<RefCell<FxHashSet<JourneyId>>>,
+    auto_increment: &AutoIncrement,
+    transport_types_pk_type_converter: &FxHashMap<String, i32>,
+    attributes_pk_type_converter: &FxHashMap<String, i32>,
+    directions_pk_type_converter: &FxHashMap<String, i32>,
+) -> Result<(), Box<dyn Error>> {
+    let _ = alt((
+        map_res(
+            row_z_combinator(),
+            |(
+                journey_id,
+                _,
+                transport_company_id,
+                _,
+                _transport_variant,
+                _,
+                _num_cycles,
+                _,
+                _cycle_dura_min,
+            )| {
+                let local_data = Rc::clone(data);
+                let id = auto_increment.next();
+
+                pk_type_converter
+                    .borrow_mut()
+                    .insert((journey_id, transport_company_id.to_owned()));
+
+                local_data
+                    .borrow_mut()
+                    .push(Journey::new(id, journey_id, transport_company_id));
+                Ok::<(), Box<dyn Error>>(())
+            },
         ),
-    ) = row_journey_description_combinator().parse(input)?;
-    Ok((
-        res,
-        (
-            stop_id,
-            stop_name,
-            arrival_time,
-            departure_time,
-            journey_id,
-            administration,
+        map_res(
+            row_g_combinator(),
+            |(offer, _, stop_from_id, _, stop_to_id)| {
+                let local_data = Rc::clone(data);
+                let mut local_data = local_data.borrow_mut();
+                let journey = local_data.last_mut().ok_or("Type A row missing.")?;
+                let transport_type_id = *transport_types_pk_type_converter
+                    .get(&offer)
+                    .ok_or("Unknown legacy ID")?;
+
+                journey.add_metadata_entry(
+                    JourneyMetadataType::TransportType,
+                    JourneyMetadataEntry::new(
+                        stop_from_id,
+                        stop_to_id,
+                        Some(transport_type_id),
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                    ),
+                );
+                Ok::<(), Box<dyn Error>>(())
+            },
+        ),
+        map_res(
+            row_a_ve_combinator(),
+            |(stop_from_id, _, stop_to_id, _, bit_field_id)| {
+                let local_data = Rc::clone(data);
+                let mut local_data = local_data.borrow_mut();
+                let journey = local_data.last_mut().ok_or("Type A row missing.")?;
+                journey.add_metadata_entry(
+                    JourneyMetadataType::BitField,
+                    JourneyMetadataEntry::new(
+                        stop_from_id,
+                        stop_to_id,
+                        None,
+                        bit_field_id,
+                        None,
+                        None,
+                        None,
+                        None,
+                    ),
+                );
+                Ok::<(), Box<dyn Error>>(())
+            },
+        ),
+        map_res(
+            row_a_combinator(),
+            |(offer, _, stop_from_id, _, stop_to_id, _, _reference)| {
+                let local_data = Rc::clone(data);
+                let mut local_data = local_data.borrow_mut();
+                let journey = local_data.last_mut().ok_or("Type A row missing.")?;
+                let attribute_id = *attributes_pk_type_converter
+                    .get(&offer)
+                    .ok_or("Unknown legacy ID")?;
+
+                journey.add_metadata_entry(
+                    JourneyMetadataType::Attribute,
+                    JourneyMetadataEntry::new(
+                        stop_from_id,
+                        stop_to_id,
+                        Some(attribute_id),
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                    ),
+                );
+                Ok::<(), Box<dyn Error>>(())
+            },
+        ),
+        map_res(
+            row_i_combinator(),
+            |(
+                info_code,
+                _,
+                stop_from_id,
+                _,
+                stop_to_id,
+                _,
+                validity_ref,
+                _,
+                info_ref,
+                _,
+                departure_time,
+                _,
+                arrival_time,
+            )| {
+                let local_data = Rc::clone(data);
+                let mut local_data = local_data.borrow_mut();
+                let journey = local_data.last_mut().ok_or("Type A row missing.")?;
+                let arrival_time = create_time(arrival_time);
+                let departure_time = create_time(departure_time);
+
+                journey.add_metadata_entry(
+                    JourneyMetadataType::InformationText,
+                    JourneyMetadataEntry::new(
+                        stop_from_id,
+                        stop_to_id,
+                        Some(info_ref),
+                        validity_ref,
+                        departure_time,
+                        arrival_time,
+                        Some(info_code),
+                        None,
+                    ),
+                );
+                Ok::<(), Box<dyn Error>>(())
+            },
+        ),
+        map_res(
+            row_l_combinator(),
+            |(
+                mut line_info,
+                _,
+                stop_from_id,
+                _,
+                stop_to_id,
+                _,
+                departure_time,
+                _,
+                arrival_time,
+            )| {
+                let local_data = Rc::clone(data);
+                let mut local_data = local_data.borrow_mut();
+                let journey = local_data.last_mut().ok_or("Type A row missing.")?;
+                let arrival_time = create_time(arrival_time);
+                let departure_time = create_time(departure_time);
+
+                let line_info_first_char = line_info
+                    .chars()
+                    .next()
+                    .ok_or("Missing line info (the string is empty).")?;
+
+                let (resource_id, extra_field_1) = if line_info_first_char == '#' {
+                    line_info.drain(..line_info_first_char.len_utf8());
+                    (Some(line_info.parse::<i32>()?), None)
+                } else {
+                    (None, Some(line_info))
+                };
+
+                journey.add_metadata_entry(
+                    JourneyMetadataType::Line,
+                    JourneyMetadataEntry::new(
+                        stop_from_id,
+                        stop_to_id,
+                        resource_id,
+                        None,
+                        departure_time,
+                        arrival_time,
+                        extra_field_1,
+                        None,
+                    ),
+                );
+
+                Ok::<(), Box<dyn Error>>(())
+            },
+        ),
+        map_res(
+            row_r_combinator(),
+            |(
+                direction,
+                _,
+                ref_direction_code,
+                _,
+                stop_from_id,
+                _,
+                stop_to_id,
+                _,
+                departure_time,
+                _,
+                arrival_time,
+            )| {
+                let local_data = Rc::clone(data);
+                let mut local_data = local_data.borrow_mut();
+                let journey = local_data.last_mut().ok_or("Type A row missing.")?;
+                let arrival_time = create_time(arrival_time);
+                let departure_time = create_time(departure_time);
+
+                let direction_id = if ref_direction_code.is_empty() {
+                    None
+                } else {
+                    let id = *directions_pk_type_converter
+                        .get(&ref_direction_code)
+                        .ok_or("Unknown legacy ID")?;
+                    Some(id)
+                };
+
+                journey.add_metadata_entry(
+                    JourneyMetadataType::Direction,
+                    JourneyMetadataEntry::new(
+                        stop_from_id,
+                        stop_to_id,
+                        direction_id,
+                        None,
+                        departure_time,
+                        arrival_time,
+                        Some(direction),
+                        None,
+                    ),
+                );
+                Ok::<(), Box<dyn Error>>(())
+            },
+        ),
+        map_res(
+            row_ci_co_combinator(),
+            |(
+                ci_co,
+                _,
+                num_minutes,
+                _,
+                stop_from_id,
+                _,
+                stop_to_id,
+                _,
+                departure_time,
+                _,
+                arrival_time,
+            )| {
+                let local_data = Rc::clone(data);
+                let mut local_data = local_data.borrow_mut();
+                let journey = local_data.last_mut().ok_or("Type A row missing.")?;
+                let arrival_time = create_time(arrival_time);
+                let departure_time = create_time(departure_time);
+
+                let metadata_type = if ci_co == "*CI" {
+                    JourneyMetadataType::ExchangeTimeBoarding
+                } else {
+                    JourneyMetadataType::ExchangeTimeDisembarking
+                };
+
+                journey.add_metadata_entry(
+                    metadata_type,
+                    JourneyMetadataEntry::new(
+                        stop_from_id,
+                        stop_to_id,
+                        None,
+                        None,
+                        departure_time,
+                        arrival_time,
+                        None,
+                        Some(num_minutes),
+                    ),
+                );
+                Ok::<(), Box<dyn Error>>(())
+            },
+        ),
+        map_res(
+            row_journey_description_combinator(),
+            |(
+                stop_id,
+                _,
+                _stop_name,
+                _,
+                arrival_time,
+                _,
+                departure_time,
+                _,
+                _journey_id,
+                _,
+                _administration,
+            )| {
+                let local_data = Rc::clone(data);
+                let mut local_data = local_data.borrow_mut();
+                let journey = local_data.last_mut().ok_or("Type A row missing.")?;
+                let arrival_time = create_time(arrival_time);
+                let departure_time = create_time(departure_time);
+
+                journey.add_route_entry(JourneyRouteEntry::new(
+                    stop_id,
+                    arrival_time,
+                    departure_time,
+                ));
+
+                Ok::<(), Box<dyn Error>>(())
+            },
         ),
     ))
+    .parse(line)
+    .map_err(|e| format!("Failed to parse line '{}': {}", line, e))?;
+    Ok::<(), Box<dyn Error>>(())
 }
 
 pub fn parse(
@@ -715,320 +824,15 @@ pub fn parse(
         .into_iter()
         .filter(|line| !line.trim().is_empty())
         .try_for_each(|line| {
-            let _res = alt((
-                map(
-                    row_z_combinator(),
-                    |(
-                        journey_id,
-                        _,
-                        transport_company_id,
-                        _,
-                        _transport_variant,
-                        _,
-                        _num_cycles,
-                        _,
-                        _cycle_dura_min,
-                    )| {
-                        let local_data = Rc::clone(&data);
-                        let id = auto_increment.next();
-
-                        pk_type_converter
-                            .borrow_mut()
-                            .insert((journey_id, transport_company_id.to_owned()));
-
-                        local_data.borrow_mut().push(Journey::new(
-                            id,
-                            journey_id,
-                            transport_company_id,
-                        ));
-                        Ok::<(), Box<dyn Error>>(())
-                    },
-                ),
-                map(
-                    row_g_combinator(),
-                    |(offer, _, stop_from_id, _, stop_to_id)| {
-                        let local_data = Rc::clone(&data);
-                        let mut local_data = local_data.borrow_mut();
-                        let journey = local_data.last_mut().ok_or("Type A row missing.")?;
-                        let transport_type_id = *transport_types_pk_type_converter
-                            .get(&offer)
-                            .ok_or("Unknown legacy ID")?;
-
-                        journey.add_metadata_entry(
-                            JourneyMetadataType::TransportType,
-                            JourneyMetadataEntry::new(
-                                stop_from_id,
-                                stop_to_id,
-                                Some(transport_type_id),
-                                None,
-                                None,
-                                None,
-                                None,
-                                None,
-                            ),
-                        );
-                        Ok::<(), Box<dyn Error>>(())
-                    },
-                ),
-                map(
-                    row_a_ve_combinator(),
-                    |(stop_from_id, _, stop_to_id, _, bit_field_id)| {
-                        let local_data = Rc::clone(&data);
-                        let mut local_data = local_data.borrow_mut();
-                        let journey = local_data.last_mut().ok_or("Type A row missing.")?;
-                        journey.add_metadata_entry(
-                            JourneyMetadataType::BitField,
-                            JourneyMetadataEntry::new(
-                                stop_from_id,
-                                stop_to_id,
-                                None,
-                                bit_field_id,
-                                None,
-                                None,
-                                None,
-                                None,
-                            ),
-                        );
-                        Ok::<(), Box<dyn Error>>(())
-                    },
-                ),
-                map(
-                    row_a_combinator(),
-                    |(offer, _, stop_from_id, _, stop_to_id, _, _reference)| {
-                        let local_data = Rc::clone(&data);
-                        let mut local_data = local_data.borrow_mut();
-                        let journey = local_data.last_mut().ok_or("Type A row missing.")?;
-                        let attribute_id = *attributes_pk_type_converter
-                            .get(&offer)
-                            .ok_or("Unknown legacy ID")?;
-
-                        journey.add_metadata_entry(
-                            JourneyMetadataType::Attribute,
-                            JourneyMetadataEntry::new(
-                                stop_from_id,
-                                stop_to_id,
-                                Some(attribute_id),
-                                None,
-                                None,
-                                None,
-                                None,
-                                None,
-                            ),
-                        );
-                        Ok::<(), Box<dyn Error>>(())
-                    },
-                ),
-                map(
-                    row_i_combinator(),
-                    |(
-                        info_code,
-                        _,
-                        stop_from_id,
-                        _,
-                        stop_to_id,
-                        _,
-                        validity_ref,
-                        _,
-                        info_ref,
-                        _,
-                        departure_time,
-                        _,
-                        arrival_time,
-                    )| {
-                        let local_data = Rc::clone(&data);
-                        let mut local_data = local_data.borrow_mut();
-                        let journey = local_data.last_mut().ok_or("Type A row missing.")?;
-                        let arrival_time = create_time(arrival_time);
-                        let departure_time = create_time(departure_time);
-
-                        journey.add_metadata_entry(
-                            JourneyMetadataType::InformationText,
-                            JourneyMetadataEntry::new(
-                                stop_from_id,
-                                stop_to_id,
-                                Some(info_ref),
-                                validity_ref,
-                                departure_time,
-                                arrival_time,
-                                Some(info_code),
-                                None,
-                            ),
-                        );
-                        Ok::<(), Box<dyn Error>>(())
-                    },
-                ),
-                map(
-                    row_l_combinator(),
-                    |(
-                        mut line_info,
-                        _,
-                        stop_from_id,
-                        _,
-                        stop_to_id,
-                        _,
-                        departure_time,
-                        _,
-                        arrival_time,
-                    )| {
-                        let local_data = Rc::clone(&data);
-                        let mut local_data = local_data.borrow_mut();
-                        let journey = local_data.last_mut().ok_or("Type A row missing.")?;
-                        let arrival_time = create_time(arrival_time);
-                        let departure_time = create_time(departure_time);
-
-                        let line_info_first_char = line_info
-                            .chars()
-                            .next()
-                            .ok_or("Missing line info (the string is empty).")?;
-
-                        let (resource_id, extra_field_1) = if line_info_first_char == '#' {
-                            line_info.drain(..line_info_first_char.len_utf8());
-                            (Some(line_info.parse::<i32>()?), None)
-                        } else {
-                            (None, Some(line_info))
-                        };
-
-                        journey.add_metadata_entry(
-                            JourneyMetadataType::Line,
-                            JourneyMetadataEntry::new(
-                                stop_from_id,
-                                stop_to_id,
-                                resource_id,
-                                None,
-                                departure_time,
-                                arrival_time,
-                                extra_field_1,
-                                None,
-                            ),
-                        );
-
-                        Ok::<(), Box<dyn Error>>(())
-                    },
-                ),
-                // set_direction(values, journey, directions_pk_type_converter)?;
-                map(
-                    row_r_combinator(),
-                    |(
-                        direction,
-                        _,
-                        ref_direction_code,
-                        _,
-                        stop_from_id,
-                        _,
-                        stop_to_id,
-                        _,
-                        departure_time,
-                        _,
-                        arrival_time,
-                    )| {
-                        let local_data = Rc::clone(&data);
-                        let mut local_data = local_data.borrow_mut();
-                        let journey = local_data.last_mut().ok_or("Type A row missing.")?;
-                        let arrival_time = create_time(arrival_time);
-                        let departure_time = create_time(departure_time);
-
-                        let direction_id = if ref_direction_code.is_empty() {
-                            None
-                        } else {
-                            let id = *directions_pk_type_converter
-                                .get(&ref_direction_code)
-                                .ok_or("Unknown legacy ID")?;
-                            Some(id)
-                        };
-
-                        journey.add_metadata_entry(
-                            JourneyMetadataType::Direction,
-                            JourneyMetadataEntry::new(
-                                stop_from_id,
-                                stop_to_id,
-                                direction_id,
-                                None,
-                                departure_time,
-                                arrival_time,
-                                Some(direction),
-                                None,
-                            ),
-                        );
-                        Ok::<(), Box<dyn Error>>(())
-                    },
-                ),
-                // set_boarding_or_disembarking_exchange_time(values, journey);
-                map(
-                    row_ci_co_combinator(),
-                    |(
-                        ci_co,
-                        _,
-                        num_minutes,
-                        _,
-                        stop_from_id,
-                        _,
-                        stop_to_id,
-                        _,
-                        departure_time,
-                        _,
-                        arrival_time,
-                    )| {
-                        let local_data = Rc::clone(&data);
-                        let mut local_data = local_data.borrow_mut();
-                        let journey = local_data.last_mut().ok_or("Type A row missing.")?;
-                        let arrival_time = create_time(arrival_time);
-                        let departure_time = create_time(departure_time);
-
-                        let metadata_type = if ci_co == "*CI" {
-                            JourneyMetadataType::ExchangeTimeBoarding
-                        } else {
-                            JourneyMetadataType::ExchangeTimeDisembarking
-                        };
-
-                        journey.add_metadata_entry(
-                            metadata_type,
-                            JourneyMetadataEntry::new(
-                                stop_from_id,
-                                stop_to_id,
-                                None,
-                                None,
-                                departure_time,
-                                arrival_time,
-                                None,
-                                Some(num_minutes),
-                            ),
-                        );
-                        Ok::<(), Box<dyn Error>>(())
-                    },
-                ),
-                map(
-                    row_journey_description_combinator(),
-                    |(
-                        stop_id,
-                        _,
-                        _stop_name,
-                        _,
-                        arrival_time,
-                        _,
-                        departure_time,
-                        _,
-                        _journey_id,
-                        _,
-                        _administration,
-                    )| {
-                        let local_data = Rc::clone(&data);
-                        let mut local_data = local_data.borrow_mut();
-                        let journey = local_data.last_mut().ok_or("Type A row missing.")?;
-                        let arrival_time = create_time(arrival_time);
-                        let departure_time = create_time(departure_time);
-
-                        journey.add_route_entry(JourneyRouteEntry::new(
-                            stop_id,
-                            arrival_time,
-                            departure_time,
-                        ));
-
-                        Ok::<(), Box<dyn Error>>(())
-                    },
-                ),
-            ))
-            .parse(&line);
-            Ok::<(), Box<dyn Error>>(())
+            parse_line(
+                &line,
+                &data,
+                &pk_type_converter,
+                &auto_increment,
+                transport_types_pk_type_converter,
+                attributes_pk_type_converter,
+                directions_pk_type_converter,
+            )
         })?;
 
     let data =
@@ -1039,367 +843,6 @@ pub fn parse(
 
     let data = Journey::vec_to_map(data);
     Ok((ResourceStorage::new(data), pk_type_converter))
-}
-
-// ------------------------------------------------------------------------------------------------
-// --- Data Processing Functions
-// ------------------------------------------------------------------------------------------------
-
-// RowA parsing
-
-fn row_a_from_parsed_values(mut values: Vec<ParsedValue>) -> (i32, String) {
-    let legacy_id: i32 = values.remove(0).into();
-    let administration: String = values.remove(0).into();
-    (legacy_id, administration)
-}
-
-fn create_instance(
-    values: Vec<ParsedValue>,
-    auto_increment: &AutoIncrement,
-    pk_type_converter: &mut FxHashSet<JourneyId>,
-) -> Journey {
-    let (legacy_id, administration) = row_a_from_parsed_values(values);
-
-    let id = auto_increment.next();
-
-    pk_type_converter.insert((legacy_id, administration.to_owned()));
-    Journey::new(id, legacy_id, administration)
-}
-
-// RowB parsing
-
-fn row_b_from_parsed_values(mut values: Vec<ParsedValue>) -> (String, Option<i32>, Option<i32>) {
-    let designation: String = values.remove(0).into();
-    let from_stop_id: Option<i32> = values.remove(0).into();
-    let until_stop_id: Option<i32> = values.remove(0).into();
-    (designation, from_stop_id, until_stop_id)
-}
-
-fn set_transport_type(
-    values: Vec<ParsedValue>,
-    journey: &mut Journey,
-    transport_types_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<(), Box<dyn Error>> {
-    let (designation, from_stop_id, until_stop_id) = row_b_from_parsed_values(values);
-    let transport_type_id = *transport_types_pk_type_converter
-        .get(&designation)
-        .ok_or("Unknown legacy ID")?;
-
-    journey.add_metadata_entry(
-        JourneyMetadataType::TransportType,
-        JourneyMetadataEntry::new(
-            from_stop_id,
-            until_stop_id,
-            Some(transport_type_id),
-            None,
-            None,
-            None,
-            None,
-            None,
-        ),
-    );
-
-    Ok(())
-}
-
-// RowC parsing
-
-fn row_c_from_parsed_values(
-    mut values: Vec<ParsedValue>,
-) -> (Option<i32>, Option<i32>, Option<i32>) {
-    let from_stop_id: Option<i32> = values.remove(0).into();
-    let until_stop_id: Option<i32> = values.remove(0).into();
-    let bit_field_id: Option<i32> = values.remove(0).into();
-    (from_stop_id, until_stop_id, bit_field_id)
-}
-
-fn set_bit_field(values: Vec<ParsedValue>, journey: &mut Journey) {
-    let (from_stop_id, until_stop_id, bit_field_id) = row_c_from_parsed_values(values);
-    journey.add_metadata_entry(
-        JourneyMetadataType::BitField,
-        JourneyMetadataEntry::new(
-            from_stop_id,
-            until_stop_id,
-            None,
-            bit_field_id,
-            None,
-            None,
-            None,
-            None,
-        ),
-    );
-}
-
-// Parsing RowD
-
-fn row_d_from_parsed_values(mut values: Vec<ParsedValue>) -> (String, Option<i32>, Option<i32>) {
-    let designation: String = values.remove(0).into();
-    let from_stop_id: Option<i32> = values.remove(0).into();
-    let until_stop_id: Option<i32> = values.remove(0).into();
-    (designation, from_stop_id, until_stop_id)
-}
-
-fn add_attribute(
-    values: Vec<ParsedValue>,
-    journey: &mut Journey,
-    attributes_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<(), Box<dyn Error>> {
-    let (designation, from_stop_id, until_stop_id) = row_d_from_parsed_values(values);
-
-    let attribute_id = *attributes_pk_type_converter
-        .get(&designation)
-        .ok_or("Unknown legacy ID")?;
-
-    journey.add_metadata_entry(
-        JourneyMetadataType::Attribute,
-        JourneyMetadataEntry::new(
-            from_stop_id,
-            until_stop_id,
-            Some(attribute_id),
-            None,
-            None,
-            None,
-            None,
-            None,
-        ),
-    );
-
-    Ok(())
-}
-
-// Parsing RowE
-
-fn row_e_from_parsed_values(
-    mut values: Vec<ParsedValue>,
-) -> (
-    String,
-    Option<i32>,
-    Option<i32>,
-    Option<i32>,
-    i32,
-    Option<i32>,
-    Option<i32>,
-) {
-    let code: String = values.remove(0).into();
-    let from_stop_id: Option<i32> = values.remove(0).into();
-    let until_stop_id: Option<i32> = values.remove(0).into();
-    let bit_field_id: Option<i32> = values.remove(0).into();
-    let information_text_id: i32 = values.remove(0).into();
-    let departure_time: Option<i32> = values.remove(0).into();
-    let arrival_time: Option<i32> = values.remove(0).into();
-    (
-        code,
-        from_stop_id,
-        until_stop_id,
-        bit_field_id,
-        information_text_id,
-        departure_time,
-        arrival_time,
-    )
-}
-
-fn add_information_text(values: Vec<ParsedValue>, journey: &mut Journey) {
-    let (
-        code,
-        from_stop_id,
-        until_stop_id,
-        bit_field_id,
-        information_text_id,
-        departure_time,
-        arrival_time,
-    ) = row_e_from_parsed_values(values);
-    let arrival_time = create_time(arrival_time);
-    let departure_time = create_time(departure_time);
-
-    journey.add_metadata_entry(
-        JourneyMetadataType::InformationText,
-        JourneyMetadataEntry::new(
-            from_stop_id,
-            until_stop_id,
-            Some(information_text_id),
-            bit_field_id,
-            departure_time,
-            arrival_time,
-            Some(code),
-            None,
-        ),
-    );
-}
-
-// Parsing RowF
-
-fn row_f_from_parsed_values(
-    mut values: Vec<ParsedValue>,
-) -> (String, Option<i32>, Option<i32>, Option<i32>, Option<i32>) {
-    let line_designation: String = values.remove(0).into();
-    let from_stop_id: Option<i32> = values.remove(0).into();
-    let until_stop_id: Option<i32> = values.remove(0).into();
-    let departure_time: Option<i32> = values.remove(0).into();
-    let arrival_time: Option<i32> = values.remove(0).into();
-
-    (
-        line_designation,
-        from_stop_id,
-        until_stop_id,
-        departure_time,
-        arrival_time,
-    )
-}
-
-fn set_line(values: Vec<ParsedValue>, journey: &mut Journey) -> Result<(), Box<dyn Error>> {
-    let (line_designation, from_stop_id, until_stop_id, departure_time, arrival_time) =
-        row_f_from_parsed_values(values);
-    let arrival_time = create_time(arrival_time);
-    let departure_time = create_time(departure_time);
-
-    let line_designation_first_char = line_designation
-        .chars()
-        .next()
-        .ok_or("Missing designation")?;
-    let (resource_id, extra_field_1) = if line_designation_first_char == '#' {
-        (Some(line_designation[1..].parse::<i32>()?), None)
-    } else {
-        (None, Some(line_designation))
-    };
-
-    journey.add_metadata_entry(
-        JourneyMetadataType::Line,
-        JourneyMetadataEntry::new(
-            from_stop_id,
-            until_stop_id,
-            resource_id,
-            None,
-            departure_time,
-            arrival_time,
-            extra_field_1,
-            None,
-        ),
-    );
-
-    Ok(())
-}
-
-// Parsing RowG
-
-fn row_g_from_parsed_values(
-    mut values: Vec<ParsedValue>,
-) -> (
-    String,
-    String,
-    Option<i32>,
-    Option<i32>,
-    Option<i32>,
-    Option<i32>,
-) {
-    let direction_type: String = values.remove(0).into();
-    let direction_id: String = values.remove(0).into();
-    let from_stop_id: Option<i32> = values.remove(0).into();
-    let until_stop_id: Option<i32> = values.remove(0).into();
-    let departure_time: Option<i32> = values.remove(0).into();
-    let arrival_time: Option<i32> = values.remove(0).into();
-
-    (
-        direction_type,
-        direction_id,
-        from_stop_id,
-        until_stop_id,
-        departure_time,
-        arrival_time,
-    )
-}
-
-fn set_direction(
-    values: Vec<ParsedValue>,
-    journey: &mut Journey,
-    directions_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<(), Box<dyn Error>> {
-    let (direction_type, direction_id, from_stop_id, until_stop_id, departure_time, arrival_time) =
-        row_g_from_parsed_values(values);
-    let arrival_time = create_time(arrival_time);
-    let departure_time = create_time(departure_time);
-
-    let direction_id = if direction_id.is_empty() {
-        None
-    } else {
-        let id = *directions_pk_type_converter
-            .get(&direction_id)
-            .ok_or("Unknown legacy ID")?;
-        Some(id)
-    };
-
-    journey.add_metadata_entry(
-        JourneyMetadataType::Direction,
-        JourneyMetadataEntry::new(
-            from_stop_id,
-            until_stop_id,
-            direction_id,
-            None,
-            departure_time,
-            arrival_time,
-            Some(direction_type),
-            None,
-        ),
-    );
-
-    Ok(())
-}
-
-// Parsing RowH
-
-fn row_h_from_parsed_values(
-    mut values: Vec<ParsedValue>,
-) -> (String, i32, Option<i32>, Option<i32>) {
-    let ci_co: String = values.remove(0).into();
-    let exchange_time: i32 = values.remove(0).into();
-    let from_stop_id: Option<i32> = values.remove(0).into();
-    let until_stop_id: Option<i32> = values.remove(0).into();
-
-    (ci_co, exchange_time, from_stop_id, until_stop_id)
-}
-
-fn set_boarding_or_disembarking_exchange_time(values: Vec<ParsedValue>, journey: &mut Journey) {
-    let (ci_co, exchange_time, from_stop_id, until_stop_id) = row_h_from_parsed_values(values);
-
-    let metadata_type = if ci_co == "*CI" {
-        JourneyMetadataType::ExchangeTimeBoarding
-    } else {
-        JourneyMetadataType::ExchangeTimeDisembarking
-    };
-
-    journey.add_metadata_entry(
-        metadata_type,
-        JourneyMetadataEntry::new(
-            from_stop_id,
-            until_stop_id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(exchange_time),
-        ),
-    );
-}
-
-// Parsing RowI
-
-fn row_i_from_parsed_values(mut values: Vec<ParsedValue>) -> (i32, Option<i32>, Option<i32>) {
-    let stop_id: i32 = values.remove(0).into();
-    let arrival_time: Option<i32> = values.remove(0).into();
-    let departure_time: Option<i32> = values.remove(0).into();
-    (stop_id, arrival_time, departure_time)
-}
-
-fn add_route_entry(values: Vec<ParsedValue>, journey: &mut Journey) {
-    let (stop_id, arrival_time, departure_time) = row_i_from_parsed_values(values);
-    let arrival_time = create_time(arrival_time);
-    let departure_time = create_time(departure_time);
-
-    journey.add_route_entry(JourneyRouteEntry::new(
-        stop_id,
-        arrival_time,
-        departure_time,
-    ));
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -1417,151 +860,16 @@ fn create_time(time: Option<i32>) -> Option<NaiveTime> {
 
 #[cfg(test)]
 mod tests {
+    use crate::parsing::tests::get_json_values;
+
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     //use crate::parsing::tests::get_json_values;
+    use nom::IResult;
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn parsing_rows_v207() {
-        let rows = vec![
-            "*Z 000003 000011   101                                     % -- 37649518927 --"
-                .to_string(),
-            "*G ICE 8500090 8503000                                     %".to_string(),
-            "*A VE 8500090 8503000 281004                               %".to_string(),
-            "*A VR 8500090 8503000                                      %".to_string(),
-            "*A WR 8500090 8503000                                      %".to_string(),
-            "*I JY                        000000000                     %".to_string(),
-            "*R H                                                       %".to_string(),
-            "8500090 Basel Bad Bf                 00740                 %".to_string(),
-            "8500010 Basel SBB             00748  00806                 %".to_string(),
-            "0000175 Hauenstein-Basistunn -00833 -00833                 %".to_string(),
-            "8503000 Zürich HB             00900                        %".to_string(),
-        ];
-        let parser = FileParser {
-            row_parser: journey_row_parser(),
-            rows: rows.clone(),
-        };
-        let mut parser_iterator = parser.parse();
-
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowA as i32);
-            let (legacy_id, administration) = row_a_from_parsed_values(parsed_values);
-            assert_eq!(3, legacy_id);
-            assert_eq!("000011", &administration);
-        }
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowB as i32);
-            let (designation, from_stop_id, until_stop_id) =
-                row_b_from_parsed_values(parsed_values);
-            assert_eq!("ICE", &designation);
-            assert_eq!(Some(8500090), from_stop_id);
-            assert_eq!(Some(8503000), until_stop_id);
-        }
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowC as i32);
-            let (from_stop_id, until_stop_id, bit_field_id) =
-                row_c_from_parsed_values(parsed_values);
-            assert_eq!(Some(8500090), from_stop_id);
-            assert_eq!(Some(8503000), until_stop_id);
-            assert_eq!(Some(281004), bit_field_id);
-        }
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowD as i32);
-            let (designation, from_stop_id, until_stop_id) =
-                row_d_from_parsed_values(parsed_values);
-            assert_eq!("VR", &designation);
-            assert_eq!(Some(8500090), from_stop_id);
-            assert_eq!(Some(8503000), until_stop_id);
-        }
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowD as i32);
-            let (designation, from_stop_id, until_stop_id) =
-                row_d_from_parsed_values(parsed_values);
-            assert_eq!("WR", &designation);
-            assert_eq!(Some(8500090), from_stop_id);
-            assert_eq!(Some(8503000), until_stop_id);
-        }
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowE as i32);
-            let (
-                code,
-                from_stop_id,
-                until_stop_id,
-                bit_field_id,
-                information_text_id,
-                departure_time,
-                arrival_time,
-            ) = row_e_from_parsed_values(parsed_values);
-            assert_eq!("JY", &code);
-            assert_eq!(None, from_stop_id);
-            assert_eq!(None, until_stop_id);
-            assert_eq!(None, bit_field_id);
-            assert_eq!(0, information_text_id);
-            assert_eq!(None, departure_time);
-            assert_eq!(None, arrival_time);
-        }
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowG as i32);
-            let (
-                direction_type,
-                direction_id,
-                from_stop_id,
-                until_stop_id,
-                departure_time,
-                arrival_time,
-            ) = row_g_from_parsed_values(parsed_values);
-            // "*R H                                                       %".to_string(),
-            assert_eq!("H", &direction_type);
-            assert_eq!("", &direction_id);
-            assert_eq!(None, from_stop_id);
-            assert_eq!(None, until_stop_id);
-            assert_eq!(None, departure_time);
-            assert_eq!(None, arrival_time);
-        }
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowI as i32);
-            let (stop_id, arrival_time, departure_time) = row_i_from_parsed_values(parsed_values);
-            assert_eq!(8500090, stop_id);
-            assert_eq!(None, arrival_time);
-            assert_eq!(Some(740), departure_time);
-        }
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowI as i32);
-            let (stop_id, arrival_time, departure_time) = row_i_from_parsed_values(parsed_values);
-            assert_eq!(8500010, stop_id);
-            assert_eq!(Some(748), arrival_time);
-            assert_eq!(Some(806), departure_time);
-        }
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowI as i32);
-            let (stop_id, arrival_time, departure_time) = row_i_from_parsed_values(parsed_values);
-            assert_eq!(175, stop_id);
-            assert_eq!(Some(-833), arrival_time);
-            assert_eq!(Some(-833), departure_time);
-        }
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowI as i32);
-            let (stop_id, arrival_time, departure_time) = row_i_from_parsed_values(parsed_values);
-            assert_eq!(8503000, stop_id);
-            assert_eq!(Some(900), arrival_time);
-            assert_eq!(None, departure_time);
-        }
-    }
-
-    #[test]
-    fn parsing_rows_alt_v207() {
+    fn parsing_rows() {
         let rows = vec![
             "*Z 002359 000011   101                                     % -- 37649518273 --"
                 .to_string(),
@@ -1577,145 +885,184 @@ mod tests {
             "8508008 Herzogenbuchsee       00704  00705                 %".to_string(),
             "8509000 Chur                  00948                        %".to_string(),
         ];
-        let parser = FileParser {
-            row_parser: journey_row_parser(),
-            rows: rows.clone(),
-        };
-        let mut parser_iterator = parser.parse();
+        let auto_increment = AutoIncrement::new();
+        let data = Rc::new(RefCell::new(Vec::new()));
+        let pk_type_converter = Rc::new(RefCell::new(FxHashSet::default()));
+        let mut transport_types_pk_type_converter = FxHashMap::<String, i32>::default();
+        transport_types_pk_type_converter.insert("IR".to_string(), 100);
+        let mut attributes_pk_type_converter = FxHashMap::<String, i32>::default();
+        attributes_pk_type_converter.insert("FS".to_string(), 100);
+        let directions_pk_type_converter = FxHashMap::<String, i32>::default();
 
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowA as i32);
-            let (legacy_id, administration) = row_a_from_parsed_values(parsed_values);
-            assert_eq!(2359, legacy_id);
-            assert_eq!("000011", &administration);
+        for line in rows {
+            parse_line(
+                &line,
+                &data,
+                &pk_type_converter,
+                &auto_increment,
+                &transport_types_pk_type_converter,
+                &attributes_pk_type_converter,
+                &directions_pk_type_converter,
+            )
+            .unwrap();
         }
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowB as i32);
-            let (designation, from_stop_id, until_stop_id) =
-                row_b_from_parsed_values(parsed_values);
-            assert_eq!("IR", &designation);
-            assert_eq!(Some(8507000), from_stop_id);
-            assert_eq!(Some(8509000), until_stop_id);
-        }
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowC as i32);
-            let (from_stop_id, until_stop_id, bit_field_id) =
-                row_c_from_parsed_values(parsed_values);
-            assert_eq!(Some(8507000), from_stop_id);
-            assert_eq!(Some(8509000), until_stop_id);
-            assert_eq!(Some(348508), bit_field_id);
-        }
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowD as i32);
-            let (designation, from_stop_id, until_stop_id) =
-                row_d_from_parsed_values(parsed_values);
-            assert_eq!("FS", &designation);
-            assert_eq!(Some(8507000), from_stop_id);
-            assert_eq!(Some(8509000), until_stop_id);
-        }
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowE as i32);
-            let (
-                code,
-                from_stop_id,
-                until_stop_id,
-                bit_field_id,
-                information_text_id,
-                departure_time,
-                arrival_time,
-            ) = row_e_from_parsed_values(parsed_values);
-            assert_eq!("JY", &code);
-            assert_eq!(None, from_stop_id);
-            assert_eq!(None, until_stop_id);
-            assert_eq!(None, bit_field_id);
-            assert_eq!(1370, information_text_id);
-            assert_eq!(None, departure_time);
-            assert_eq!(None, arrival_time);
-        }
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowF as i32);
-            let (line_designation, from_stop_id, until_stop_id, departure_time, arrival_time) =
-                row_f_from_parsed_values(parsed_values);
-            assert_eq!("35", &line_designation);
-            assert_eq!(Some(8507000), from_stop_id);
-            assert_eq!(Some(8509000), until_stop_id);
-            assert_eq!(None, departure_time);
-            assert_eq!(None, arrival_time);
-        }
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowG as i32);
-            let (
-                direction_type,
-                direction_id,
-                from_stop_id,
-                until_stop_id,
-                departure_time,
-                arrival_time,
-            ) = row_g_from_parsed_values(parsed_values);
-            assert_eq!("H", &direction_type);
-            assert_eq!("", &direction_id);
-            assert_eq!(None, from_stop_id);
-            assert_eq!(None, until_stop_id);
-            assert_eq!(None, departure_time);
-            assert_eq!(None, arrival_time);
-        }
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowH as i32);
-            let (ci_co, exchange_time, from_stop_id, until_stop_id) =
-                row_h_from_parsed_values(parsed_values);
 
-            assert_eq!("*CI", &ci_co);
-            assert_eq!(2, exchange_time);
-            assert_eq!(Some(8507000), from_stop_id);
-            assert_eq!(Some(8507000), until_stop_id);
-        }
-        // "8509000 Chur                  00948                        %".to_string(),
+        // First row (id: 1)
+        let reference = r#"
         {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowI as i32);
-            let (stop_id, arrival_time, departure_time) = row_i_from_parsed_values(parsed_values);
-            assert_eq!(8507000, stop_id);
-            assert_eq!(None, arrival_time);
-            assert_eq!(Some(638), departure_time);
-        }
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowI as i32);
-            let (stop_id, arrival_time, departure_time) = row_i_from_parsed_values(parsed_values);
-            assert_eq!(8508005, stop_id);
-            assert_eq!(Some(652), arrival_time);
-            assert_eq!(Some(653), departure_time);
-        }
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowI as i32);
-            let (stop_id, arrival_time, departure_time) = row_i_from_parsed_values(parsed_values);
-            assert_eq!(8508008, stop_id);
-            assert_eq!(Some(704), arrival_time);
-            assert_eq!(Some(705), departure_time);
-        }
-        {
-            let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-            assert_eq!(id, RowType::RowI as i32);
-            let (stop_id, arrival_time, departure_time) = row_i_from_parsed_values(parsed_values);
-            assert_eq!(8509000, stop_id);
-            assert_eq!(Some(948), arrival_time);
-            assert_eq!(None, departure_time);
-        }
+          "id": 1,
+          "legacy_id": 2359,
+          "administration": "000011",
+          "metadata": {
+            "Attribute": [
+              {
+                "from_stop_id": 8507000,
+                "until_stop_id": 8509000,
+                "resource_id": 100,
+                "bit_field_id": null,
+                "departure_time": null,
+                "arrival_time": null,
+                "extra_field_1": null,
+                "extra_field_2": null
+              }
+            ],
+            "TransportType": [
+              {
+                "from_stop_id": 8507000,
+                "until_stop_id": 8509000,
+                "resource_id": 100,
+                "bit_field_id": null,
+                "departure_time": null,
+                "arrival_time": null,
+                "extra_field_1": null,
+                "extra_field_2": null
+              }
+            ],
+            "InformationText": [
+              {
+                "from_stop_id": null,
+                "until_stop_id": null,
+                "resource_id": 1370,
+                "bit_field_id": null,
+                "departure_time": null,
+                "arrival_time": null,
+                "extra_field_1": "JY",
+                "extra_field_2": null
+              }
+            ],
+            "BitField": [
+              {
+                "from_stop_id": 8507000,
+                "until_stop_id": 8509000,
+                "resource_id": null,
+                "bit_field_id": 348508,
+                "departure_time": null,
+                "arrival_time": null,
+                "extra_field_1": null,
+                "extra_field_2": null
+              }
+            ],
+            "ExchangeTimeBoarding": [
+              {
+                "from_stop_id": 8507000,
+                "until_stop_id": 8507000,
+                "resource_id": null,
+                "bit_field_id": null,
+                "departure_time": null,
+                "arrival_time": null,
+                "extra_field_1": null,
+                "extra_field_2": 2
+              }
+            ],
+            "Line": [
+              {
+                "from_stop_id": 8507000,
+                "until_stop_id": 8509000,
+                "resource_id": null,
+                "bit_field_id": null,
+                "departure_time": null,
+                "arrival_time": null,
+                "extra_field_1": "35",
+                "extra_field_2": null
+              }
+            ],
+            "Direction": [
+              {
+                "from_stop_id": null,
+                "until_stop_id": null,
+                "resource_id": null,
+                "bit_field_id": null,
+                "departure_time": null,
+                "arrival_time": null,
+                "extra_field_1": "H",
+                "extra_field_2": null
+              }
+            ]
+          },
+          "route": [
+            {
+              "stop_id": 8507000,
+              "arrival_time": null,
+              "departure_time": "06:38:00"
+            },
+            {
+              "stop_id": 8508005,
+              "arrival_time": "06:52:00",
+              "departure_time": "06:53:00"
+            },
+            {
+              "stop_id": 8508008,
+              "arrival_time": "07:04:00",
+              "departure_time": "07:05:00"
+            },
+            {
+              "stop_id": 8509000,
+              "arrival_time": "09:48:00",
+              "departure_time": null
+            }
+          ]
+        }"#;
+
+        let data = RefCell::<Vec<Journey>>::into_inner(
+            Rc::into_inner(data).ok_or("Unable to get data").unwrap(),
+        );
+        let (attribute, reference) = get_json_values(&data[0], reference).unwrap();
+        assert_eq!(attribute, reference);
     }
 
     mod row_z {
         // Note this useful idiom: importing names from outer (for mod tests) scope.
         use super::*;
         use pretty_assertions::assert_eq;
+
+        fn row_z_parser(
+            input: &str,
+        ) -> IResult<&str, (i32, String, i32, Option<i32>, Option<i32>)> {
+            let (
+                res,
+                (
+                    journey_id,
+                    _,
+                    transport_company_id,
+                    _,
+                    transport_variant,
+                    _,
+                    num_cycles,
+                    _,
+                    cycle_dura_min,
+                ),
+            ) = row_z_combinator().parse(input)?;
+            Ok((
+                res,
+                (
+                    journey_id,
+                    transport_company_id,
+                    transport_variant,
+                    num_cycles,
+                    cycle_dura_min,
+                ),
+            ))
+        }
 
         #[test]
         fn success_no_options() {
@@ -1759,6 +1106,11 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
+        fn row_g_parser(input: &str) -> IResult<&str, (String, Option<i32>, Option<i32>)> {
+            let (res, (offer, _, stop_from_id, _, stop_to_id)) = row_g_combinator().parse(input)?;
+            Ok((res, (offer, stop_from_id, stop_to_id)))
+        }
+
         #[test]
         fn success_with_options() {
             let input = "*G ICE 8500090 8503000 % Angebotskategorie ICE gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000";
@@ -1793,6 +1145,12 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
+        fn row_a_ve_parser(input: &str) -> IResult<&str, (Option<i32>, Option<i32>, Option<i32>)> {
+            let (res, (stop_from_id, _, stop_to_id, _, reference)) =
+                row_a_ve_combinator().parse(input)?;
+            Ok((res, (stop_from_id, stop_to_id, reference)))
+        }
+
         #[test]
         fn success_with_options() {
             let input = "*A VE 8500090 8503000 001417 % Ab HS-Nr. 8500090 bis HS-Nr. 8503000, gelten die Gültigkeitstage 001417 (Bitfeld für bspw. alle Montage)";
@@ -1826,6 +1184,14 @@ mod tests {
         // Note this useful idiom: importing names from outer (for mod tests) scope.
         use super::*;
         use pretty_assertions::assert_eq;
+
+        fn row_a_parser(
+            input: &str,
+        ) -> IResult<&str, (String, Option<i32>, Option<i32>, Option<i32>)> {
+            let (res, (offer, _, stop_from_id, _, stop_to_id, _, reference)) =
+                row_a_combinator().parse(input)?;
+            Ok((res, (offer, stop_from_id, stop_to_id, reference)))
+        }
 
         #[test]
         fn success_with_partial_options1() {
@@ -1877,6 +1243,52 @@ mod tests {
         // Note this useful idiom: importing names from outer (for mod tests) scope.
         use super::*;
         use pretty_assertions::assert_eq;
+
+        fn row_i_parser(
+            input: &str,
+        ) -> IResult<
+            &str,
+            (
+                String,
+                Option<i32>,
+                Option<i32>,
+                Option<i32>,
+                i32,
+                Option<i32>,
+                Option<i32>,
+            ),
+        > {
+            let (
+                res,
+                (
+                    info_code,
+                    _,
+                    stop_from_id,
+                    _,
+                    stop_to_id,
+                    _,
+                    validity_ref,
+                    _,
+                    info_ref,
+                    _,
+                    departure_time,
+                    _,
+                    arrival_time,
+                ),
+            ) = row_i_combinator().parse(input)?;
+            Ok((
+                res,
+                (
+                    info_code,
+                    stop_from_id,
+                    stop_to_id,
+                    validity_ref,
+                    info_ref,
+                    departure_time,
+                    arrival_time,
+                ),
+            ))
+        }
 
         #[test]
         fn success_with_partial_options() {
@@ -1940,6 +1352,25 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
+        fn row_l_parser(
+            input: &str,
+        ) -> IResult<&str, (String, Option<i32>, Option<i32>, Option<i32>, Option<i32>)> {
+            let (
+                res,
+                (line_info, _, stop_from_id, _, stop_to_id, _, departure_time, _, arrival_time),
+            ) = row_l_combinator().parse(input)?;
+            Ok((
+                res,
+                (
+                    line_info,
+                    stop_from_id,
+                    stop_to_id,
+                    departure_time,
+                    arrival_time,
+                ),
+            ))
+        }
+
         #[test]
         fn success_with_options() {
             let input = "*L 8        8578157 8589334  01126  01159 % Linie 8 ab HS-Nr. 8578157 bis HS-Nr. 8589334 Abfahrt 11:26 Ankunft 11:59";
@@ -1990,6 +1421,48 @@ mod tests {
         // Note this useful idiom: importing names from outer (for mod tests) scope.
         use super::*;
         use pretty_assertions::assert_eq;
+
+        fn row_r_parser(
+            input: &str,
+        ) -> IResult<
+            &str,
+            (
+                String,
+                String,
+                Option<i32>,
+                Option<i32>,
+                Option<i32>,
+                Option<i32>,
+            ),
+        > {
+            let (
+                res,
+                (
+                    direction,
+                    _,
+                    ref_direction_code,
+                    _,
+                    stop_from_id,
+                    _,
+                    stop_to_id,
+                    _,
+                    departure_time,
+                    _,
+                    arrival_time,
+                ),
+            ) = row_r_combinator().parse(input)?;
+            Ok((
+                res.trim(), // res contains the comments that are useful to determine the direction
+                (
+                    direction,
+                    ref_direction_code,
+                    stop_from_id,
+                    stop_to_id,
+                    departure_time,
+                    arrival_time,
+                ),
+            ))
+        }
 
         #[test]
         fn success_with_options() {
@@ -2048,6 +1521,48 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
+        fn row_ci_co_parser(
+            input: &str,
+        ) -> IResult<
+            &str,
+            (
+                &str,
+                i32,
+                Option<i32>,
+                Option<i32>,
+                Option<i32>,
+                Option<i32>,
+            ),
+        > {
+            let (
+                res,
+                (
+                    ci_co,
+                    _,
+                    num_minutes,
+                    _,
+                    stop_from_id,
+                    _,
+                    stop_to_id,
+                    _,
+                    departure_time,
+                    _,
+                    arrival_time,
+                ),
+            ) = row_ci_co_combinator().parse(input)?;
+            Ok((
+                res,
+                (
+                    ci_co,
+                    num_minutes,
+                    stop_from_id,
+                    stop_to_id,
+                    departure_time,
+                    arrival_time,
+                ),
+            ))
+        }
+
         #[test]
         fn success_ci_options() {
             let input = "*CI 0002 8507000 8507000                                   % Check-in 2 Min. ab HS-Nr. 8507000 bis HS-Nr. 8507000";
@@ -2086,6 +1601,38 @@ mod tests {
     }
 
     mod row_journey_description {
+
+        fn row_journey_description_parser(
+            input: &str,
+        ) -> IResult<&str, (i32, String, Option<i32>, Option<i32>, Option<i32>, String)> {
+            let (
+                res,
+                (
+                    stop_id,
+                    _,
+                    stop_name,
+                    _,
+                    arrival_time,
+                    _,
+                    departure_time,
+                    _,
+                    journey_id,
+                    _,
+                    administration,
+                ),
+            ) = row_journey_description_combinator().parse(input)?;
+            Ok((
+                res,
+                (
+                    stop_id,
+                    stop_name,
+                    arrival_time,
+                    departure_time,
+                    journey_id,
+                    administration,
+                ),
+            ))
+        }
         // Note this useful idiom: importing names from outer (for mod tests) scope.
         use super::*;
         use pretty_assertions::assert_eq;
