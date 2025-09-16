@@ -33,7 +33,8 @@ use crate::{
         ColumnDefinition, ExpectedType, FastRowMatcher, FileParser, ParsedValue, RowDefinition,
         RowParser,
         helpers::{
-            i32_from_n_digits_parser, optional_i32_from_n_digits_parser, string_from_n_chars_parser,
+            i32_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
+            string_from_n_chars_parser,
         },
     },
     storage::ResourceStorage,
@@ -41,18 +42,6 @@ use crate::{
 };
 
 type JourneyAndTypeConverter = (ResourceStorage<Journey>, FxHashSet<JourneyId>);
-
-enum RowType {
-    RowA = 1,
-    RowB = 2,
-    RowC = 3,
-    RowD = 4,
-    RowE = 5,
-    RowF = 6,
-    RowG = 7,
-    RowH = 8,
-    RowI = 9,
-}
 
 /// ## Z-lines
 ///
@@ -102,6 +91,7 @@ fn row_z_combinator<'a>() -> impl Parser<
         ),
     )
 }
+
 fn row_z_parser(input: &str) -> IResult<&str, (i32, String, i32, Option<i32>, Option<i32>)> {
     let (
         res,
@@ -708,190 +698,6 @@ fn row_journey_description_parser(
     ))
 }
 
-fn journey_row_parser() -> RowParser {
-    RowParser::new(vec![
-        // This row is used to create a Journey instance.
-        RowDefinition::new(
-            RowType::RowA as i32,
-            Box::new(FastRowMatcher::new(1, 2, "*Z", true)),
-            vec![
-                ColumnDefinition::new(4, 9, ExpectedType::Integer32),
-                ColumnDefinition::new(11, 16, ExpectedType::String),
-            ],
-        ),
-        RowDefinition::new(
-            RowType::RowB as i32,
-            Box::new(FastRowMatcher::new(1, 2, "*G", true)),
-            vec![
-                ColumnDefinition::new(4, 6, ExpectedType::String),
-                ColumnDefinition::new(8, 14, ExpectedType::OptionInteger32),
-                ColumnDefinition::new(16, 22, ExpectedType::OptionInteger32),
-            ],
-        ),
-        RowDefinition::new(
-            RowType::RowC as i32,
-            Box::new(FastRowMatcher::new(1, 5, "*A VE", true)),
-            vec![
-                ColumnDefinition::new(7, 13, ExpectedType::OptionInteger32),
-                ColumnDefinition::new(15, 21, ExpectedType::OptionInteger32),
-                ColumnDefinition::new(23, 28, ExpectedType::OptionInteger32),
-            ],
-        ),
-        RowDefinition::new(
-            RowType::RowD as i32,
-            Box::new(FastRowMatcher::new(1, 2, "*A", true)),
-            vec![
-                ColumnDefinition::new(4, 5, ExpectedType::String),
-                ColumnDefinition::new(7, 13, ExpectedType::OptionInteger32),
-                ColumnDefinition::new(15, 21, ExpectedType::OptionInteger32),
-            ],
-        ),
-        RowDefinition::new(
-            RowType::RowE as i32,
-            Box::new(FastRowMatcher::new(1, 2, "*I", true)),
-            vec![
-                ColumnDefinition::new(4, 5, ExpectedType::String),
-                ColumnDefinition::new(7, 13, ExpectedType::OptionInteger32),
-                ColumnDefinition::new(15, 21, ExpectedType::OptionInteger32),
-                ColumnDefinition::new(23, 28, ExpectedType::OptionInteger32),
-                ColumnDefinition::new(30, 38, ExpectedType::Integer32),
-                ColumnDefinition::new(40, 45, ExpectedType::OptionInteger32),
-                ColumnDefinition::new(47, 52, ExpectedType::OptionInteger32),
-            ],
-        ),
-        RowDefinition::new(
-            RowType::RowF as i32,
-            Box::new(FastRowMatcher::new(1, 2, "*L", true)),
-            vec![
-                ColumnDefinition::new(4, 11, ExpectedType::String),
-                ColumnDefinition::new(13, 19, ExpectedType::OptionInteger32),
-                ColumnDefinition::new(21, 27, ExpectedType::OptionInteger32),
-                ColumnDefinition::new(29, 34, ExpectedType::OptionInteger32),
-                ColumnDefinition::new(36, 41, ExpectedType::OptionInteger32),
-            ],
-        ),
-        RowDefinition::new(
-            RowType::RowG as i32,
-            Box::new(FastRowMatcher::new(1, 2, "*R", true)),
-            vec![
-                ColumnDefinition::new(4, 4, ExpectedType::String),
-                ColumnDefinition::new(6, 12, ExpectedType::String),
-                ColumnDefinition::new(14, 20, ExpectedType::OptionInteger32),
-                ColumnDefinition::new(22, 28, ExpectedType::OptionInteger32),
-                ColumnDefinition::new(30, 35, ExpectedType::OptionInteger32),
-                ColumnDefinition::new(37, 42, ExpectedType::OptionInteger32),
-            ],
-        ),
-        // *CI
-        RowDefinition::new(
-            RowType::RowH as i32,
-            Box::new(FastRowMatcher::new(1, 3, "*CI", true)),
-            vec![
-                ColumnDefinition::new(1, 3, ExpectedType::String),
-                ColumnDefinition::new(5, 8, ExpectedType::Integer32),
-                ColumnDefinition::new(10, 16, ExpectedType::OptionInteger32),
-                ColumnDefinition::new(18, 24, ExpectedType::OptionInteger32),
-            ],
-        ),
-        // *CO
-        RowDefinition::new(
-            RowType::RowH as i32,
-            Box::new(FastRowMatcher::new(1, 3, "*CO", true)),
-            vec![
-                ColumnDefinition::new(1, 3, ExpectedType::String),
-                ColumnDefinition::new(5, 8, ExpectedType::Integer32),
-                ColumnDefinition::new(10, 16, ExpectedType::OptionInteger32),
-                ColumnDefinition::new(18, 24, ExpectedType::OptionInteger32),
-            ],
-        ),
-        RowDefinition::new(
-            RowType::RowI as i32,
-            Box::new(FastRowMatcher::new(1, 0, "", true)),
-            vec![
-                ColumnDefinition::new(1, 7, ExpectedType::Integer32),
-                ColumnDefinition::new(30, 35, ExpectedType::OptionInteger32),
-                ColumnDefinition::new(37, 42, ExpectedType::OptionInteger32),
-            ],
-        ),
-    ])
-}
-
-pub fn old_parse(
-    path: &str,
-    transport_types_pk_type_converter: &FxHashMap<String, i32>,
-    attributes_pk_type_converter: &FxHashMap<String, i32>,
-    directions_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<JourneyAndTypeConverter, Box<dyn Error>> {
-    log::info!("Parsing FPLAN...");
-    let row_parser = journey_row_parser();
-    let parser = FileParser::new(&format!("{path}/FPLAN"), row_parser)?;
-
-    let (data, pk_type_converter) = journey_row_converter(
-        parser,
-        transport_types_pk_type_converter,
-        attributes_pk_type_converter,
-        directions_pk_type_converter,
-    )?;
-    Ok((ResourceStorage::new(data), pk_type_converter))
-}
-
-fn read_lines(path: &str, bytes_offset: u64) -> io::Result<Vec<String>> {
-    let mut file = File::open(path)?;
-    file.seek(io::SeekFrom::Start(bytes_offset))?;
-    let mut reader = io::BufReader::new(file);
-    let mut contents = String::new();
-    reader.read_to_string(&mut contents)?;
-    let lines = contents.lines().map(String::from).collect();
-    Ok(lines)
-}
-
-fn journey_row_converter(
-    parser: FileParser,
-    transport_types_pk_type_converter: &FxHashMap<String, i32>,
-    attributes_pk_type_converter: &FxHashMap<String, i32>,
-    directions_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<(FxHashMap<i32, Journey>, FxHashSet<JourneyId>), Box<dyn Error>> {
-    let auto_increment = AutoIncrement::new();
-    let mut data = Vec::new();
-    let mut pk_type_converter = FxHashSet::default();
-
-    for x in parser.parse() {
-        let (id, _, values) = x?;
-        if RowType::RowA as i32 == id {
-            data.push(create_instance(
-                values,
-                &auto_increment,
-                &mut pk_type_converter,
-            ));
-        } else {
-            let journey = data.last_mut().ok_or("Type A row missing.")?;
-
-            if id == RowType::RowB as i32 {
-                set_transport_type(values, journey, transport_types_pk_type_converter)?;
-            } else if id == RowType::RowC as i32 {
-                set_bit_field(values, journey);
-            } else if id == RowType::RowD as i32 {
-                add_attribute(values, journey, attributes_pk_type_converter)?;
-            } else if id == RowType::RowE as i32 {
-                add_information_text(values, journey);
-            } else if id == RowType::RowF as i32 {
-                set_line(values, journey)?;
-            } else if id == RowType::RowG as i32 {
-                set_direction(values, journey, directions_pk_type_converter)?;
-            } else if id == RowType::RowH as i32 {
-                set_boarding_or_disembarking_exchange_time(values, journey);
-            } else if id == RowType::RowI as i32 {
-                add_route_entry(values, journey);
-            } else {
-                unreachable!();
-            }
-        }
-    }
-
-    let data = Journey::vec_to_map(data);
-
-    Ok((data, pk_type_converter))
-}
 pub fn parse(
     path: &str,
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
@@ -908,7 +714,7 @@ pub fn parse(
     lines
         .into_iter()
         .filter(|line| !line.trim().is_empty())
-        .for_each(|line| {
+        .try_for_each(|line| {
             let _res = alt((
                 map(
                     row_z_combinator(),
@@ -1221,9 +1027,9 @@ pub fn parse(
                     },
                 ),
             ))
-            .parse(&line)
-            .unwrap();
-        });
+            .parse(&line);
+            Ok::<(), Box<dyn Error>>(())
+        })?;
 
     let data =
         RefCell::<Vec<Journey>>::into_inner(Rc::into_inner(data).ok_or("Unable to get data")?);
