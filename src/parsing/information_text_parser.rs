@@ -19,11 +19,15 @@
 /// INFOTEXT_DE, INFOTEXT_EN, INFOTEXT_FR, INFOTEXT_IT
 use std::error::Error;
 
+use nom::{IResult, Parser, character::char, sequence::separated_pair};
 use rustc_hash::FxHashMap;
 
 use crate::{
     models::{InformationText, Language, Model},
-    parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
+    parsing::{
+        ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser,
+        helpers::{i32_from_n_digits_parser, string_till_eol_parser},
+    },
     storage::ResourceStorage,
 };
 
@@ -53,6 +57,15 @@ fn infotext_row_parser() -> RowParser {
     ])
 }
 
+fn parse_infotext_row(input: &str) -> IResult<&str, (i32, String)> {
+    separated_pair(
+        i32_from_n_digits_parser(9),
+        char(' '),
+        string_till_eol_parser(),
+    )
+    .parse(input)
+}
+
 fn infotext_row_converter(
     parser: FileParser,
     data: &mut FxHashMap<i32, InformationText>,
@@ -63,6 +76,24 @@ fn infotext_row_converter(
         set_content(values, data, language)?;
         Ok(())
     })
+}
+
+pub fn old_parse(path: &str) -> Result<ResourceStorage<InformationText>, Box<dyn Error>> {
+    log::info!("Parsing INFOTEXT_DE...");
+    log::info!("Parsing INFOTEXT_EN...");
+    log::info!("Parsing INFOTEXT_FR...");
+    log::info!("Parsing INFOTEXT_IT...");
+
+    let row_parser = id_row_parser();
+    let parser = FileParser::new(&format!("{path}/INFOTEXT_DE"), row_parser)?;
+    let mut data = id_row_converter(parser)?;
+
+    load_content(path, &mut data, Language::German)?;
+    load_content(path, &mut data, Language::English)?;
+    load_content(path, &mut data, Language::French)?;
+    load_content(path, &mut data, Language::Italian)?;
+
+    Ok(ResourceStorage::new(data))
 }
 
 pub fn parse(path: &str) -> Result<ResourceStorage<InformationText>, Box<dyn Error>> {
