@@ -32,7 +32,7 @@ pub(crate) fn string_from_n_chars_parser<'a>(
 
 pub(crate) fn string_till_eol_parser<'a>()
 -> impl Parser<&'a str, Output = String, Error = nom::error::Error<&'a str>> {
-    map(take_till(is_newline), |c: &str| c.to_string())
+    map(take_till(is_newline), |c: &str| c.trim().to_string())
 }
 
 pub(crate) fn i32_from_n_digits_parser<'a>(

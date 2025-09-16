@@ -34,6 +34,12 @@ fn parse_holiday_row(input: &str) -> IResult<&str, (String, String)> {
     .parse(input)
 }
 
+fn parse_line(line: &str, auto_increment: &AutoIncrement) -> Result<Holiday, Box<dyn Error>> {
+    let (_, (date, translations)) =
+        parse_holiday_row(line).map_err(|e| format!("Failed to parse line '{}': {}", line, e))?;
+    create_instance(date, translations, auto_increment)
+}
+
 pub fn parse(path: &str) -> Result<ResourceStorage<Holiday>, Box<dyn Error>> {
     log::info!("Parsing FEIERTAG...");
     let lines = read_lines(&format!("{path}/FEIERTAG"), 0)?;
@@ -41,11 +47,7 @@ pub fn parse(path: &str) -> Result<ResourceStorage<Holiday>, Box<dyn Error>> {
     let holidays = lines
         .into_iter()
         .filter(|line| !line.trim().is_empty())
-        .map(|line| {
-            let (_, (date, translations)) = parse_holiday_row(&line)
-                .map_err(|e| format!("Failed to parse line '{}': {}", line, e))?;
-            create_instance(date, translations, &auto_increment)
-        })
+        .map(|line| parse_line(&line, &auto_increment))
         .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     let data = Holiday::vec_to_map(holidays);
     Ok(ResourceStorage::new(data))
@@ -114,8 +116,7 @@ mod tests {
     fn row_converter_v207() {
         let auto_increment = AutoIncrement::new();
         let input = "25.12.2024 Weihnachtstag<deu>Noël<fra>Natale<ita>Christmas Day<eng>";
-        let (_, (date, translations)) = parse_holiday_row(input).unwrap();
-        let instance = create_instance(date, translations, &auto_increment).unwrap();
+        let instance = parse_line(input, &auto_increment).unwrap();
 
         // First row (id: 1)
         let reference = r#"

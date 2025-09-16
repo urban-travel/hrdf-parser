@@ -1,5 +1,6 @@
 use std::{
     collections::BTreeSet,
+    error::Error,
     hash::{DefaultHasher, Hash, Hasher},
 };
 
@@ -866,16 +867,16 @@ impl Model<JourneyPlatform> for JourneyPlatform {
 )]
 pub enum Language {
     #[default]
-    #[strum(serialize = "deu")]
+    #[strum(serialize = "deu", serialize = "DE")]
     German,
 
-    #[strum(serialize = "fra")]
+    #[strum(serialize = "fra", serialize = "FR")]
     French,
 
-    #[strum(serialize = "ita")]
+    #[strum(serialize = "ita", serialize = "IT")]
     Italian,
 
-    #[strum(serialize = "eng")]
+    #[strum(serialize = "eng", serialize = "EN")]
     English,
 }
 
