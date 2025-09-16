@@ -15,7 +15,7 @@ use nom::{
     branch::alt,
     bytes::tag,
     character::{char, complete::space1},
-    combinator::{map, map_res},
+    combinator::map_res,
     sequence::preceded,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
