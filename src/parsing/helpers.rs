@@ -35,6 +35,19 @@ pub(crate) fn string_till_eol_parser<'a>()
     map(take_till(is_newline), |c: &str| c.trim().to_string())
 }
 
+pub(crate) fn i16_from_n_digits_parser<'a>(
+    n_digits: usize,
+) -> impl Parser<&'a str, Output = i16, Error = nom::error::Error<&'a str>> {
+    map_res(
+        // Take exactly n_digits bytes
+        nom::bytes::take(n_digits),
+        |n_chars: &str| {
+            // Trim spaces and parse to i32
+            n_chars.trim().parse::<i16>()
+        },
+    )
+}
+
 pub(crate) fn i32_from_n_digits_parser<'a>(
     n_digits: usize,
 ) -> impl Parser<&'a str, Output = i32, Error = nom::error::Error<&'a str>> {

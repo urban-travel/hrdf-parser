@@ -48,6 +48,13 @@
 /// These files were suppressed in 2.0.7
 use std::{error::Error, str::FromStr};
 
+use nom::{
+    Parser,
+    bytes::{tag, take_until},
+    character::{char, complete::multispace1},
+    combinator::{map, map_res},
+    sequence::{preceded, terminated},
+};
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -56,6 +63,10 @@ use crate::{
     parsing::{
         AdvancedRowMatcher, ColumnDefinition, ExpectedType, FastRowMatcher, FileParser,
         ParsedValue, RowDefinition, RowParser,
+        helpers::{
+            i16_from_n_digits_parser, i32_from_n_digits_parser, string_from_n_chars_parser,
+            string_till_eol_parser, to_string,
+        },
     },
     storage::ResourceStorage,
     utils::AutoIncrement,
@@ -69,6 +80,44 @@ enum RowType {
     RowB = 2,
     RowC = 3,
     RowD = 4,
+}
+
+fn row_offer_combinator<'a>() -> impl Parser<
+    &'a str,
+    Output = (String, char, i16, char, i16, char, i16),
+    Error = nom::error::Error<&'a str>,
+> {
+    (
+        string_from_n_chars_parser(2),
+        char(' '),
+        i16_from_n_digits_parser(1),
+        char(' '),
+        i16_from_n_digits_parser(3),
+        char(' '),
+        i16_from_n_digits_parser(2),
+    )
+}
+
+fn row_language_combinator<'a>()
+-> impl Parser<&'a str, Output = String, Error = nom::error::Error<&'a str>> {
+    map(
+        preceded(tag("<"), terminated(take_until(">"), tag(">"))),
+        String::from,
+    )
+}
+
+fn row_description_combinator<'a>()
+-> impl Parser<&'a str, Output = String, Error = nom::error::Error<&'a str>> {
+    preceded(tag("#"), string_till_eol_parser())
+}
+
+fn row_language_description_combinator<'a>()
+-> impl Parser<&'a str, Output = (String, &'a str, String), Error = nom::error::Error<&'a str>> {
+    (
+        string_from_n_chars_parser(2),
+        multispace1,
+        string_till_eol_parser(),
+    )
 }
 
 fn attribute_row_parser(version: Version) -> Result<RowParser, Box<dyn Error>> {
@@ -144,6 +193,18 @@ fn attribute_row_converter(
         }
     }
     Ok((data, pk_type_converter))
+}
+
+pub fn old_parse(
+    version: Version,
+    path: &str,
+) -> Result<AttributeAndTypeConverter, Box<dyn Error>> {
+    log::info!("Parsing ATTRIBUT...");
+    let row_parser = attribute_row_parser(version)?;
+    // The ATTRIBUT file is used instead of ATTRIBUT_* for simplicity's sake.
+    let parser = FileParser::new(&format!("{path}/ATTRIBUT"), row_parser)?;
+    let (data, pk_type_converter) = attribute_row_converter(parser)?;
+    Ok((ResourceStorage::new(data), pk_type_converter))
 }
 
 pub fn parse(version: Version, path: &str) -> Result<AttributeAndTypeConverter, Box<dyn Error>> {
@@ -247,30 +308,25 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use crate::parsing::tests::get_json_values;
+    use nom::IResult;
     use pretty_assertions::assert_eq;
 
-    #[test]
-    fn description_row_d_v206() {
-        let rows = vec![
-            "VR VELOS: Reservation obligatory".to_string(),
-            "2  2nd class only".to_string(),
-        ];
-        let parser = FileParser {
-            row_parser: attribute_row_parser(Version::V_5_40_41_2_0_6).unwrap(),
-            rows: rows.clone(),
-        };
-        let mut parser_iterator = parser.parse();
+    fn row_language_description_parser(input: &str) -> IResult<&str, (String, String)> {
+        let (res, (id, _, description)) = row_language_description_combinator().parse(input)?;
+        Ok((res, (id, description)))
+    }
 
-        let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-        assert_eq!(id, RowType::RowD as i32);
-        let (legacy_id, description) = row_d_from_parsed_values(parsed_values);
-        assert_eq!("VR", &legacy_id);
-        assert_eq!("VELOS: Reservation obligatory", &description);
-        let (id, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-        assert_eq!(id, RowType::RowD as i32);
-        let (legacy_id, description) = row_d_from_parsed_values(parsed_values);
-        assert_eq!("2", &legacy_id);
-        assert_eq!("2nd class only", &description);
+    #[test]
+    fn language_description_row() {
+        let input = "VR VELOS: Reservation obligatory";
+        let (res, (id, description)) = row_language_description_parser(input).unwrap();
+        assert_eq!("VR", id);
+        assert_eq!("VELOS: Reservation obligatory", description);
+
+        let input = "2  2nd class only";
+        let (res, (id, description)) = row_language_description_parser(input).unwrap();
+        assert_eq!("VR", id);
+        assert_eq!("VELOS: Reservation obligatory", description);
     }
 
     #[test]
