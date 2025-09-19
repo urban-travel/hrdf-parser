@@ -61,17 +61,17 @@ pub(crate) fn i32_from_n_digits_parser<'a>(
     )
 }
 
-fn exaclty_n_spaces_parser<'a, T>(
+fn exaclty_n_spaces_or_at_parser<'a, T>(
     n_digits: usize,
 ) -> impl Parser<&'a str, Output = Option<T>, Error = nom::error::Error<&'a str>> {
-    map(count(one_of(" "), n_digits), |_| None)
+    map(count(one_of(" @"), n_digits), |_| None)
 }
 
 pub(crate) fn optional_i32_from_n_digits_parser<'a>(
     n_digits: usize,
 ) -> impl Parser<&'a str, Output = Option<i32>, Error = nom::error::Error<&'a str>> {
     alt((
-        exaclty_n_spaces_parser(n_digits),
+        exaclty_n_spaces_or_at_parser(n_digits),
         opt(i32_from_n_digits_parser(n_digits)),
     ))
 }
