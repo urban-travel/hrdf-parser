@@ -13,67 +13,30 @@
 /// RICHTUNG
 use std::error::Error;
 
+use nom::{IResult, Parser, character::char};
 use rustc_hash::FxHashMap;
 
 use crate::{
     models::{Direction, Model},
-    parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
+    parsing::helpers::{direction_parser, read_lines, string_till_eol_parser},
     storage::ResourceStorage,
 };
 
 type DirectionAndTypeConverter = (ResourceStorage<Direction>, FxHashMap<String, i32>);
-type FxHashMapsAndTypeConverter = (FxHashMap<i32, Direction>, FxHashMap<String, i32>);
 
-fn direction_row_parser() -> RowParser {
-    RowParser::new(vec![
-        // This row is used to create a Direction instance.
-        RowDefinition::from(vec![
-            ColumnDefinition::new(1, 7, ExpectedType::String),
-            ColumnDefinition::new(9, -1, ExpectedType::String),
-        ]),
-    ])
-}
-fn direction_row_converter(
-    parser: FileParser,
-) -> Result<FxHashMapsAndTypeConverter, Box<dyn Error>> {
-    let mut pk_type_converter = FxHashMap::default();
-
-    let data = parser
-        .parse()
-        .map(|x| x.and_then(|(_, _, values)| create_instance(values, &mut pk_type_converter)))
-        .collect::<Result<Vec<_>, _>>()?;
-    let data = Direction::vec_to_map(data);
-    Ok((data, pk_type_converter))
+pub fn parse_direction_row(input: &str) -> IResult<&str, (String, i32, String)> {
+    let (res, ((prefix, id), _, name)) =
+        (direction_parser(), char(' '), string_till_eol_parser()).parse(input)?;
+    Ok((res, (prefix, id, name)))
 }
 
-pub fn parse(path: &str) -> Result<DirectionAndTypeConverter, Box<dyn Error>> {
-    log::info!("Parsing RICHTUNG...");
-    let row_parser = direction_row_parser();
-    let parser = FileParser::new(&format!("{path}/RICHTUNG"), row_parser)?;
-
-    let (data, pk_type_converter) = direction_row_converter(parser)?;
-
-    Ok((ResourceStorage::new(data), pk_type_converter))
-}
-
-// ------------------------------------------------------------------------------------------------
-// --- Data Processing Functions
-// ------------------------------------------------------------------------------------------------
-
-fn row_from_parsed_values(mut values: Vec<ParsedValue>) -> (String, String) {
-    let legacy_id: String = values.remove(0).into();
-    let name: String = values.remove(0).into();
-    (legacy_id, name)
-}
-
-fn create_instance(
-    values: Vec<ParsedValue>,
+fn parse_line(
+    line: &str,
     pk_type_converter: &mut FxHashMap<String, i32>,
 ) -> Result<Direction, Box<dyn Error>> {
-    let (legacy_id, name) = row_from_parsed_values(values);
-
-    let id = remove_first_char(&legacy_id).parse::<i32>()?;
-
+    let (_, (prefix, id, name)) =
+        parse_direction_row(line).map_err(|e| format!("Failed to parse line '{}': {}", line, e))?;
+    let legacy_id = format!("{prefix}{id}");
     if let Some(previous) = pk_type_converter.insert(legacy_id.clone(), id) {
         log::warn!(
             "Warning: previous id {previous} for {legacy_id}. The legacy_id, {legacy_id} is not unique."
@@ -82,15 +45,18 @@ fn create_instance(
     Ok(Direction::new(id, name))
 }
 
-// ------------------------------------------------------------------------------------------------
-// --- Helper Functions
-// ------------------------------------------------------------------------------------------------
+pub fn parse(path: &str) -> Result<DirectionAndTypeConverter, Box<dyn Error>> {
+    log::info!("Parsing RICHTUNG...");
 
-// TODO: handle the empty string case
-fn remove_first_char(value: &str) -> &str {
-    let mut chars = value.chars();
-    chars.next();
-    chars.as_str()
+    let lines = read_lines(&format!("{path}/RICHTUNG"), 0)?;
+    let mut pk_type_converter = FxHashMap::default();
+    let directions = lines
+        .into_iter()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| parse_line(&line, &mut pk_type_converter))
+        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+    let directions = Direction::vec_to_map(directions);
+    Ok((ResourceStorage::new(directions), pk_type_converter))
 }
 
 #[cfg(test)]
@@ -102,28 +68,23 @@ mod tests {
 
     #[test]
     fn row_parser_v207() {
-        let rows = vec![
-            "R000008 Winterthur".to_string(),
-            "R000192 Saas-Fee, Parkhaus".to_string(),
-            "R002609 Hégenheim - Collège des Trois Pays".to_string(),
-        ];
-        let parser = FileParser {
-            row_parser: direction_row_parser(),
-            rows,
-        };
-        let mut parser_iterator = parser.parse();
-        let (_, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let (legacy_id, name) = row_from_parsed_values(parsed_values);
-        assert_eq!("R000008", &legacy_id);
-        assert_eq!("Winterthur", &name);
-        let (_, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let (legacy_id, name) = row_from_parsed_values(parsed_values);
-        assert_eq!("R000192", &legacy_id);
-        assert_eq!("Saas-Fee, Parkhaus", &name);
-        let (_, _, parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let (legacy_id, name) = row_from_parsed_values(parsed_values);
-        assert_eq!("R002609", &legacy_id);
-        assert_eq!("Hégenheim - Collège des Trois Pays", &name);
+        let input = "R000008 Winterthur";
+        let (_, (prefix, id, name)) = parse_direction_row(input).unwrap();
+        assert_eq!("R", prefix);
+        assert_eq!(8, id);
+        assert_eq!("Winterthur", name);
+
+        let input = "R000192 Saas-Fee, Parkhaus";
+        let (_, (prefix, id, name)) = parse_direction_row(input).unwrap();
+        assert_eq!("R", prefix);
+        assert_eq!(192, id);
+        assert_eq!("Saas-Fee, Parkhaus", name);
+
+        let input = "R002609 Hégenheim - Collège des Trois Pays";
+        let (_, (prefix, id, name)) = parse_direction_row(input).unwrap();
+        assert_eq!("R", prefix);
+        assert_eq!(2609, id);
+        assert_eq!("Hégenheim - Collège des Trois Pays", name);
     }
 
     #[test]
@@ -133,15 +94,19 @@ mod tests {
             "R000192 Saas-Fee, Parkhaus".to_string(),
             "R002609 Hégenheim - Collège des Trois Pays".to_string(),
         ];
-        let parser = FileParser {
-            row_parser: direction_row_parser(),
-            rows,
-        };
-        let (data, pk_type_converter) = direction_row_converter(parser).unwrap();
-        assert_eq!(*pk_type_converter.get("R000008").unwrap(), 8);
-        assert_eq!(*pk_type_converter.get("R000192").unwrap(), 192);
-        assert_eq!(*pk_type_converter.get("R002609").unwrap(), 2609);
-        let attribute = data.get(&8).unwrap();
+        let mut pk_type_converter = FxHashMap::default();
+        let directions = rows
+            .into_iter()
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| parse_line(&line, &mut pk_type_converter))
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()
+            .unwrap();
+        let directions = Direction::vec_to_map(directions);
+        println!("LET'S GO: {pk_type_converter:?}");
+        assert_eq!(*pk_type_converter.get("R8").unwrap(), 8);
+        assert_eq!(*pk_type_converter.get("R192").unwrap(), 192);
+        assert_eq!(*pk_type_converter.get("R2609").unwrap(), 2609);
+        let attribute = directions.get(&8).unwrap();
         let reference = r#"
             {
                 "id":8,
@@ -149,7 +114,7 @@ mod tests {
             }"#;
         let (attribute, reference) = get_json_values(attribute, reference).unwrap();
         assert_eq!(attribute, reference);
-        let attribute = data.get(&192).unwrap();
+        let attribute = directions.get(&192).unwrap();
         let reference = r#"
             {
                 "id":192,
@@ -157,7 +122,7 @@ mod tests {
             }"#;
         let (attribute, reference) = get_json_values(attribute, reference).unwrap();
         assert_eq!(attribute, reference);
-        let attribute = data.get(&2609).unwrap();
+        let attribute = directions.get(&2609).unwrap();
         let reference = r#"
             {
                 "id":2609,

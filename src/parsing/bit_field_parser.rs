@@ -55,17 +55,20 @@ fn parse_bitfield_row(input: &str) -> IResult<&str, (i32, Vec<u8>)> {
     .parse(input)
 }
 
+// TODO: Add test for parse line
+fn parse_line(line: &str) -> Result<BitField, Box<dyn Error>> {
+    let (_, (id, bits)) =
+        parse_bitfield_row(line).map_err(|e| format!("Failed to parse line '{}': {}", line, e))?;
+    Ok(BitField::new(id, bits))
+}
+
 pub fn parse(path: &str) -> Result<ResourceStorage<BitField>, Box<dyn Error>> {
     log::info!("Parsing BITFELD...");
     let lines = read_lines(&format!("{path}/BITFELD"), 0)?;
     let bitfields = lines
         .into_iter()
         .filter(|line| !line.trim().is_empty())
-        .map(|line| {
-            let (_, (id, bits)) = parse_bitfield_row(&line)
-                .map_err(|e| format!("Failed to parse line '{}': {}", line, e))?;
-            Ok(BitField::new(id, bits))
-        })
+        .map(|line| parse_line(&line))
         .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     let data = BitField::vec_to_map(bitfields);
     Ok(ResourceStorage::new(data))

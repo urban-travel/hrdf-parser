@@ -15,7 +15,7 @@ use nom::{
     branch::alt,
     bytes::tag,
     character::{char, complete::space1},
-    combinator::map_res,
+    combinator::{map, map_res},
     sequence::preceded,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -24,7 +24,7 @@ use crate::{
     JourneyId,
     models::{Journey, JourneyMetadataEntry, JourneyMetadataType, JourneyRouteEntry, Model},
     parsing::helpers::{
-        i32_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
+        direction_parser, i32_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
         string_from_n_chars_parser,
     },
     storage::ResourceStorage,
@@ -358,7 +358,10 @@ fn row_r_combinator<'a>() -> impl Parser<
         (
             string_from_n_chars_parser(1),
             char(' '),
-            string_from_n_chars_parser(7),
+            alt((
+                map(direction_parser(), |(prefix, id)| format!("{prefix}{id}")),
+                string_from_n_chars_parser(7),
+            )),
             char(' '),
             optional_i32_from_n_digits_parser(7),
             char(' '),
@@ -1480,7 +1483,7 @@ mod tests {
             ) = row_r_parser(input).unwrap();
 
             assert_eq!("R", direction);
-            assert_eq!("R000063", ref_direction_code);
+            assert_eq!("R63", ref_direction_code);
             assert_eq!(Some(1300146), stop_from_id);
             assert_eq!(Some(8574808), stop_to_id);
             assert_eq!(None, departure_time);

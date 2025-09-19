@@ -8,7 +8,7 @@ use std::{
 use nom::{
     Parser,
     branch::alt,
-    bytes::complete::take_till,
+    bytes::{complete::take_till, tag},
     character::{anychar, one_of},
     combinator::{map, map_res, opt},
     multi::count,
@@ -74,6 +74,11 @@ pub(crate) fn optional_i32_from_n_digits_parser<'a>(
         exaclty_n_spaces_parser(n_digits),
         opt(i32_from_n_digits_parser(n_digits)),
     ))
+}
+
+pub(crate) fn direction_parser<'a>()
+-> impl Parser<&'a str, Output = (String, i32), Error = nom::error::Error<&'a str>> {
+    (map(tag("R"), String::from), i32_from_n_digits_parser(6))
 }
 
 pub(crate) fn read_lines(path: &str, bytes_offset: u64) -> io::Result<Vec<String>> {
