@@ -153,6 +153,38 @@ impl DataStorage {
 
         // Exchange times
         let exchange_times_administration = parsing::load_exchange_times_administration(path)?;
+        let old_exchange_times_administration =
+            parsing::old_load_exchange_times_administration(path)?;
+
+        let mut keys = exchange_times_administration
+            .data()
+            .keys()
+            .copied()
+            .collect::<Vec<_>>();
+        keys.sort();
+        let mut old_keys: Vec<i32> = old_exchange_times_administration
+            .data()
+            .keys()
+            .copied()
+            .collect();
+        old_keys.sort();
+
+        let bla = keys
+            .into_iter()
+            .zip(old_keys)
+            .filter(|(lhs, rhs)| {
+                let vlhs = exchange_times_administration.data().get(lhs).unwrap();
+                let vrhs = old_exchange_times_administration.data().get(rhs).unwrap();
+                let (new, old) = get_json_values_complete(vlhs, vrhs).unwrap();
+                let cond = new != old;
+                if cond {
+                    log::info!("=================================");
+                    log::info!("{new},\n {old}");
+                }
+                cond
+            })
+            .collect::<Vec<_>>();
+        return Err(format!("{:?}\n", bla).into());
         let exchange_times_journey =
             parsing::load_exchange_times_journey(path, &journeys_pk_type_converter)?;
         let exchange_times_line =

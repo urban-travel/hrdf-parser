@@ -24,11 +24,18 @@
 /// UMSTEIGV
 use std::error::Error;
 
+use nom::{IResult, Parser, character::char};
 use rustc_hash::FxHashMap;
 
 use crate::{
     models::{ExchangeTimeAdministration, Model},
-    parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
+    parsing::{
+        ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser,
+        helpers::{
+            i16_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
+            string_from_n_chars_parser,
+        },
+    },
     storage::ResourceStorage,
     utils::AutoIncrement,
 };
@@ -44,6 +51,23 @@ fn exchange_administration_row_parser() -> RowParser {
         ]),
     ])
 }
+
+pub fn parse_exchange_administration_row(
+    input: &str,
+) -> IResult<&str, (Option<i32>, String, String, i16)> {
+    let (res, (stop_id, _, administration_1, _, administration_2, _, duration)) = (
+        optional_i32_from_n_digits_parser(7),
+        char(' '),
+        string_from_n_chars_parser(6),
+        char(' '),
+        string_from_n_chars_parser(6),
+        char(' '),
+        i16_from_n_digits_parser(2),
+    )
+        .parse(input)?;
+    Ok((res, (stop_id, administration_1, administration_2, duration)))
+}
+
 fn exchange_administration_row_converter(
     parser: FileParser,
 ) -> Result<FxHashMap<i32, ExchangeTimeAdministration>, Box<dyn Error>> {
@@ -57,13 +81,47 @@ fn exchange_administration_row_converter(
     Ok(data)
 }
 
-pub fn parse(path: &str) -> Result<ResourceStorage<ExchangeTimeAdministration>, Box<dyn Error>> {
+pub fn old_parse(
+    path: &str,
+) -> Result<ResourceStorage<ExchangeTimeAdministration>, Box<dyn Error>> {
     log::info!("Parsing UMSTEIGV...");
     let row_parser = exchange_administration_row_parser();
     let parser = FileParser::new(&format!("{path}/UMSTEIGV"), row_parser)?;
     let data = exchange_administration_row_converter(parser)?;
 
     Ok(ResourceStorage::new(data))
+}
+
+fn parse_line(
+    line: &str,
+    auto_increment: &AutoIncrement,
+) -> Result<ExchangeTimeAdministration, Box<dyn Error>> {
+    let (_, (stop_id, administration_1, administration_2, duration)) =
+        parse_exchange_administration_row(line)
+            .map_err(|e| format!("Error {e} while parsing {line}"))?;
+
+    Ok(ExchangeTimeAdministration::new(
+        auto_increment.next(),
+        stop_id,
+        administration_1,
+        administration_2,
+        duration,
+    ))
+}
+
+pub fn parse(path: &str) -> Result<ResourceStorage<ExchangeTimeAdministration>, Box<dyn Error>> {
+    log::info!("Parsing UMSTEIGV...");
+
+    let lines = read_lines(&format!("{path}/UMSTEIGV"), 0)?;
+    let auto_increment = AutoIncrement::new();
+    let exchanges = lines
+        .into_iter()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| parse_line(&line, &auto_increment))
+        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+    let exchanges = ExchangeTimeAdministration::vec_to_map(exchanges);
+
+    Ok(ResourceStorage::new(exchanges))
 }
 
 // ------------------------------------------------------------------------------------------------
