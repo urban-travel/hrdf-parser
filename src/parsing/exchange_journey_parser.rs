@@ -45,6 +45,8 @@ fn parse_exchange_journey_row(
 ) -> IResult<&str, (i32, i32, String, i32, String, i16, bool, Option<i32>)> {
     // TODO: I haven't seen an is_guaranteed field in the doc. Check if this makes sense.
     // It is present in UMSTEIGL. Mabe a copy/paste leftover
+    //
+    // TODO: There is still a String after all the parsing is done that remains (a name)
     let (
         res,
         (

@@ -34,14 +34,108 @@
 /// UMSTEIGL
 use std::{error::Error, str::FromStr};
 
+use nom::{IResult, Parser, character::char, combinator::map};
 use rustc_hash::FxHashMap;
 
 use crate::{
     models::{DirectionType, ExchangeTimeLine, LineInfo, Model},
-    parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
+    parsing::{
+        ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser,
+        helpers::{
+            i16_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
+            string_from_n_chars_parser,
+        },
+    },
     storage::ResourceStorage,
     utils::AutoIncrement,
 };
+
+fn parse_exchange_line_row(
+    input: &str,
+) -> IResult<
+    &str,
+    (
+        Option<i32>,
+        String,
+        String,
+        String,
+        String,
+        String,
+        String,
+        String,
+        String,
+        i16,
+        bool,
+    ),
+> {
+    // TODO: I haven't seen an is_guaranteed field in the doc. Check if this makes sense.
+    // It is present in UMSTEIGL. Mabe a copy/paste leftover
+    //
+    // TODO: There is still a String after all the parsing is done that remains (a name)
+    let (
+        res,
+        (
+            stop_id,
+            _,
+            administration_1,
+            _,
+            transport_type_1,
+            _,
+            line_id_1,
+            _,
+            direction_1,
+            _,
+            administration_2,
+            _,
+            transport_type_2,
+            _,
+            line_id_2,
+            _,
+            direction_2,
+            _,
+            duration,
+            is_guaranteed,
+        ),
+    ) = (
+        optional_i32_from_n_digits_parser(7),
+        char(' '),
+        string_from_n_chars_parser(6),
+        char(' '),
+        string_from_n_chars_parser(3),
+        char(' '),
+        string_from_n_chars_parser(8),
+        char(' '),
+        string_from_n_chars_parser(1),
+        char(' '),
+        string_from_n_chars_parser(6),
+        char(' '),
+        string_from_n_chars_parser(3),
+        char(' '),
+        string_from_n_chars_parser(8),
+        char(' '),
+        string_from_n_chars_parser(1),
+        char(' '),
+        i16_from_n_digits_parser(3),
+        map(string_from_n_chars_parser(1), |s| s == "!"),
+    )
+        .parse(input)?;
+    Ok((
+        res,
+        (
+            stop_id,
+            administration_1,
+            transport_type_1,
+            line_id_1,
+            direction_1,
+            administration_2,
+            transport_type_2,
+            line_id_2,
+            direction_2,
+            duration,
+            is_guaranteed,
+        ),
+    ))
+}
 
 fn exchange_line_row_parser() -> RowParser {
     RowParser::new(vec![
@@ -61,6 +155,7 @@ fn exchange_line_row_parser() -> RowParser {
         ]),
     ])
 }
+
 fn exchange_line_row_converter(
     parser: FileParser,
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
@@ -79,7 +174,7 @@ fn exchange_line_row_converter(
     Ok(data)
 }
 
-pub fn parse(
+pub fn old_parse(
     path: &str,
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
 ) -> Result<ResourceStorage<ExchangeTimeLine>, Box<dyn Error>> {
@@ -90,6 +185,100 @@ pub fn parse(
     let data = exchange_line_row_converter(parser, transport_types_pk_type_converter)?;
 
     Ok(ResourceStorage::new(data))
+}
+
+fn parse_line(
+    line: &str,
+    auto_increment: &AutoIncrement,
+    transport_types_pk_type_converter: &FxHashMap<String, i32>,
+) -> Result<ExchangeTimeLine, Box<dyn Error>> {
+    let (
+        _res,
+        (
+            stop_id,
+            administration_1,
+            transport_type_id_1,
+            line_id_1,
+            direction_1,
+            administration_2,
+            transport_type_id_2,
+            line_id_2,
+            direction_2,
+            duration,
+            is_guaranteed,
+        ),
+    ) = parse_exchange_line_row(line).map_err(|e| format!("Error {e} while parsing {line}"))?;
+
+    let transport_type_id_1 = *transport_types_pk_type_converter
+        .get(&transport_type_id_1)
+        .ok_or("Unknown legacy ID for transport_type_1 {transport_type_id_1}")?;
+
+    let line_id_1 = if line_id_1 == "*" {
+        None
+    } else {
+        Some(line_id_1)
+    };
+
+    let direction_1 = if direction_1 == "*" {
+        None
+    } else {
+        Some(DirectionType::from_str(&direction_1)?)
+    };
+
+    let transport_type_id_2 = *transport_types_pk_type_converter
+        .get(&transport_type_id_2)
+        .ok_or("Unknown legacy ID for transport_type_id_2 {transport_type_id_2}")?;
+
+    let line_id_2 = if line_id_2 == "*" {
+        None
+    } else {
+        Some(line_id_2)
+    };
+
+    let direction_2 = if direction_2 == "*" {
+        None
+    } else {
+        Some(DirectionType::from_str(&direction_2)?)
+    };
+
+    let line_1 = LineInfo::new(
+        administration_1,
+        transport_type_id_1,
+        line_id_1,
+        direction_1,
+    );
+    let line_2 = LineInfo::new(
+        administration_2,
+        transport_type_id_2,
+        line_id_2,
+        direction_2,
+    );
+
+    Ok(ExchangeTimeLine::new(
+        auto_increment.next(),
+        stop_id,
+        line_1,
+        line_2,
+        duration,
+        is_guaranteed,
+    ))
+}
+
+pub fn parse(
+    path: &str,
+    transport_types_pk_type_converter: &FxHashMap<String, i32>,
+) -> Result<ResourceStorage<ExchangeTimeLine>, Box<dyn Error>> {
+    log::info!("Parsing UMSTEIGL...");
+    let lines = read_lines(&format!("{path}/UMSTEIGL"), 0)?;
+    let auto_increment = AutoIncrement::new();
+    let exchanges = lines
+        .into_iter()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| parse_line(&line, &auto_increment, transport_types_pk_type_converter))
+        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+    let exchanges = ExchangeTimeLine::vec_to_map(exchanges);
+
+    Ok(ResourceStorage::new(exchanges))
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -179,119 +368,130 @@ mod tests {
 
     #[test]
     fn row_parser_v207() {
-        let rows = vec![
-            "8301113 000011 S   *        * 007000 B   *        * 003  Luino (I)".to_string(),
-            "1111135 sbg034 B   7339     H sbg034 TX  7341     H 000! Waldshut, Busbahnhof"
-                .to_string(),
-            "8509002 000011 RE  *        * 000065 S   12       * 008  Landquart".to_string(),
-            "8580522 003849 T   #0000482 * 003849 T   #0000488 * 003  Zürich, Escher-Wyss-Platz"
-                .to_string(),
-        ];
-        let parser = FileParser {
-            row_parser: exchange_line_row_parser(),
-            rows,
-        };
-        let mut parser_iterator = parser.parse();
-        // First row
+        let line = "8301113 000011 S   *        * 007000 B   *        * 003  Luino (I)";
+        let (
+            _res,
+            (
+                stop_id,
+                administration_1,
+                transport_type_id_1,
+                line_id_1,
+                direction_1,
+                administration_2,
+                transport_type_id_2,
+                line_id_2,
+                direction_2,
+                duration,
+                is_guaranteed,
+            ),
+        ) = parse_exchange_line_row(line).unwrap();
+
         // "8301113 000011 S   *        * 007000 B   *        * 003  Luino (I)",
-        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let stop_id: Option<i32> = parsed_values.remove(0).into();
         assert_eq!(Some(8301113), stop_id);
-        let administration_1: String = parsed_values.remove(0).into();
         assert_eq!("000011", &administration_1);
-        let transport_type_id_1: String = parsed_values.remove(0).into();
         assert_eq!("S", &transport_type_id_1);
-        let line_id_1: String = parsed_values.remove(0).into();
         assert_eq!("*", &line_id_1);
-        let direction_1: String = parsed_values.remove(0).into();
         assert_eq!("*", &direction_1);
-        let administration_2: String = parsed_values.remove(0).into();
         assert_eq!("007000", &administration_2);
-        let transport_type_id_2: String = parsed_values.remove(0).into();
         assert_eq!("B", &transport_type_id_2);
-        let line_id_2: String = parsed_values.remove(0).into();
         assert_eq!("*", &line_id_2);
-        let direction_2: String = parsed_values.remove(0).into();
         assert_eq!("*", &direction_2);
-        let duration: i16 = parsed_values.remove(0).into();
         assert_eq!(3, duration);
-        let is_guaranteed: String = parsed_values.remove(0).into();
-        assert_eq!("", &is_guaranteed);
+        assert!(!is_guaranteed);
+
+        let line = "1111135 sbg034 B   7339     H sbg034 TX  7341     H 000! Waldshut, Busbahnhof";
+        let (
+            _res,
+            (
+                stop_id,
+                administration_1,
+                transport_type_id_1,
+                line_id_1,
+                direction_1,
+                administration_2,
+                transport_type_id_2,
+                line_id_2,
+                direction_2,
+                duration,
+                is_guaranteed,
+            ),
+        ) = parse_exchange_line_row(line).unwrap();
         // Second row
         // "1111135 sbg034 B   7339     H sbg034 TX  7341     H 000! Waldshut, Busbahnhof"
-        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let stop_id: Option<i32> = parsed_values.remove(0).into();
         assert_eq!(Some(1111135), stop_id);
-        let administration_1: String = parsed_values.remove(0).into();
         assert_eq!("sbg034", &administration_1);
-        let transport_type_id_1: String = parsed_values.remove(0).into();
         assert_eq!("B", &transport_type_id_1);
-        let line_id_1: String = parsed_values.remove(0).into();
         assert_eq!("7339", &line_id_1);
-        let direction_1: String = parsed_values.remove(0).into();
         assert_eq!("H", &direction_1);
-        let administration_2: String = parsed_values.remove(0).into();
         assert_eq!("sbg034", &administration_2);
-        let transport_type_id_2: String = parsed_values.remove(0).into();
         assert_eq!("TX", &transport_type_id_2);
-        let line_id_2: String = parsed_values.remove(0).into();
         assert_eq!("7341", &line_id_2);
-        let direction_2: String = parsed_values.remove(0).into();
         assert_eq!("H", &direction_2);
-        let duration: i16 = parsed_values.remove(0).into();
         assert_eq!(0, duration);
-        let is_guaranteed: String = parsed_values.remove(0).into();
-        assert_eq!("!", &is_guaranteed);
+        assert!(is_guaranteed);
+
+        let line = "8509002 000011 RE  *        * 000065 S   12       * 008  Landquart";
+        let (
+            _res,
+            (
+                stop_id,
+                administration_1,
+                transport_type_id_1,
+                line_id_1,
+                direction_1,
+                administration_2,
+                transport_type_id_2,
+                line_id_2,
+                direction_2,
+                duration,
+                is_guaranteed,
+            ),
+        ) = parse_exchange_line_row(line).unwrap();
         // Third row
         // "8509002 000011 RE  *        * 000065 S   12       * 008  Landquart".to_string(),
-        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let stop_id: Option<i32> = parsed_values.remove(0).into();
         assert_eq!(Some(8509002), stop_id);
-        let administration_1: String = parsed_values.remove(0).into();
         assert_eq!("000011", &administration_1);
-        let transport_type_id_1: String = parsed_values.remove(0).into();
         assert_eq!("RE", &transport_type_id_1);
-        let line_id_1: String = parsed_values.remove(0).into();
         assert_eq!("*", &line_id_1);
-        let direction_1: String = parsed_values.remove(0).into();
         assert_eq!("*", &direction_1);
-        let administration_2: String = parsed_values.remove(0).into();
         assert_eq!("000065", &administration_2);
-        let transport_type_id_2: String = parsed_values.remove(0).into();
         assert_eq!("S", &transport_type_id_2);
-        let line_id_2: String = parsed_values.remove(0).into();
         assert_eq!("12", &line_id_2);
-        let direction_2: String = parsed_values.remove(0).into();
         assert_eq!("*", &direction_2);
-        let duration: i16 = parsed_values.remove(0).into();
         assert_eq!(8, duration);
-        let is_guaranteed: String = parsed_values.remove(0).into();
-        assert_eq!("", &is_guaranteed);
+        assert!(!is_guaranteed);
+
+        let line =
+            "8580522 003849 T   #0000482 * 003849 T   #0000488 * 003  Zürich, Escher-Wyss-Platz";
+        let (
+            _res,
+            (
+                stop_id,
+                administration_1,
+                transport_type_id_1,
+                line_id_1,
+                direction_1,
+                administration_2,
+                transport_type_id_2,
+                line_id_2,
+                direction_2,
+                duration,
+                is_guaranteed,
+            ),
+        ) = parse_exchange_line_row(line).unwrap();
         // Fourth row
         // "8580522 003849 T   #0000482 * 003849 T   #0000488 * 003  Zürich, Escher-Wyss-Platz"
-        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let stop_id: Option<i32> = parsed_values.remove(0).into();
         assert_eq!(Some(8580522), stop_id);
-        let administration_1: String = parsed_values.remove(0).into();
         assert_eq!("003849", &administration_1);
-        let transport_type_id_1: String = parsed_values.remove(0).into();
         assert_eq!("T", &transport_type_id_1);
-        let line_id_1: String = parsed_values.remove(0).into();
         assert_eq!("#0000482", &line_id_1);
-        let direction_1: String = parsed_values.remove(0).into();
         assert_eq!("*", &direction_1);
-        let administration_2: String = parsed_values.remove(0).into();
         assert_eq!("003849", &administration_2);
-        let transport_type_id_2: String = parsed_values.remove(0).into();
         assert_eq!("T", &transport_type_id_2);
-        let line_id_2: String = parsed_values.remove(0).into();
         assert_eq!("#0000488", &line_id_2);
-        let direction_2: String = parsed_values.remove(0).into();
         assert_eq!("*", &direction_2);
-        let duration: i16 = parsed_values.remove(0).into();
         assert_eq!(3, duration);
-        let is_guaranteed: String = parsed_values.remove(0).into();
-        assert_eq!("", &is_guaranteed);
+        assert!(!is_guaranteed);
     }
 
     #[test]
