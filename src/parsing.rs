@@ -20,7 +20,6 @@ mod transport_type_parser;
 pub use attribute_parser::parse as load_attributes;
 pub use bit_field_parser::parse as load_bit_fields;
 pub use direction_parser::parse as load_directions;
-pub use exchange_administration_parser::old_parse as old_load_exchange_times_administration;
 pub use exchange_administration_parser::parse as load_exchange_times_administration;
 pub use exchange_journey_parser::parse as load_exchange_times_journey;
 pub use exchange_line_parser::parse as load_exchange_times_line;
