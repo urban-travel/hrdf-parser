@@ -39,12 +39,9 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     models::{DirectionType, ExchangeTimeLine, LineInfo, Model},
-    parsing::{
-        ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser,
-        helpers::{
-            i16_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
-            string_from_n_chars_parser,
-        },
+    parsing::helpers::{
+        i16_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
+        string_from_n_chars_parser,
     },
     storage::ResourceStorage,
     utils::AutoIncrement,
@@ -135,56 +132,6 @@ fn parse_exchange_line_row(
             is_guaranteed,
         ),
     ))
-}
-
-fn exchange_line_row_parser() -> RowParser {
-    RowParser::new(vec![
-        // This row is used to create a LineExchangeTime instance.
-        RowDefinition::from(vec![
-            ColumnDefinition::new(1, 7, ExpectedType::OptionInteger32),
-            ColumnDefinition::new(9, 14, ExpectedType::String),
-            ColumnDefinition::new(16, 18, ExpectedType::String),
-            ColumnDefinition::new(20, 27, ExpectedType::String),
-            ColumnDefinition::new(29, 29, ExpectedType::String),
-            ColumnDefinition::new(31, 36, ExpectedType::String),
-            ColumnDefinition::new(38, 40, ExpectedType::String),
-            ColumnDefinition::new(42, 49, ExpectedType::String),
-            ColumnDefinition::new(51, 51, ExpectedType::String),
-            ColumnDefinition::new(53, 55, ExpectedType::Integer16),
-            ColumnDefinition::new(56, 56, ExpectedType::String),
-        ]),
-    ])
-}
-
-fn exchange_line_row_converter(
-    parser: FileParser,
-    transport_types_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<FxHashMap<i32, ExchangeTimeLine>, Box<dyn Error>> {
-    let auto_increment = AutoIncrement::new();
-
-    let data = parser
-        .parse()
-        .map(|x| {
-            x.and_then(|(_, _, values)| {
-                create_instance(values, &auto_increment, transport_types_pk_type_converter)
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let data = ExchangeTimeLine::vec_to_map(data);
-    Ok(data)
-}
-
-pub fn old_parse(
-    path: &str,
-    transport_types_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<ResourceStorage<ExchangeTimeLine>, Box<dyn Error>> {
-    log::info!("Parsing UMSTEIGL...");
-
-    let row_parser = exchange_line_row_parser();
-    let parser = FileParser::new(&format!("{path}/UMSTEIGL"), row_parser)?;
-    let data = exchange_line_row_converter(parser, transport_types_pk_type_converter)?;
-
-    Ok(ResourceStorage::new(data))
 }
 
 fn parse_line(
@@ -281,84 +228,6 @@ pub fn parse(
     Ok(ResourceStorage::new(exchanges))
 }
 
-// ------------------------------------------------------------------------------------------------
-// --- Data Processing Functions
-// ------------------------------------------------------------------------------------------------
-
-fn create_instance(
-    mut values: Vec<ParsedValue>,
-    auto_increment: &AutoIncrement,
-    transport_types_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<ExchangeTimeLine, Box<dyn Error>> {
-    let stop_id: Option<i32> = values.remove(0).into();
-    let administration_1: String = values.remove(0).into();
-    let transport_type_id_1: String = values.remove(0).into();
-    let line_id_1: String = values.remove(0).into();
-    let direction_1: String = values.remove(0).into();
-    let administration_2: String = values.remove(0).into();
-    let transport_type_id_2: String = values.remove(0).into();
-    let line_id_2: String = values.remove(0).into();
-    let direction_2: String = values.remove(0).into();
-    let duration: i16 = values.remove(0).into();
-    let is_guaranteed: String = values.remove(0).into();
-
-    let transport_type_id_1 = *transport_types_pk_type_converter
-        .get(&transport_type_id_1)
-        .ok_or("Unknown legacy ID")?;
-
-    let line_id_1 = if line_id_1 == "*" {
-        None
-    } else {
-        Some(line_id_1)
-    };
-
-    let direction_1 = if direction_1 == "*" {
-        None
-    } else {
-        Some(DirectionType::from_str(&direction_1)?)
-    };
-
-    let transport_type_id_2 = *transport_types_pk_type_converter
-        .get(&transport_type_id_2)
-        .ok_or("Unknown legacy ID")?;
-
-    let line_id_2 = if line_id_2 == "*" {
-        None
-    } else {
-        Some(line_id_2)
-    };
-
-    let direction_2 = if direction_2 == "*" {
-        None
-    } else {
-        Some(DirectionType::from_str(&direction_2)?)
-    };
-
-    let is_guaranteed = is_guaranteed == "!";
-
-    let line_1 = LineInfo::new(
-        administration_1,
-        transport_type_id_1,
-        line_id_1,
-        direction_1,
-    );
-    let line_2 = LineInfo::new(
-        administration_2,
-        transport_type_id_2,
-        line_id_2,
-        direction_2,
-    );
-
-    Ok(ExchangeTimeLine::new(
-        auto_increment.next(),
-        stop_id,
-        line_1,
-        line_2,
-        duration,
-        is_guaranteed,
-    ))
-}
-
 #[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
@@ -367,7 +236,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn row_parser_v207() {
+    fn row_parser() {
         let line = "8301113 000011 S   *        * 007000 B   *        * 003  Luino (I)";
         let (
             _res,
@@ -495,7 +364,7 @@ mod tests {
     }
 
     #[test]
-    fn type_converter_v207() {
+    fn mutiline_parser() {
         let rows = vec![
             "8301113 000011 S   *        * 007000 B   *        * 003  Luino (I)".to_string(),
             "1111135 sbg034 B   7339     H sbg034 TX  7341     H 000! Waldshut, Busbahnhof"
@@ -504,10 +373,6 @@ mod tests {
             "8580522 003849 T   #0000482 * 003849 T   #0000488 * 003  Zürich, Escher-Wyss-Platz"
                 .to_string(),
         ];
-        let parser = FileParser {
-            row_parser: exchange_line_row_parser(),
-            rows,
-        };
 
         // The transport_types_pk_type_converter is dummy and created just for testing purposes
         let mut transport_types_pk_type_converter: FxHashMap<String, i32> = FxHashMap::default();
@@ -516,10 +381,17 @@ mod tests {
         transport_types_pk_type_converter.insert("TX".to_string(), 3);
         transport_types_pk_type_converter.insert("RE".to_string(), 4);
         transport_types_pk_type_converter.insert("T".to_string(), 5);
+        let auto_increment = AutoIncrement::new();
+        let exchanges = rows
+            .into_iter()
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| parse_line(&line, &auto_increment, &transport_types_pk_type_converter))
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()
+            .unwrap();
+        let exchanges = ExchangeTimeLine::vec_to_map(exchanges);
 
-        let data = exchange_line_row_converter(parser, &transport_types_pk_type_converter).unwrap();
         // Id 1
-        let attribute = data.get(&1).unwrap();
+        let attribute = exchanges.get(&1).unwrap();
         let reference = r#"
              {
                  "id": 1,
@@ -542,7 +414,7 @@ mod tests {
         let (attribute, reference) = get_json_values(attribute, reference).unwrap();
         assert_eq!(attribute, reference);
         // Id 2
-        let attribute = data.get(&2).unwrap();
+        let attribute = exchanges.get(&2).unwrap();
         let reference = r#"
              {
                  "id": 2,
@@ -565,7 +437,7 @@ mod tests {
         let (attribute, reference) = get_json_values(attribute, reference).unwrap();
         assert_eq!(attribute, reference);
         // Id 3
-        let attribute = data.get(&3).unwrap();
+        let attribute = exchanges.get(&3).unwrap();
         let reference = r#"
              {
                  "id": 3,
@@ -588,7 +460,7 @@ mod tests {
         let (attribute, reference) = get_json_values(attribute, reference).unwrap();
         assert_eq!(attribute, reference);
         // Id 4
-        let attribute = data.get(&4).unwrap();
+        let attribute = exchanges.get(&4).unwrap();
         let reference = r###"
              {
                  "id": 4,
