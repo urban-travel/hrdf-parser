@@ -58,21 +58,43 @@ use crate::{
 #[derive(Debug)]
 enum LineType {
     // * Line type K: Line key
-    Kline { id: i32, name: String },
+    Kline {
+        id: i32,
+        name: String,
+    },
     // * Line type W: Internal line designation
-    Wline,
+    Wline {
+        id: i32,
+        internal_designation: String,
+    },
     // * Line type N T: Line short name (not present)
-    NTline { id: i32, short_name: String },
+    NTline {
+        id: i32,
+        short_name: String,
+    },
     // * Line type L T: Long line name
-    LTline { id: i32, long_name: String },
+    LTline {
+        id: i32,
+        long_name: String,
+    },
     // * Line type R T: Line region name (reserved for BAV ID)
     RTline,
     // * Line type D T: Line description (not present)
     DTline,
     // * Line type F: Line color
-    Fline { id: i32, r: i16, g: i16, b: i16 },
+    Fline {
+        id: i32,
+        r: i16,
+        g: i16,
+        b: i16,
+    },
     // * Line type B: Line background color
-    Bline { id: i32, r: i16, g: i16, b: i16 },
+    Bline {
+        id: i32,
+        r: i16,
+        g: i16,
+        b: i16,
+    },
     // * Line type H: Main line (not present)
     Hline,
     // * Line type I: Line info texts (not present)
@@ -85,7 +107,7 @@ fn row_k_nt_lt_combinator<'a>()
         (
             i32_from_n_digits_parser(7),
             char(' '),
-            alt((tag("K "), tag("N T "), tag("L T "))),
+            alt((tag("K "), tag("N T "), tag("L T "), tag("W "))),
             string_till_eol_parser(),
         ),
         |(id, _, line_type, name)| match line_type {
@@ -97,6 +119,10 @@ fn row_k_nt_lt_combinator<'a>()
             "L T " => Some(LineType::LTline {
                 id,
                 long_name: name,
+            }),
+            "W " => Some(LineType::Wline {
+                id,
+                internal_designation: name,
             }),
             _ => None,
         },
@@ -151,6 +177,19 @@ fn parse_line(line: &str, data: &mut Vec<Line>) -> Result<(), Box<dyn Error>> {
             }
             line.set_long_name(long_name);
         }
+        LineType::Wline {
+            id,
+            internal_designation,
+        } => {
+            let line = data.last_mut().ok_or("Type K row missing.")?;
+            if id != line.id() {
+                return Err(
+                    format!("Error: Line id not corresponding, {id}, {}", line.id()).into(),
+                );
+            }
+            line.set_internal_designation(internal_designation);
+        }
+
         LineType::Fline { id, r, g, b } => {
             let line = data.last_mut().ok_or("Type K row missing.")?;
             if id != line.id() {
