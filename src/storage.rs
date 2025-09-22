@@ -118,7 +118,7 @@ impl DataStorage {
         //     .zip(old_keys)
         //     .filter(|(lhs, rhs)| {
         //         let vlhs = journeys.data().get(lhs).unwrap();
-        //         let vrhs: &Journey = old_journeys.data().get(rhs).unwrap();
+        //         let vrhs = old_journeys.data().get(rhs).unwrap();
         //         let (new, old) = get_json_values_complete(vlhs, vrhs).unwrap();
         //         let cond = new != old;
         //         if cond {

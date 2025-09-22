@@ -68,7 +68,7 @@ use crate::{
 
 type AttributeAndTypeConverter = (ResourceStorage<Attribute>, FxHashMap<String, i32>);
 
-enum AttributeRow {
+enum AttributeLine {
     Offer {
         designation_id: String,
         stop_scope: i16,
@@ -84,7 +84,7 @@ enum AttributeRow {
 }
 
 fn row_offer_combinator<'a>()
--> impl Parser<&'a str, Output = AttributeRow, Error = nom::error::Error<&'a str>> {
+-> impl Parser<&'a str, Output = AttributeLine, Error = nom::error::Error<&'a str>> {
     (
         string_from_n_chars_parser(2),
         char(' '),
@@ -96,7 +96,7 @@ fn row_offer_combinator<'a>()
     )
         .map(
             |(designation_id, _, stop_scope, _, priority, _, secondary_sorting_priority)| {
-                AttributeRow::Offer {
+                AttributeLine::Offer {
                     designation_id,
                     stop_scope,
                     priority,
@@ -107,25 +107,25 @@ fn row_offer_combinator<'a>()
 }
 
 fn row_language_combinator<'a>()
--> impl Parser<&'a str, Output = AttributeRow, Error = nom::error::Error<&'a str>> {
+-> impl Parser<&'a str, Output = AttributeLine, Error = nom::error::Error<&'a str>> {
     preceded(tag("<"), terminated(take_until(">"), tag(">")))
-        .map(|s| AttributeRow::Language(String::from(s)))
+        .map(|s| AttributeLine::Language(String::from(s)))
 }
 
 fn row_description_combinator<'a>()
--> impl Parser<&'a str, Output = AttributeRow, Error = nom::error::Error<&'a str>> {
-    preceded(tag("#"), string_till_eol_parser()).map(AttributeRow::Description)
+-> impl Parser<&'a str, Output = AttributeLine, Error = nom::error::Error<&'a str>> {
+    preceded(tag("#"), string_till_eol_parser()).map(AttributeLine::Description)
 }
 
 fn row_language_description_combinator<'a>()
--> impl Parser<&'a str, Output = AttributeRow, Error = nom::error::Error<&'a str>> {
+-> impl Parser<&'a str, Output = AttributeLine, Error = nom::error::Error<&'a str>> {
     (
         string_from_n_chars_parser(2),
         multispace1,
         string_till_eol_parser(),
     )
         .map(
-            |(legacy_id, _, description)| AttributeRow::LanguageDescription {
+            |(legacy_id, _, description)| AttributeLine::LanguageDescription {
                 legacy_id,
                 description,
             },
@@ -149,7 +149,7 @@ fn parse_line(
     .map_err(|e| format!("Error {e} while parsing {line}"))?;
 
     match attribute_row {
-        AttributeRow::Offer {
+        AttributeLine::Offer {
             designation_id,
             stop_scope,
             priority,
@@ -171,12 +171,12 @@ fn parse_line(
             );
             data.insert(attribute.id(), attribute);
         }
-        AttributeRow::Language(s) => {
+        AttributeLine::Language(s) => {
             if s != "text" {
                 *current_language = Language::from_str(&s)?;
             }
         }
-        AttributeRow::LanguageDescription {
+        AttributeLine::LanguageDescription {
             legacy_id,
             description,
         } => {
@@ -188,7 +188,7 @@ fn parse_line(
                 .ok_or(format!("Unknown ID: {id}"))?
                 .set_description(*current_language, &description);
         }
-        AttributeRow::Description(_s) => {
+        AttributeLine::Description(_s) => {
             // We do nothing
         }
     }
@@ -235,7 +235,7 @@ mod tests {
             .map_err(|e| format!("Error {e}: Unable to parse {input}"))?;
 
         match ld {
-            AttributeRow::LanguageDescription {
+            AttributeLine::LanguageDescription {
                 legacy_id,
                 description,
             } => Ok((legacy_id, description)),
@@ -275,7 +275,7 @@ mod tests {
             .map_err(|e| format!("Error {e}: Unable to parse {input}"))?;
 
         match lang {
-            AttributeRow::Description(s) => Ok(s),
+            AttributeLine::Description(s) => Ok(s),
             _ => Err("Not a Description".into()),
         }
     }
@@ -292,7 +292,7 @@ mod tests {
             .parse(input)
             .map_err(|e| format!("Error {e}: Unable to parse {input}"))?;
         match line {
-            AttributeRow::Offer {
+            AttributeLine::Offer {
                 designation_id,
                 stop_scope,
                 priority,
@@ -323,7 +323,7 @@ mod tests {
             .map_err(|e| format!("Error {e}: Unable to parse {input}"))?;
 
         match line {
-            AttributeRow::Language(language) => Ok(language),
+            AttributeLine::Language(language) => Ok(language),
             _ => Err("Not a Language".into()),
         }
     }
