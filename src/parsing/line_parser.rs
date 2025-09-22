@@ -101,7 +101,7 @@ enum LineType {
     Iline,
 }
 
-fn row_k_nt_lt_combinator<'a>()
+fn row_k_nt_lt_w_combinator<'a>()
 -> impl Parser<&'a str, Output = Option<LineType>, Error = nom::error::Error<&'a str>> {
     map(
         (
@@ -153,7 +153,7 @@ fn row_f_b_combinator<'a>()
 }
 
 fn parse_line(line: &str, data: &mut Vec<Line>) -> Result<(), Box<dyn Error>> {
-    let (_, line_row) = alt((row_k_nt_lt_combinator(), row_f_b_combinator()))
+    let (_, line_row) = alt((row_k_nt_lt_w_combinator(), row_f_b_combinator()))
         .parse(line)
         .map_err(|e| format!("Error {e} while parsing {line}"))?;
 
