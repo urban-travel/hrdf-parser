@@ -1,10 +1,95 @@
-// 3 file(s).
-// File(s) read by the parser:
-// GLEIS, GLEIS_LV95, GLEIS_WGS
-// ---
-// Note: this parser collects both the Platform and JourneyPlatform resources.
+/// # List of track and bus platform information.
+///
+/// ## File contains:
+///
+/// The first part defines validities, TUs and journeys, which are associated with the track infrastructure in the second part:
+/// * HS no.
+/// * Journey number
+/// * Transport company code
+/// * Track link ID “#…”
+/// * Service running times;
+/// * Days of operation
+///
+/// ## Example (excerpt):
+///
+/// `
+/// ...
+/// 8500010 000003 000011 #0000001      053751 % HS-Nr. 8500010, Fahrt-Nr. 3, TU-Code 11 (SBB), Link #1, keine Verkehrszeit, Verkehrstage-bit: 053751 (s. BITFELD-Datei)
+/// 8500010 000003 000011 #0000002      053056 % ...
+/// 8500010 000003 000011 #0000003      097398 % ...
+/// 8500010 000003 000011 #0000001      001345 % HS-Nr. 8500010, Fahrt-Nr. 3, TU-Code 11 (SBB), Link #1, keine Verkehrszeit, Verkehrstage-bit: 001345 (!) anders als erste Zeile!
+/// ...
+/// 8014413 005338 8006C5 #0000001      075277 % ...
+/// 8014331 005338 8006C5 #0000003 0025 049496 % HS-Nr. 8014331, Fahrt-Nr. 5338, TU-Code 8006C5 (DB Regio), Link #3, Verkehrszeit 00:25, Verkehrstage-bit: 049496 (s. BITFELD-Datei)
+/// 8014281 005339 8006C5 #0000002      080554 % ...
+/// ...
+/// `
+///
+/// The second part describes the infrastructure (tracks or bus platforms) of the stop:
+/// * HS no.
+/// * Track link ID “#…” linked with part 1 in combination with HS no.
+/// * G = track, A = section, T = separator
+///
+/// ## Description
+///
+/// `
+/// ...
+/// 8500010 #0000004 G '9'  % HS-Nr. 8500010, Link #4, Gleis "9"
+/// 8500010 #0000001 G '11' % HS-Nr. 8500010, Link #4, Gleis "11" -> Übereinstimmung mit Erster und vierter Zeile im Beispiel oben!, d.h. die beiden mit unterschiedlichen Gültigkeiten beziehen sich auf Gleis 11
+/// 8500010 #0000003 G '12' % ...
+/// ...
+/// 8014330 #0000001 G '2'  % ...
+/// 8014331 #0000001 G '1'  % ...
+/// 8014331 #0000002 G '2'  % ...
+/// 8014331 #0000003 G '3'  % HS-Nr. 8014331, Link #3, Gleis "3" -> Übereinstimmung mit zweiter Zeile im Zweiten Abschnitt im Beispiel oben!
+/// 8014332 #0000002 G '1'  % ...
+/// ...
+/// `
+///
+/// This creates the overall picture by linking the two pieces of information.
+///
+/// IMPORTANT NOTE on *WGS and *LV95, as well as “GLEIS” vs “GLEISE”: These two files will replace the “pure” GLEIS and GLEIS_* files in Switzerland in 2024. So GLEISE_WGS and GLEISE_LV95 remain. Accordingly, we have also documented these directly here.
+///
+/// With the replacement, only the second part changes as follows (further details on this topic and the implementation in Switzerland can be found in the RV):
+///
+/// * HS no.
+/// * Track link ID “#…” linked with part 1 in combination with HS no.
+/// * Changed: Track = G, A = Section, g A = Swiss Location ID (SLOID), k = Coordinates (longitude, latitude, altitude)
+/// * Important: contrary to the standard, track and section data are in different lines and not in one!
+///
+/// ## Description
+/// * ‘ ‘ means no explicit designation at the location
+///
+/// ## Example (excerpt):
+///
+/// `
+/// ...
+/// 8500207 #0000001 G '1'                    % Hs-Nr. 8500207, Link #1, Gleis "1"
+/// 8500207 #0000001 A 'AB'                   % Hs-Nr. 8500207, Link #1, Gleis-Abschnitt "AB" <-> Die verlinkte Fahrt hält an Gleis 1, Abschnitt AB (Tripel HS-Nr., Link, Bezeichnungen)
+/// 8503000 #0000002 G '13'                   % ...
+/// 8574200 #0000003 G ''                     % Hs-Nr. 8574200, Link #3, Gleis "" <-> Gleis hat keine explizite Bezeichnung am Ort
+/// 8574200 #0000003 g A ch:1:sloid:74200:1:3 % Hs-Nr. 8574200, Link #3, SLOID "ch:1:sloid:74200:1:3" <-> Gleis "" hat SLOID wie beschrieben
+/// 8574200 #0000003 k 2692827 1247287 680    % Hs-Nr. 8574200, Link #3, Koordinaten 269.. 124.. Höhe 680 <-> Gleis "" mit SLOID hat Koordinaten wie beschrieben
+/// ...
+/// `
+///
+///
+/// 3 file(s).
+/// File(s) read by the parser:
+/// GLEIS, GLEIS_LV95, GLEIS_WGS
+/// ---
+/// Note: this parser collects both the Platform and JourneyPlatform resources.
 use std::error::Error;
 
+use nom::{
+    Parser,
+    bytes::tag,
+    character::{char, complete::space1},
+    combinator::map,
+    multi::separated_list1,
+    number::double,
+    sequence::{preceded, separated_pair},
+};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
@@ -13,6 +98,10 @@ use crate::{
     parsing::{
         ColumnDefinition, ExpectedType, FastRowMatcher, FileParser, ParsedValue, RowDefinition,
         RowParser,
+        helpers::{
+            i32_from_n_digits_parser, optional_i32_from_n_digits_parser,
+            string_from_n_chars_parser, string_till_eol_parser,
+        },
     },
     storage::ResourceStorage,
     utils::{AutoIncrement, create_time_from_value},
@@ -23,6 +112,130 @@ const ROW_PLATFORM: i32 = 2;
 const ROW_SECTION: i32 = 3;
 const ROW_SLOID: i32 = 4;
 const ROW_COORD: i32 = 5;
+
+enum PlatformLine {
+    JourneyPlatform {
+        stop_id: i32,
+        journey_id: i32,
+        administration: String,
+        index: i32,
+        time: Option<i32>,
+        bit_field_id: Option<i32>,
+    },
+    Platform {
+        stop_id: i32,
+        index: i32,
+        platform_data: String,
+    },
+    // Currently unused. Maybe we will want to use it at some point
+    Section {
+        stop_id: i32,
+        index: i32,
+        section_data: String,
+    },
+    Sloid {
+        stop_id: i32,
+        index: i32,
+        sloid: String,
+    },
+    Coord {
+        stop_id: i32,
+        index: i32,
+        x: f64,
+        y: f64,
+        altitude: f64,
+    },
+}
+
+fn journey_platform_combinator<'a>()
+-> impl Parser<&'a str, Output = PlatformLine, Error = nom::error::Error<&'a str>> {
+    map(
+        (
+            i32_from_n_digits_parser(7),
+            preceded(char(' '), i32_from_n_digits_parser(6)),
+            preceded(char(' '), string_from_n_chars_parser(6)),
+            preceded((space1, tag("#")), i32_from_n_digits_parser(7)),
+            preceded(char(' '), optional_i32_from_n_digits_parser(4)),
+            preceded(char(' '), optional_i32_from_n_digits_parser(6)),
+        ),
+        |(stop_id, journey_id, administration, index, time, bit_field_id)| {
+            PlatformLine::JourneyPlatform {
+                stop_id,
+                journey_id,
+                administration,
+                index,
+                time,
+                bit_field_id,
+            }
+        },
+    )
+}
+
+fn journey_combinator<'a>()
+-> impl Parser<&'a str, Output = PlatformLine, Error = nom::error::Error<&'a str>> {
+    map(
+        (
+            i32_from_n_digits_parser(7),
+            preceded(tag(" #"), i32_from_n_digits_parser(7)),
+            preceded(tag(" G "), string_till_eol_parser()),
+        ),
+        |(stop_id, index, platform_data)| PlatformLine::Platform {
+            stop_id,
+            index,
+            platform_data,
+        },
+    )
+}
+
+fn section_combinator<'a>()
+-> impl Parser<&'a str, Output = PlatformLine, Error = nom::error::Error<&'a str>> {
+    map(
+        (
+            i32_from_n_digits_parser(7),
+            preceded(tag(" #"), i32_from_n_digits_parser(7)),
+            preceded(tag(" A "), string_till_eol_parser()),
+        ),
+        |(stop_id, index, section_data)| PlatformLine::Section {
+            stop_id,
+            index,
+            section_data,
+        },
+    )
+}
+
+fn coord_combinator<'a>()
+-> impl Parser<&'a str, Output = PlatformLine, Error = nom::error::Error<&'a str>> {
+    map(
+        (
+            i32_from_n_digits_parser(7),
+            preceded(tag(" #"), i32_from_n_digits_parser(7)),
+            preceded(tag(" g A "), separated_list1(char(' '), double())),
+        ),
+        |(stop_id, index, coords)| PlatformLine::Coord {
+            stop_id,
+            index,
+            x: coords[0],
+            y: coords[1],
+            altitude: coords[2],
+        },
+    )
+}
+
+fn sloid_combinator<'a>()
+-> impl Parser<&'a str, Output = PlatformLine, Error = nom::error::Error<&'a str>> {
+    map(
+        (
+            i32_from_n_digits_parser(7),
+            preceded(tag(" #"), i32_from_n_digits_parser(7)),
+            preceded(tag(" k "), string_till_eol_parser()),
+        ),
+        |(stop_id, index, sloid)| PlatformLine::Sloid {
+            stop_id,
+            index,
+            sloid,
+        },
+    )
+}
 
 fn construct_row_parser(version: Version) -> RowParser {
     match version {
