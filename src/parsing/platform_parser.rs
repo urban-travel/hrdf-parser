@@ -83,6 +83,7 @@ use std::error::Error;
 
 use nom::{
     Parser,
+    branch::alt,
     bytes::tag,
     character::{char, complete::space1},
     combinator::map,
@@ -99,7 +100,7 @@ use crate::{
         ColumnDefinition, ExpectedType, FastRowMatcher, FileParser, ParsedValue, RowDefinition,
         RowParser,
         helpers::{
-            i32_from_n_digits_parser, optional_i32_from_n_digits_parser,
+            i32_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
             string_from_n_chars_parser, string_till_eol_parser,
         },
     },
@@ -125,7 +126,8 @@ enum PlatformLine {
     Platform {
         stop_id: i32,
         index: i32,
-        platform_data: String,
+        plaform: String,
+        code: String,
     },
     // Currently unused. Maybe we will want to use it at some point
     Section {
@@ -171,7 +173,7 @@ fn journey_platform_combinator<'a>()
     )
 }
 
-fn journey_combinator<'a>()
+fn platform_combinator<'a>()
 -> impl Parser<&'a str, Output = PlatformLine, Error = nom::error::Error<&'a str>> {
     map(
         (
@@ -235,6 +237,177 @@ fn sloid_combinator<'a>()
             sloid,
         },
     )
+}
+
+fn parse_line(
+    line: &str,
+    platforms: &mut FxHashMap<i32, Platform>,
+    journey_platform: &mut FxHashMap<(i32, i32), JourneyPlatform>,
+    platforms_pk_type_converter: &mut FxHashMap<(i32, i32), i32>,
+    journeys_pk_type_converter: &FxHashSet<JourneyId>,
+    auto_increment: &AutoIncrement,
+) -> Result<(), Box<dyn Error>> {
+    let (_, platform_row) = alt((
+        journey_platform_combinator(),
+        platform_combinator(),
+        section_combinator(),
+        sloid_combinator(),
+        coord_combinator(),
+    ))
+    .parse(line)
+    .map_err(|e| format!("Error {e} while parsing {line}"))?;
+
+    match platform_row {
+        PlatformLine::JourneyPlatform {
+            stop_id,
+            journey_id,
+            administration,
+            index,
+            time,
+            bit_field_id,
+        } => {}
+        PlatformLine::Section {
+            stop_id,
+            index,
+            section_data,
+        } => {}
+        PlatformLine::Platform {
+            stop_id,
+            index,
+            platform_data,
+        } => {
+            let id = auto_increment.next();
+            let (code, sectors) = parse_platform_data(platform_data)?;
+
+            if let Some(previous) = platforms_pk_type_converter.insert((stop_id, index), id) {
+                log::warn!(
+                    "Warning: previous id {previous} for ({stop_id}, {index}). The pair (stop_id, index), ({stop_id}, {index}), is not unique."
+                );
+            };
+
+            Ok(Platform::new(id, code, sectors, stop_id))
+        }
+        PlatformLine::Sloid {
+            stop_id,
+            index,
+            sloid,
+        } => {}
+        PlatformLine::Coord {
+            stop_id,
+            index,
+            x,
+            y,
+            altitude,
+        } => {}
+    }
+    Ok(())
+}
+
+pub fn parse(
+    version: Version,
+    path: &str,
+    journeys_pk_type_converter: &FxHashSet<JourneyId>,
+) -> Result<(ResourceStorage<JourneyPlatform>, ResourceStorage<Platform>), Box<dyn Error>> {
+    log::info!("Parsing GLEIS...");
+    let row_parser = construct_row_parser(version);
+
+    let auto_increment = AutoIncrement::new();
+    let mut platforms = FxHashMap::default();
+    let mut platforms_pk_type_converter = FxHashMap::default();
+
+    let mut journey_platform = FxHashMap::default();
+
+    let lines = read_lines(&format!("{path}/LINIE"), 0)?;
+
+    lines
+        .into_iter()
+        .filter(|line| !line.trim().is_empty())
+        .try_for_each(|line| {
+            parse_line(
+                &line,
+                &mut platforms,
+                &mut journey_platform,
+                &mut platforms_pk_type_converter,
+                &journeys_pk_type_converter,
+                &auto_increment,
+            )
+        })?;
+
+    match version {
+        Version::V_5_40_41_2_0_4 | Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6 => {
+            let parser = FileParser::new(&format!("{path}/GLEIS"), row_parser)?;
+            for x in parser.parse() {
+                let (id, bytes_read, values) = x?;
+                match id {
+                    ROW_JOURNEY_PLATFORM => {
+                        bytes_offset += bytes_read;
+                        journey_platform.push(values);
+                    }
+                    ROW_PLATFORM => {
+                        platforms.push(create_platform(
+                            values,
+                            &auto_increment,
+                            &mut platforms_pk_type_converter,
+                        )?);
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        }
+        Version::V_5_40_41_2_0_7 => {
+            let parser = FileParser::new(&format!("{path}/GLEISE_LV95"), row_parser)?;
+            for x in parser.parse() {
+                let (id, bytes_read, values) = x?;
+                match id {
+                    ROW_JOURNEY_PLATFORM => {
+                        bytes_offset += bytes_read;
+                        journey_platform.push(values);
+                    }
+                    ROW_PLATFORM => {
+                        platforms.push(create_platform(
+                            values,
+                            &auto_increment,
+                            &mut platforms_pk_type_converter,
+                        )?);
+                    }
+                    ROW_SECTION => {
+                        // We do nothing
+                        // We may want to use section at some point
+                    }
+                    ROW_SLOID | ROW_COORD => {
+                        // We do nothing, coordinates and sloid are parsed afterwards
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        }
+    }
+
+    let mut platforms = Platform::vec_to_map(platforms);
+
+    let journey_platform = journey_platform
+        .into_iter()
+        .map(|values| {
+            create_journey_platform(
+                values,
+                journeys_pk_type_converter,
+                &platforms_pk_type_converter,
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let journey_platform = JourneyPlatform::vec_to_map(journey_platform);
+
+    log::info!("Parsing GLEIS_LV95...");
+    #[rustfmt::skip]
+    load_coordinates_for_platforms(version, path, CoordinateSystem::LV95, bytes_offset, &platforms_pk_type_converter, &mut platforms)?;
+    log::info!("Parsing GLEIS_WGS84...");
+    #[rustfmt::skip]
+    load_coordinates_for_platforms(version, path, CoordinateSystem::WGS84, bytes_offset, &platforms_pk_type_converter, &mut platforms)?;
+
+    Ok((
+        ResourceStorage::new(journey_platform),
+        ResourceStorage::new(platforms),
+    ))
 }
 
 fn construct_row_parser(version: Version) -> RowParser {
@@ -346,7 +519,7 @@ fn construct_row_parser(version: Version) -> RowParser {
     }
 }
 
-pub fn parse(
+pub fn old_parse(
     version: Version,
     path: &str,
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
