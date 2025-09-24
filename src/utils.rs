@@ -23,6 +23,10 @@ impl AutoIncrement {
         *self.value.borrow_mut() += 1;
         *self.value.borrow()
     }
+
+    pub fn get(&self) -> i32 {
+        *self.value.borrow()
+    }
 }
 
 pub fn add_1_day(date: NaiveDate) -> NaiveDate {

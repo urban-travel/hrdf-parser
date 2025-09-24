@@ -110,7 +110,7 @@ impl DataStorage {
 
         // let mut keys = journeys.data().keys().copied().collect::<Vec<_>>();
         // keys.sort();
-        // let mut old_keys> = old_journeys.data().keys().copied().collect::<Vec<_>>();
+        // let mut old_keys = old_journeys.data().keys().copied().collect::<Vec<_>>();
         // old_keys.sort();
         //
         // let bla = keys
