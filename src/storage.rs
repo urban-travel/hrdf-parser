@@ -110,7 +110,7 @@ impl DataStorage {
 
         // let mut keys = journeys.data().keys().copied().collect::<Vec<_>>();
         // keys.sort();
-        // let mut old_keys: Vec<i32> = old_journeys.data().keys().copied().collect();
+        // let mut old_keys> = old_journeys.data().keys().copied().collect::<Vec<_>>();
         // old_keys.sort();
         //
         // let bla = keys
@@ -118,7 +118,7 @@ impl DataStorage {
         //     .zip(old_keys)
         //     .filter(|(lhs, rhs)| {
         //         let vlhs = journeys.data().get(lhs).unwrap();
-        //         let vrhs = old_journeys.data().get(rhs).unwrap();
+        //         let vrhs= old_journeys.data().get(rhs).unwrap();
         //         let (new, old) = get_json_values_complete(vlhs, vrhs).unwrap();
         //         let cond = new != old;
         //         if cond {
@@ -149,7 +149,6 @@ impl DataStorage {
         // return Err(format!("{:?}\n {:?} \n", bla, bla2).into());
         let (journey_platform, platforms) =
             parsing::load_platforms(version, path, &journeys_pk_type_converter)?;
-
         let through_service = parsing::load_through_service(path, &journeys_pk_type_converter)?;
 
         // Exchange times

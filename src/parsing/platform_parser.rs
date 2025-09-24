@@ -88,7 +88,7 @@ use nom::{
     bytes::streaming::take_until,
     character::{
         char,
-        complete::{alphanumeric0, multispace0, multispace1, space1},
+        complete::{multispace0, multispace1, space1},
     },
     combinator::{map, opt},
     number::complete::double,
@@ -175,7 +175,7 @@ fn platform_combinator<'a>()
             preceded(tag(" G "), delimited(tag("'"), take_until("'"), tag("'"))),
             preceded(
                 opt(tag(" A ")),
-                opt(delimited(tag("'"), alphanumeric0, tag("'"))),
+                opt(delimited(tag("'"), take_until("'"), tag("'"))),
             ),
         ),
         |(stop_id, index, platform_name, code)| PlatformLine::Platform {
@@ -210,7 +210,7 @@ fn coord_combinator<'a>()
             i32_from_n_digits_parser(7),
             preceded(tag(" #"), i32_from_n_digits_parser(7)),
             preceded(
-                tag(" k"),
+                alt((tag(" k"), tag(" K"))),
                 (
                     preceded(multispace0, double),
                     preceded(multispace1, double),
@@ -234,7 +234,10 @@ fn sloid_combinator<'a>()
         (
             i32_from_n_digits_parser(7),
             preceded(tag(" #"), i32_from_n_digits_parser(7)),
-            preceded(tag(" g A "), string_till_eol_parser()),
+            alt((
+                preceded(tag(" g A "), string_till_eol_parser()),
+                preceded(tag(" I A "), string_till_eol_parser()),
+            )),
         ),
         |(stop_id, index, sloid)| PlatformLine::Sloid {
             stop_id,
@@ -372,14 +375,18 @@ pub fn parse(
     path: &str,
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
 ) -> Result<(ResourceStorage<JourneyPlatform>, ResourceStorage<Platform>), Box<dyn Error>> {
+    let prefix = match version {
+        Version::V_5_40_41_2_0_7 => "GLEISE",
+        Version::V_5_40_41_2_0_4 | Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6 => "GLEIS",
+    };
     let auto_increment = AutoIncrement::new();
     let mut platforms = FxHashMap::default();
     let mut platforms_pk_type_converter = FxHashMap::default();
 
     let mut journey_platform = FxHashMap::default();
 
-    log::info!("Parsing GLEISE_LV95...");
-    let platforms_lv95 = read_lines(&format!("{path}/GLEISE_LV95"), 0)?;
+    log::info!("Parsing {prefix}_LV95...");
+    let platforms_lv95 = read_lines(&format!("{path}/{prefix}_LV95"), 0)?;
     platforms_lv95
         .into_iter()
         .filter(|line| !line.trim().is_empty())
@@ -396,8 +403,8 @@ pub fn parse(
             .map_err(|e| format!("Error: {e}, for line: {line}"))
         })?;
 
-    log::info!("Parsing GLEISE_WGS...");
-    let platforms_wgs84 = read_lines(&format!("{path}/GLEISE_WGS"), 0)?;
+    log::info!("Parsing {prefix}_WGS...");
+    let platforms_wgs84 = read_lines(&format!("{path}/{prefix}_WGS"), 0)?;
     platforms_wgs84
         .into_iter()
         .filter(|line| !line.trim().is_empty())
