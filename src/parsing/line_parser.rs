@@ -225,7 +225,6 @@ pub fn parse(path: &str) -> Result<ResourceStorage<Line>, Box<dyn Error>> {
         .into_iter()
         .filter(|line| !line.trim().is_empty())
         .try_for_each(|line| parse_line(&line, &mut data))?;
-
     let data = Line::vec_to_map(data);
 
     Ok(ResourceStorage::new(data))
