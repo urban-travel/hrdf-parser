@@ -1,11 +1,62 @@
-// 8 file(s).
-// File(s) read by the parser:
-// BAHNHOF, BFKOORD_LV95, BFKOORD_WGS, BFPRIOS, KMINFO, UMSTEIGB, BHFART_60
-// ---
-// Files not used by the parser:
-// BHFART
+/// # BAHNHOF file
+///
+/// ## List of stops A detailed description of the stops (incl. Meta-stops (see METABHF file)) can be found here.
+///
+/// The file contains stops that are referenced in various files:
+///
+/// - Stop number, from DiDok (in future atlas), with a 7-digit number >= 1000000
+/// - The first two numbers are the UIC country code
+/// - Stop name with up to 4 types of designations:
+///     - Up to “$<1>”: official designation from DiDok/atlas
+///     - Up to “$<2>”: long designation from DiDok/atlas
+///     - Up to “$<3>”: Abbreviation from DiDok/atlas
+///     - Up to “$<4>”: alternative designations from the timetable collection
+///
+///
+///
+///
+/// ## Example (excerpt):
+///
+/// `
+/// ...
+/// 8500009     Pregassona, Scuola Media$<1>
+/// 8500010     Basel SBB$<1>$BS$<3>$Bale$<4>$Basilea FFS$<4>$Bâle CFF$<4>
+/// 8500016     Basel St. Johann$<1>$BSSJ$<3>
+/// ...
+/// 8501212     Chavannes-R., UNIL-Mouline$<1>$Chavannes-près-Renens, UNIL-Mouline$<2>$MOUI$<3>
+/// ...
+/// `
+///
+/// Auxiliary stops have an ID < 1000000.They serve as a meta operating point and as an alternative to the name
+/// of the DiDok/atlas system. They allow you to search for services with these names in an online timetable
+/// without knowing the exact name of the stop according to DiDok/atlas.
+///
+/// ## Example – Search for Basel instead of “Basel SBB” (excerpt):
+///
+/// `
+/// ...
+/// 0000021     Barcelona$<1>    % Hilfs-Hs-Nr. 000021, off. Bez. Barcelona
+/// 0000022     Basel$<1>        % Hilfs-Hs-Nr. 000022, off. Bez. Basel
+/// 0000024     Bern Bümpliz$<1> % Hilfs-Hs-Nr. 000024, off. Bez. Bern Bümpliz
+/// ...
+/// `
+///
+/// 8 file(s).
+/// File(s) read by the parser:
+/// BAHNHOF, BFKOORD_LV95, BFKOORD_WGS, BFPRIOS, KMINFO, UMSTEIGB, BHFART_60
+/// ---
+/// Files not used by the parser:
+/// BHFART
 use std::{error::Error, vec};
 
+use nom::{
+    Parser,
+    bytes::complete::{tag, take_until},
+    character::complete::{digit1, space1},
+    combinator::{map, map_res, opt},
+    multi::many0,
+    sequence::{preceded, terminated},
+};
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -13,13 +64,152 @@ use crate::{
     parsing::{
         ColumnDefinition, ExpectedType, FastRowMatcher, FileParser, ParsedValue, RowDefinition,
         RowParser,
+        helpers::{i32_from_n_digits_parser, read_lines, string_till_eol_parser},
     },
     storage::ResourceStorage,
 };
 
 type StopStorageAndExchangeTimes = (ResourceStorage<Stop>, (i16, i16));
 
+enum StopLine {
+    Stop {
+        stop_id: i32,
+        designation: String,
+        long_name: Option<String>,
+        abbreviation: Option<String>,
+        synonyms: Option<Vec<String>>,
+    },
+}
+
+fn designation_number_combinator<'a>()
+-> impl Parser<&'a str, Output = i8, Error = nom::error::Error<&'a str>> {
+    map_res(
+        terminated(preceded(tag("$<"), digit1), tag(">")),
+        |num: &str| num.parse::<i8>(),
+    )
+}
+
+fn station_combinator<'a>()
+-> impl Parser<&'a str, Output = StopLine, Error = nom::error::Error<&'a str>> {
+    map_res(
+        (
+            i32_from_n_digits_parser(7),
+            preceded(space1, map(take_until("$<"), |s: &str| String::from(s))),
+            designation_number_combinator(),
+            many0((
+                preceded(tag("$"), take_until("$<")),
+                designation_number_combinator(),
+            )),
+        ),
+        |(stop_id, designation, num, optional_designations)| {
+            if num != 1 {
+                Err(format!("Error: absent principal name, got {num} instead"))
+            } else {
+                let mut long_name = None;
+                let mut abbreviation = None;
+                let mut synonyms = Vec::new();
+
+                for (d, tag) in optional_designations {
+                    if tag == 2 {
+                        long_name = Some(String::from(d));
+                    } else if tag == 3 {
+                        abbreviation = Some(String::from(d));
+                    } else if tag == 4 {
+                        synonyms.push(String::from(d))
+                    } else {
+                        return Err(format!(
+                            "Error: invalid num must be in range [1, 4], got {tag} instead"
+                        ));
+                    }
+                }
+                Ok(StopLine::Stop {
+                    stop_id,
+                    designation,
+                    long_name,
+                    abbreviation,
+                    synonyms: if synonyms.is_empty() {
+                        None
+                    } else {
+                        Some(synonyms)
+                    },
+                })
+            }
+        },
+    )
+}
+
+fn parse_line(line: &str, stops: &mut FxHashMap<i32, Stop>) -> Result<(), Box<dyn Error>> {
+    let (_, stop_row) = station_combinator()
+        .parse(line)
+        .map_err(|e| format!("Error {e} while parsing {line}"))?;
+
+    match stop_row {
+        StopLine::Stop {
+            stop_id,
+            designation,
+            long_name,
+            abbreviation,
+            synonyms,
+        } => {
+            stops.insert(
+                stop_id,
+                Stop::new(stop_id, designation, long_name, abbreviation, synonyms),
+            );
+        }
+    }
+    Ok(())
+}
+
 pub fn parse(version: Version, path: &str) -> Result<StopStorageAndExchangeTimes, Box<dyn Error>> {
+    log::info!("Parsing BAHNHOF...");
+
+    let mut stops = FxHashMap::default();
+
+    let stop_lines = read_lines(&format!("{path}/BAHNHOF"), 0)?;
+    stop_lines
+        .into_iter()
+        .filter(|line| !line.trim().is_empty())
+        .try_for_each(|line| {
+            parse_line(&line, &mut stops).map_err(|e| format!("Error: {e}, for line: {line}"))
+        })?;
+
+    log::info!("Done BAHNHOF...");
+    #[rustfmt::skip]
+    let row_parser = RowParser::new(vec![
+        // This row is used to create a Stop instance.
+        RowDefinition::from(vec![
+            ColumnDefinition::new(1, 7, ExpectedType::Integer32),
+            ColumnDefinition::new(13, -1, ExpectedType::String), // Should be 13-62, but some entries go beyond column 62.
+        ]),
+    ]);
+    let parser = FileParser::new(&format!("{path}/BAHNHOF"), row_parser)?;
+
+    let data = parser
+        .parse()
+        .map(|x| x.map(|(_, _, values)| create_instance(values))?)
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut data = Stop::vec_to_map(data);
+
+    log::info!("Parsing BFKOORD_LV95...");
+    load_coordinates(version, path, CoordinateSystem::LV95, &mut data)?;
+    log::info!("Parsing BFKOORD_WGS...");
+    load_coordinates(version, path, CoordinateSystem::WGS84, &mut data)?;
+    log::info!("Parsing BFPRIOS...");
+    load_exchange_priorities(path, &mut data)?;
+    log::info!("Parsing KMINFO...");
+    load_exchange_flags(path, &mut data)?;
+    log::info!("Parsing UMSTEIGB...");
+    let default_exchange_time = load_exchange_times(path, &mut data)?;
+    log::info!("Parsing BHFART...");
+    load_descriptions(version, path, &mut data)?;
+
+    Ok((ResourceStorage::new(data), default_exchange_time))
+}
+
+pub fn old_parse(
+    version: Version,
+    path: &str,
+) -> Result<StopStorageAndExchangeTimes, Box<dyn Error>> {
     log::info!("Parsing BAHNHOF...");
     #[rustfmt::skip]
     let row_parser = RowParser::new(vec![
