@@ -149,6 +149,7 @@ impl DataStorage {
         // return Err(format!("{:?}\n {:?} \n", bla, bla2).into());
         let (journey_platform, platforms) =
             parsing::load_platforms(version, path, &journeys_pk_type_converter)?;
+
         let through_service = parsing::load_through_service(path, &journeys_pk_type_converter)?;
 
         // Exchange times
