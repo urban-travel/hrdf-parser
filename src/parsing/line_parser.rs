@@ -19,6 +19,7 @@ pub fn parse(path: &str) -> Result<ResourceStorage<Line>, Box<dyn Error>> {
     const ROW_C: i32 = 3;
     const ROW_D: i32 = 4;
     const ROW_E: i32 = 5;
+    const ROW_F: i32 = 6;
 
     #[rustfmt::skip]
     let row_parser = RowParser::new(vec![
@@ -47,6 +48,12 @@ pub fn parse(path: &str) -> Result<ResourceStorage<Line>, Box<dyn Error>> {
         RowDefinition::new(ROW_E, Box::new(FastRowMatcher::new(9, 3, "L T", true)), vec![
             ColumnDefinition::new(13, -1, ExpectedType::String),
         ]),
+
+        // This row contains the background color.
+        RowDefinition::new(ROW_F, Box::new(FastRowMatcher::new(9, 1, "W", true)), vec![
+            ColumnDefinition::new(1, 7, ExpectedType::Integer32),
+            ColumnDefinition::new(11, -1, ExpectedType::String),
+        ]),
     ]);
     let parser = FileParser::new(&format!("{path}/LINIE"), row_parser)?;
 
@@ -66,6 +73,8 @@ pub fn parse(path: &str) -> Result<ResourceStorage<Line>, Box<dyn Error>> {
                     ROW_C => set_text_color(values, line),
                     ROW_D => set_background_color(values, line),
                     ROW_E => set_long_name(values, line),
+                    ROW_F => { // We do nothing, just for parsing
+                    }
                     _ => unreachable!(),
                 }
             }
