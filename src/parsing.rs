@@ -29,7 +29,6 @@ pub use journey_parser::parse as load_journeys;
 pub use line_parser::parse as load_lines;
 pub use platform_parser::parse as load_platforms;
 pub use stop_connection_parser::parse as load_stop_connections;
-pub use stop_parser::old_parse as old_load_stops;
 pub use stop_parser::parse as load_stops;
 pub use through_service_parser::parse as load_through_service;
 pub use timetable_metadata_parser::parse as load_timetable_metadata;

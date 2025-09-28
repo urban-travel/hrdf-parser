@@ -99,31 +99,6 @@ impl DataStorage {
         // Stop data
         let stop_connections = parsing::load_stop_connections(path, &attributes_pk_type_converter)?;
         let (stops, default_exchange_time) = parsing::load_stops(version, path)?;
-        let (old_stops, old_default_exchange_time) = parsing::old_load_stops(version, path)?;
-
-        let mut keys = stops.data().keys().copied().collect::<Vec<_>>();
-        keys.sort();
-        let mut old_keys = old_stops.data().keys().copied().collect::<Vec<_>>();
-        old_keys.sort();
-
-        let bla = keys
-            .into_iter()
-            .zip(old_keys)
-            .filter(|(lhs, rhs)| {
-                let vlhs = stops.data().get(lhs).unwrap();
-                let vrhs = old_stops.data().get(rhs).unwrap();
-                let (new, old) = get_json_values_complete(vlhs, vrhs).unwrap();
-                let cond = new != old;
-                if cond {
-                    log::info!("=================================");
-                    log::info!("{lhs}: {new}");
-
-                    log::info!("{rhs}: {old}");
-                }
-                cond
-            })
-            .collect::<Vec<_>>();
-        log::info!("{default_exchange_time:?},\n {old_default_exchange_time:?}");
 
         // Timetable data
         let (journeys, journeys_pk_type_converter) = parsing::load_journeys(
