@@ -1,8 +1,51 @@
-// 4 file(s).
-// File(s) read by the parser:
-// BETRIEB_DE, BETRIEB_EN, BETRIEB_FR, BETRIEB_IT
+/// # BETRIEB_* files
+///
+/// List of transport companies. The term “transport company” is understood in different ways.
+/// In the context of opentransportdata.swiss, it is understood that it is an organisation
+/// that is responsible for the runs described in the FPLAN. A detailed description of
+/// the transport companies and business organisations can be found here.
+///
+/// Each TU is described in detail with 2 lines:
+///
+///
+/// - The first line:
+///     - Operator no. (for BETRIEB / OPERATION file)
+///         - Short name (after the “K”)
+///         - Long name (after the “L”)
+///         - Full name (after the”V”)
+///
+/// - The second line:
+///     - Operator no. (for BETRIEB / OPERATION file)
+///     - “:”
+///     - TU code (or administration number)
+///         - Several TU codes can be listed. These share the information in the first line.
+///
+/// ## Example (excerpt):
+///
+/// `
+/// ...
+/// 00379 K "SBB" L "SBB" V "Schweizerische Bundesbahnen SBB"     % Betrieb-Nr 00379, kurz sbb, lang sbb, voll schweizerische bundesbahn sbb
+/// 00379 : 000011                                                % Betrieb-Nr 00379, TU-Code 000011
+/// 00380 K "SOB" L "SOB-bt" V "Schweizerische Südostbahn (bt)"   % Betrieb-Nr 00380, kurz sob, lang sob-bt,  voll schweizerische südostbahn (bt)
+/// 00380 : 000036                                                % Betrieb-Nr 00380, TU-Code 000036
+/// 00381 K "SOB" L "SOB-sob" V "Schweizerische Südostbahn (sob)" % Betrieb-Nr 00381, kurz sob, lang sob-sob, voll schweizerische südostbahn (sob)
+/// 00381 : 000082                                                % Betrieb-Nr 00381, TU-Code 000082
+/// ...
+/// `
+///
+/// 4 file(s).
+/// File(s) read by the parser:
+/// BETRIEB_DE, BETRIEB_EN, BETRIEB_FR, BETRIEB_IT
 use std::error::Error;
 
+use nom::{
+    Parser,
+    bytes::{complete::take_till, complete::take_until, tag},
+    character::complete::{char, i32, space1},
+    combinator::map,
+    multi::many0,
+    sequence::{delimited, preceded, terminated},
+};
 use regex::Regex;
 use rustc_hash::FxHashMap;
 
@@ -14,6 +57,45 @@ use crate::{
     },
     storage::ResourceStorage,
 };
+
+enum TransportCompanyLine {
+    Kline {
+        id: i32,
+        short_name: String,
+        full_name: String,
+        long_name: String,
+    },
+    Nline {
+        id: i32,
+        sboid: String,
+    },
+    ColumnLine {
+        id: i32,
+        administrations: Vec<String>,
+    },
+}
+
+fn kline_combinator<'a>()
+-> impl Parser<&'a str, Output = TransportCompanyLine, Error = nom::error::Error<&'a str>> {
+    map(
+        (
+            i32,
+            many0(preceded(
+                space1,
+                map(
+                    terminated(preceded(tag("\""), take_until("\"")), tag("\"")),
+                    String::from,
+                ),
+            )),
+        ),
+        |(id, names)| TransportCompanyLine::Kline {
+            id,
+            short_name: names[0].to_owned(),
+            full_name: names[1].to_owned(),
+            long_name: names[2].to_owned(),
+        },
+    )
+}
 
 pub fn parse(path: &str) -> Result<ResourceStorage<TransportCompany>, Box<dyn Error>> {
     log::info!("Parsing BETRIEB_DE...");

@@ -1,6 +1,15 @@
-// 1 file(s).
-// File(s) read by the parser:
-// ECKDATEN
+/// # ECKDATEN file
+///
+/// Life of the timetable
+///
+/// The timetable data is valid for the defined period. The duration usually corresponds to that of the timetable period
+///
+/// Can be read in decoupled from other data.
+///
+///
+/// 1 file(s).
+/// File(s) read by the parser:
+/// ECKDATEN
 use std::error::Error;
 
 use chrono::NaiveDate;
