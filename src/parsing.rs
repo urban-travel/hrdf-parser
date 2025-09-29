@@ -31,7 +31,6 @@ pub use platform_parser::parse as load_platforms;
 pub use stop_connection_parser::parse as load_stop_connections;
 pub use stop_parser::parse as load_stops;
 pub use through_service_parser::parse as load_through_service;
-pub use timetable_metadata_parser::old_parse as old_load_timetable_metadata;
 pub use timetable_metadata_parser::parse as load_timetable_metadata;
 pub use transport_company_parser::parse as load_transport_companies;
 pub use transport_type_parser::parse as load_transport_types;
