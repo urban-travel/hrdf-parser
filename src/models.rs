@@ -1239,17 +1239,21 @@ pub struct TransportCompany {
 impl_Model!(TransportCompany);
 
 impl TransportCompany {
-    pub fn new(id: i32, administrations: Vec<String>) -> Self {
+    pub fn new(id: i32) -> Self {
         Self {
             id,
             short_name: FxHashMap::default(),
             long_name: FxHashMap::default(),
             full_name: FxHashMap::default(),
-            administrations,
+            administrations: Vec::new(),
         }
     }
 
     // Getters/Setters
+
+    pub fn set_administrations(&mut self, administrations: Vec<String>) {
+        self.administrations = administrations;
+    }
 
     pub fn set_short_name(&mut self, language: Language, value: &str) {
         self.short_name.insert(language, value.to_string());
