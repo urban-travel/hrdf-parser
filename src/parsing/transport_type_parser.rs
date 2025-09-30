@@ -86,7 +86,7 @@ use std::error::Error;
 use nom::{
     Parser,
     bytes::complete::{tag, take_until1},
-    character::complete::{i16, space1},
+    character::complete::{char, i16, space1},
     combinator::map,
     sequence::{preceded, terminated},
 };
@@ -98,7 +98,9 @@ use crate::{
     parsing::{
         AdvancedRowMatcher, ColumnDefinition, ExpectedType, FastRowMatcher, FileParser,
         ParsedValue, RowDefinition, RowParser,
-        helpers::{string_from_n_chars_parser, string_till_eol_parser},
+        helpers::{
+            optional_i32_from_n_digits_parser, string_from_n_chars_parser, string_till_eol_parser,
+        },
     },
     storage::ResourceStorage,
     utils::AutoIncrement,
@@ -125,7 +127,14 @@ enum TransportTypeAndTypeLine {
         category_id: i16,
         category_name: String,
     },
-    Option {},
+    Option {
+        option_id: i16,
+        option_name: String,
+    },
+    Information {
+        code_name: String,
+        id: Option<i32>,
+    },
 }
 
 fn offer_definition_combinator<'a>()
@@ -205,10 +214,21 @@ fn option_combinator<'a>()
             preceded(tag("option"), i16),
             preceded(space1, string_till_eol_parser()),
         ),
-        |(category_id, category_name)| TransportTypeAndTypeLine::Category {
-            category_id,
-            category_name,
+        |(option_id, option_name)| TransportTypeAndTypeLine::Option {
+            option_id,
+            option_name,
         },
+    )
+}
+
+fn iline_combinator<'a>()
+-> impl Parser<&'a str, Output = TransportTypeAndTypeLine, Error = nom::error::Error<&'a str>> {
+    map(
+        (
+            preceded(preceded(tag("*I"), space1), string_from_n_chars_parser(2)),
+            preceded(char(' '), optional_i32_from_n_digits_parser(7)),
+        ),
+        |(code_name, id)| TransportTypeAndTypeLine::Information { code_name, id },
     )
 }
 
