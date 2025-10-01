@@ -19,7 +19,7 @@
 /// INFOTEXT_DE, INFOTEXT_EN, INFOTEXT_FR, INFOTEXT_IT
 use std::{error::Error, str::FromStr};
 
-use nom::{IResult, Parser, character::char, sequence::separated_pair};
+use nom::{character::char, sequence::separated_pair, IResult, Parser};
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -77,9 +77,10 @@ pub fn parse(path: &str) -> Result<ResourceStorage<InformationText>, Box<dyn Err
 
 #[cfg(test)]
 mod tests {
+    use crate::parsing::tests::get_json_values;
+
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::parsing::tests::get_json_values;
     use pretty_assertions::assert_eq;
 
     #[test]

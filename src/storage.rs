@@ -5,7 +5,6 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    JourneyId,
     models::{
         Attribute, BitField, Direction, ExchangeTimeAdministration, ExchangeTimeJourney,
         ExchangeTimeLine, Holiday, InformationText, Journey, JourneyPlatform, Line, Model,
@@ -14,26 +13,13 @@ use crate::{
     },
     parsing,
     utils::{count_days_between_two_dates, timetable_end_date, timetable_start_date},
+    JourneyId,
 };
 
 // ------------------------------------------------------------------------------------------------
 // --- DataStorage
 // ------------------------------------------------------------------------------------------------
 //
-pub(crate) fn get_json_values_complete<F>(
-    lhs: &F,
-    rhs: &F,
-) -> Result<(serde_json::Value, serde_json::Value), Box<dyn Error>>
-where
-    for<'a> F: Serialize + Deserialize<'a>,
-{
-    let serialized_lhs = serde_json::to_string(&lhs)?;
-    let serialized_rhs = serde_json::to_string(&rhs)?;
-    Ok((
-        serialized_lhs.parse::<serde_json::Value>()?,
-        serialized_rhs.parse::<serde_json::Value>()?,
-    ))
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DataStorage {
@@ -94,7 +80,7 @@ impl DataStorage {
         let lines = parsing::load_lines(path)?;
         let transport_companies = parsing::load_transport_companies(path)?;
         let (transport_types, transport_types_pk_type_converter) =
-            parsing::load_transport_types(version, path)?;
+            parsing::load_transport_types(path)?;
 
         // Stop data
         let stop_connections = parsing::load_stop_connections(path, &attributes_pk_type_converter)?;
@@ -496,26 +482,4 @@ fn create_exchange_times_administration_map(
             acc
         },
     )
-}
-
-#[cfg(test)]
-mod tests {
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
-    use super::*;
-    use serde::{Deserialize, Serialize};
-
-    pub(crate) fn get_json_values_complete<F>(
-        lhs: &F,
-        rhs: &F,
-    ) -> Result<(serde_json::Value, serde_json::Value), Box<dyn Error>>
-    where
-        for<'a> F: Serialize + Deserialize<'a>,
-    {
-        let serialized_lhs = serde_json::to_string(&lhs)?;
-        let serialized_rhs = serde_json::to_string(&rhs)?;
-        Ok((
-            serialized_lhs.parse::<serde_json::Value>()?,
-            serialized_rhs.parse::<serde_json::Value>()?,
-        ))
-    }
 }

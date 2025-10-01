@@ -227,7 +227,6 @@
 use std::error::Error;
 
 use nom::{
-    Parser,
     branch::alt,
     bytes::complete::{tag, take_until},
     character::complete::{digit1, i16, i32, space1},
@@ -235,6 +234,7 @@ use nom::{
     multi::many0,
     number::complete::double,
     sequence::{preceded, terminated},
+    Parser,
 };
 use rustc_hash::FxHashMap;
 
@@ -258,12 +258,14 @@ struct CoordLine {
     stop_id: i32,
     x: f64,
     y: f64,
+    #[allow(unused)]
     altitude: f64,
 }
 
 struct PriosLine {
     stop_id: i32,
     exchange_priority: i16,
+    #[allow(unused)]
     name: String,
 }
 
@@ -280,20 +282,39 @@ struct TimesLines {
 
 enum DescriptionLine {
     Comment,
-    Restriction { stop_id: i32, restrictions: i16 },
-    Sloid { stop_id: i32, sloid: String },
-    Boarding { stop_id: i32, sloid: String },
-    Country { stop_id: i32, country_code: String },
-    Canton { stop_id: i32, canton_id: i32 },
+    Restriction {
+        stop_id: i32,
+        restrictions: i16,
+    },
+    Sloid {
+        stop_id: i32,
+        sloid: String,
+    },
+    Boarding {
+        stop_id: i32,
+        sloid: String,
+    },
+    Country {
+        #[allow(unused)]
+        stop_id: i32,
+        #[allow(unused)]
+        country_code: String,
+    },
+    Canton {
+        #[allow(unused)]
+        stop_id: i32,
+        #[allow(unused)]
+        canton_id: i32,
+    },
 }
 
-fn comment_combinator<'a>()
--> impl Parser<&'a str, Output = DescriptionLine, Error = nom::error::Error<&'a str>> {
+fn comment_combinator<'a>(
+) -> impl Parser<&'a str, Output = DescriptionLine, Error = nom::error::Error<&'a str>> {
     map(tag("%"), |_| DescriptionLine::Comment)
 }
 
-fn restriction_combinator<'a>()
--> impl Parser<&'a str, Output = DescriptionLine, Error = nom::error::Error<&'a str>> {
+fn restriction_combinator<'a>(
+) -> impl Parser<&'a str, Output = DescriptionLine, Error = nom::error::Error<&'a str>> {
     map(
         (
             i32,
@@ -306,8 +327,8 @@ fn restriction_combinator<'a>()
     )
 }
 
-fn sloid_combinator<'a>()
--> impl Parser<&'a str, Output = DescriptionLine, Error = nom::error::Error<&'a str>> {
+fn sloid_combinator<'a>(
+) -> impl Parser<&'a str, Output = DescriptionLine, Error = nom::error::Error<&'a str>> {
     map(
         (
             i32,
@@ -320,8 +341,8 @@ fn sloid_combinator<'a>()
     )
 }
 
-fn boarding_combinator<'a>()
--> impl Parser<&'a str, Output = DescriptionLine, Error = nom::error::Error<&'a str>> {
+fn boarding_combinator<'a>(
+) -> impl Parser<&'a str, Output = DescriptionLine, Error = nom::error::Error<&'a str>> {
     map(
         (
             i32,
@@ -334,8 +355,8 @@ fn boarding_combinator<'a>()
     )
 }
 
-fn country_combinator<'a>()
--> impl Parser<&'a str, Output = DescriptionLine, Error = nom::error::Error<&'a str>> {
+fn country_combinator<'a>(
+) -> impl Parser<&'a str, Output = DescriptionLine, Error = nom::error::Error<&'a str>> {
     map(
         (
             i32,
@@ -351,8 +372,8 @@ fn country_combinator<'a>()
     )
 }
 
-fn canton_combinator<'a>()
--> impl Parser<&'a str, Output = DescriptionLine, Error = nom::error::Error<&'a str>> {
+fn canton_combinator<'a>(
+) -> impl Parser<&'a str, Output = DescriptionLine, Error = nom::error::Error<&'a str>> {
     map(
         (
             i32,
@@ -421,16 +442,16 @@ fn parse_description_line(
     Ok(())
 }
 
-fn designation_number_combinator<'a>()
--> impl Parser<&'a str, Output = i8, Error = nom::error::Error<&'a str>> {
+fn designation_number_combinator<'a>(
+) -> impl Parser<&'a str, Output = i8, Error = nom::error::Error<&'a str>> {
     map_res(
         terminated(preceded(tag("$<"), digit1), tag(">")),
         |num: &str| num.parse::<i8>(),
     )
 }
 
-fn station_combinator<'a>()
--> impl Parser<&'a str, Output = StopLine, Error = nom::error::Error<&'a str>> {
+fn station_combinator<'a>(
+) -> impl Parser<&'a str, Output = StopLine, Error = nom::error::Error<&'a str>> {
     map_res(
         (
             i32,
@@ -478,8 +499,8 @@ fn station_combinator<'a>()
     )
 }
 
-fn coordinates_combinator<'a>()
--> impl Parser<&'a str, Output = CoordLine, Error = nom::error::Error<&'a str>> {
+fn coordinates_combinator<'a>(
+) -> impl Parser<&'a str, Output = CoordLine, Error = nom::error::Error<&'a str>> {
     map(
         (
             i32,
@@ -496,8 +517,8 @@ fn coordinates_combinator<'a>()
     )
 }
 
-fn prios_combinator<'a>()
--> impl Parser<&'a str, Output = PriosLine, Error = nom::error::Error<&'a str>> {
+fn prios_combinator<'a>(
+) -> impl Parser<&'a str, Output = PriosLine, Error = nom::error::Error<&'a str>> {
     map(
         (
             i32,
@@ -512,8 +533,8 @@ fn prios_combinator<'a>()
     )
 }
 
-fn flags_combinator<'a>()
--> impl Parser<&'a str, Output = FlagsLine, Error = nom::error::Error<&'a str>> {
+fn flags_combinator<'a>(
+) -> impl Parser<&'a str, Output = FlagsLine, Error = nom::error::Error<&'a str>> {
     map((i32, preceded(space1, i16)), |(stop_id, exchange_flag)| {
         FlagsLine {
             stop_id,
@@ -522,8 +543,8 @@ fn flags_combinator<'a>()
     })
 }
 
-fn times_combinator<'a>()
--> impl Parser<&'a str, Output = TimesLines, Error = nom::error::Error<&'a str>> {
+fn times_combinator<'a>(
+) -> impl Parser<&'a str, Output = TimesLines, Error = nom::error::Error<&'a str>> {
     map(
         (i32, preceded(space1, i16), preceded(space1, i16)),
         |(stop_id, exchange_time_inter_city, exchange_time_other)| TimesLines {
@@ -581,7 +602,8 @@ fn parse_coord_line(
             stop.set_lv95_coordinates(Coordinates::new(coordinate_system, x, y))
         }
         CoordinateSystem::WGS84 => {
-            stop.set_wgs84_coordinates(Coordinates::new(coordinate_system, y, x)) // x, y
+            stop.set_wgs84_coordinates(Coordinates::new(coordinate_system, y, x))
+            // x, y
             // are stored in reverse order
         }
     }

@@ -39,12 +39,12 @@
 use std::error::Error;
 
 use nom::{
-    Parser,
     branch::alt,
     bytes::{complete::take_until, tag},
     character::complete::{i32, space1},
     combinator::map,
     sequence::{preceded, terminated},
+    Parser,
 };
 use rustc_hash::FxHashMap;
 
@@ -62,7 +62,9 @@ enum TransportCompanyLine {
         full_name: String,
     },
     Nline {
+        #[allow(unused)]
         id: i32,
+        #[allow(unused)]
         sboid: String,
     },
     ColonLine {
@@ -71,8 +73,8 @@ enum TransportCompanyLine {
     },
 }
 
-fn kline_combinator<'a>()
--> impl Parser<&'a str, Output = TransportCompanyLine, Error = nom::error::Error<&'a str>> {
+fn kline_combinator<'a>(
+) -> impl Parser<&'a str, Output = TransportCompanyLine, Error = nom::error::Error<&'a str>> {
     map(
         (
             i32,
@@ -116,8 +118,8 @@ fn kline_combinator<'a>()
     )
 }
 
-fn nline_combinator<'a>()
--> impl Parser<&'a str, Output = TransportCompanyLine, Error = nom::error::Error<&'a str>> {
+fn nline_combinator<'a>(
+) -> impl Parser<&'a str, Output = TransportCompanyLine, Error = nom::error::Error<&'a str>> {
     map(
         (
             i32,
@@ -136,8 +138,8 @@ fn nline_combinator<'a>()
     )
 }
 
-fn colon_combinator<'a>()
--> impl Parser<&'a str, Output = TransportCompanyLine, Error = nom::error::Error<&'a str>> {
+fn colon_combinator<'a>(
+) -> impl Parser<&'a str, Output = TransportCompanyLine, Error = nom::error::Error<&'a str>> {
     map(
         (
             i32,

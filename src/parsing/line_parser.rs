@@ -45,7 +45,7 @@
 /// LINIE
 use std::error::Error;
 
-use nom::{Parser, branch::alt, bytes::tag, character::char, combinator::map, sequence::preceded};
+use nom::{branch::alt, bytes::tag, character::char, combinator::map, Parser};
 
 use crate::{
     models::{Color, Line, Model},
@@ -78,8 +78,10 @@ enum LineType {
         long_name: String,
     },
     // * Line type R T: Line region name (reserved for BAV ID)
+    #[allow(unused)]
     RTline,
     // * Line type D T: Line description (not present)
+    #[allow(unused)]
     DTline,
     // * Line type F: Line color
     Fline {
@@ -96,13 +98,15 @@ enum LineType {
         b: i16,
     },
     // * Line type H: Main line (not present)
+    #[allow(unused)]
     Hline,
     // * Line type I: Line info texts (not present)
+    #[allow(unused)]
     Iline,
 }
 
-fn row_k_nt_lt_w_combinator<'a>()
--> impl Parser<&'a str, Output = Option<LineType>, Error = nom::error::Error<&'a str>> {
+fn row_k_nt_lt_w_combinator<'a>(
+) -> impl Parser<&'a str, Output = Option<LineType>, Error = nom::error::Error<&'a str>> {
     map(
         (
             i32_from_n_digits_parser(7),
@@ -129,8 +133,8 @@ fn row_k_nt_lt_w_combinator<'a>()
     )
 }
 
-fn row_f_b_combinator<'a>()
--> impl Parser<&'a str, Output = Option<LineType>, Error = nom::error::Error<&'a str>> {
+fn row_f_b_combinator<'a>(
+) -> impl Parser<&'a str, Output = Option<LineType>, Error = nom::error::Error<&'a str>> {
     map(
         (
             i32_from_n_digits_parser(7),

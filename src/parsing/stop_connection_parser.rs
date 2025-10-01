@@ -42,13 +42,13 @@
 use std::error::Error;
 
 use nom::{
-    Parser,
     branch::alt,
     bytes::tag,
     character::complete::multispace1,
     combinator::map,
     multi::separated_list0,
     sequence::{preceded, terminated},
+    Parser,
 };
 use rustc_hash::FxHashMap;
 
@@ -69,20 +69,22 @@ enum StopConnectionLine {
         duration: i16,
     },
     StopGourps {
+        #[allow(unused)]
         group_id: i32,
+        #[allow(unused)]
         stop_group: Vec<i32>,
     },
 }
 
-fn a_line_combinator<'a>()
--> impl Parser<&'a str, Output = StopConnectionLine, Error = nom::error::Error<&'a str>> {
+fn a_line_combinator<'a>(
+) -> impl Parser<&'a str, Output = StopConnectionLine, Error = nom::error::Error<&'a str>> {
     map(preceded(tag("*A"), string_till_eol_parser()), |s| {
         StopConnectionLine::Aline(s)
     })
 }
 
-fn meta_stop_line_combinator<'a>()
--> impl Parser<&'a str, Output = StopConnectionLine, Error = nom::error::Error<&'a str>> {
+fn meta_stop_line_combinator<'a>(
+) -> impl Parser<&'a str, Output = StopConnectionLine, Error = nom::error::Error<&'a str>> {
     map(
         (
             i32_from_n_digits_parser(7),
@@ -97,8 +99,8 @@ fn meta_stop_line_combinator<'a>()
     )
 }
 
-fn stop_groups_combinator<'a>()
--> impl Parser<&'a str, Output = StopConnectionLine, Error = nom::error::Error<&'a str>> {
+fn stop_groups_combinator<'a>(
+) -> impl Parser<&'a str, Output = StopConnectionLine, Error = nom::error::Error<&'a str>> {
     map(
         (
             terminated(i32_from_n_digits_parser(7), tag(":")),

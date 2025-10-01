@@ -11,24 +11,24 @@ use std::error::Error;
 
 use chrono::NaiveTime;
 use nom::{
-    Parser,
     branch::alt,
     bytes::tag,
     character::{char, complete::space1},
     combinator::map,
     sequence::preceded,
+    Parser,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-    JourneyId,
     models::{Journey, JourneyMetadataEntry, JourneyMetadataType, JourneyRouteEntry, Model},
     parsing::helpers::{
         direction_parser, i32_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
         string_from_n_chars_parser,
     },
     storage::ResourceStorage,
-    utils::{AutoIncrement, create_time_from_value},
+    utils::{create_time_from_value, AutoIncrement},
+    JourneyId,
 };
 
 type JourneyAndTypeConverter = (ResourceStorage<Journey>, FxHashSet<JourneyId>);
@@ -38,8 +38,11 @@ enum JourneyLines {
     Zline {
         journey_id: i32,
         transport_company_id: String,
+        #[allow(unused)]
         transport_variant: i32,
+        #[allow(unused)]
         num_cycles: Option<i32>,
+        #[allow(unused)]
         cycle_dura_min: Option<i32>,
     },
     Gline {
@@ -56,6 +59,7 @@ enum JourneyLines {
         offer: String,
         stop_from_id: Option<i32>,
         stop_to_id: Option<i32>,
+        #[allow(unused)]
         reference: Option<i32>,
     },
     Iline {
@@ -98,10 +102,13 @@ enum JourneyLines {
     },
     JourneyLine {
         stop_id: i32,
+        #[allow(unused)]
         stop_name: String,
         arrival_time: Option<i32>,
         departure_time: Option<i32>,
+        #[allow(unused)]
         journey_id: Option<i32>,
+        #[allow(unused)]
         administration: String,
     },
 }
@@ -124,8 +131,8 @@ enum JourneyLines {
 /// ...
 /// *Z 123456 000011   101 012 060 % Fahrtnummer 123456, für TU 11 (SBB), mit Variante 101 (ignore), 12 mal, alle 60 Minuten
 /// ...
-fn row_z_combinator<'a>()
--> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
+fn row_z_combinator<'a>(
+) -> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
     map(
         preceded(
             tag("*Z "),
@@ -178,8 +185,8 @@ fn row_z_combinator<'a>()
 /// ...
 /// `
 ///
-fn row_g_combinator<'a>()
--> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
+fn row_g_combinator<'a>(
+) -> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
     map(
         preceded(
             tag("*G "),
@@ -214,8 +221,8 @@ fn row_g_combinator<'a>()
 /// *A VE 8500090 8503000 001417 % Ab HS-Nr. 8500090 bis HS-Nr. 8503000, gelten die Gültigkeitstage 001417 (Bitfeld für bspw. alle Montage)
 /// ...
 /// `
-fn row_a_ve_combinator<'a>()
--> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
+fn row_a_ve_combinator<'a>(
+) -> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
     map(
         preceded(
             tag("*A VE "),
@@ -256,8 +263,8 @@ fn row_a_ve_combinator<'a>()
 /// ...
 /// `
 ///
-fn row_a_combinator<'a>()
--> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
+fn row_a_combinator<'a>(
+) -> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
     map(
         preceded(
             tag("*A "),
@@ -306,8 +313,8 @@ fn row_a_combinator<'a>()
 /// ...
 /// `
 ///
-fn row_i_combinator<'a>()
--> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
+fn row_i_combinator<'a>(
+) -> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
     map(
         preceded(
             tag("*I "),
@@ -376,8 +383,8 @@ fn row_i_combinator<'a>()
 /// *L #0000022 8589601 8589913             % Referenz auf Linie No. 22 ab HS-Nr. 8589601 bis HS-Nr. 8589913
 /// ...
 /// `
-fn row_l_combinator<'a>()
--> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
+fn row_l_combinator<'a>(
+) -> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
     map(
         preceded(
             tag("*L "),
@@ -430,8 +437,8 @@ fn row_l_combinator<'a>()
 /// *R R R000063 1300146 8574808             % gilt für Rück-Richtung 63 ab HS-Nr. 1300146 bis HS-Nr. 8574808
 /// ...
 /// `
-fn row_r_combinator<'a>()
--> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
+fn row_r_combinator<'a>(
+) -> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
     map(
         preceded(
             tag("*R "),
@@ -501,8 +508,8 @@ fn row_r_combinator<'a>()
 /// *CO 0002 8507000 8507000                                   % Check-out 2 Min. ab HS-Nr. 8507000 bis HS-Nr. 8507000
 /// ...
 /// `
-fn row_ci_co_combinator<'a>()
--> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
+fn row_ci_co_combinator<'a>(
+) -> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
     map(
         (
             alt((tag("*CI"), tag("*CO"))),
@@ -577,8 +584,8 @@ fn row_ci_co_combinator<'a>()
 /// 0053202 Am Kl. Wannsee/Am Gr  02016  02016               %
 /// `
 ///
-fn row_journey_description_combinator<'a>()
--> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
+fn row_journey_description_combinator<'a>(
+) -> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
     map(
         (
             i32_from_n_digits_parser(7),
