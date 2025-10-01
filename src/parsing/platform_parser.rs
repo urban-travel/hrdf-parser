@@ -316,7 +316,7 @@ fn parse_line(
         } => {
             let id = auto_increment.next();
 
-            platforms_pk_type_converter
+            let id = platforms_pk_type_converter
                 .entry((stop_id, index))
                 .or_insert(id);
 
@@ -325,8 +325,9 @@ fn parse_line(
             //         "Warning: previous id {previous} for ({stop_id}, {index}). The pair (stop_id, index), ({stop_id}, {index}), is not unique."
             //     );
             // };
-            let platform_instance = Platform::new(id, platform_name, code, stop_id);
-            platforms.insert(platform_instance.id(), platform_instance);
+            platforms
+                .entry(*id)
+                .or_insert(Platform::new(*id, platform_name, code, stop_id));
         }
         PlatformLine::Sloid {
             stop_id,

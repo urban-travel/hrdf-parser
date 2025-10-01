@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{error::Error, time::Instant};
 
 use chrono::{Days, NaiveDate};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -68,81 +68,106 @@ pub struct DataStorage {
 impl DataStorage {
     pub fn new(version: Version, path: &str) -> Result<Self, Box<dyn Error>> {
         // Time-relevant data
+        let complete = Instant::now();
+        let now = Instant::now();
         let bit_fields = parsing::load_bit_fields(path)?;
+        log::info!("Time elapsed for bitfields parsing: {:?}", now.elapsed());
+        let now = Instant::now();
         let holidays = parsing::load_holidays(path)?;
+        log::info!("Time elapsed for holidays parsing: {:?}", now.elapsed());
 
+        let now = Instant::now();
         let timetable_metadata = parsing::load_timetable_metadata(path)?;
+        log::info!(
+            "Time elapsed for timetable_metadata parsing: {:?}",
+            now.elapsed()
+        );
 
         // Basic data
+        let now = Instant::now();
         let (attributes, attributes_pk_type_converter) = parsing::load_attributes(path)?;
+        log::info!("Time elapsed for attributes parsing: {:?}", now.elapsed());
+        let now = Instant::now();
         let (directions, directions_pk_type_converter) = parsing::load_directions(path)?;
+        log::info!("Time elapsed for directions parsing: {:?}", now.elapsed());
+        let now = Instant::now();
         let information_texts = parsing::load_information_texts(path)?;
+        log::info!(
+            "Time elapsed for information_texts parsing: {:?}",
+            now.elapsed()
+        );
+        let now = Instant::now();
         let lines = parsing::load_lines(path)?;
+        log::info!("Time elapsed for line parsing: {:?}", now.elapsed());
+        let now = Instant::now();
         let transport_companies = parsing::load_transport_companies(path)?;
+        log::info!(
+            "Time elapsed for transport_companies parsing: {:?}",
+            now.elapsed()
+        );
+        let now = Instant::now();
         let (transport_types, transport_types_pk_type_converter) =
             parsing::load_transport_types(path)?;
+        log::info!(
+            "Time elapsed for transport_types parsing: {:?}",
+            now.elapsed()
+        );
 
         // Stop data
+        let now = Instant::now();
         let stop_connections = parsing::load_stop_connections(path, &attributes_pk_type_converter)?;
+        log::info!(
+            "Time elapsed for stop_connections parsing: {:?}",
+            now.elapsed()
+        );
+        let now = Instant::now();
         let (stops, default_exchange_time) = parsing::load_stops(version, path)?;
+        log::info!("Time elapsed for stops parsing: {:?}", now.elapsed());
 
         // Timetable data
+        let now = Instant::now();
         let (journeys, journeys_pk_type_converter) = parsing::load_journeys(
             path,
             &transport_types_pk_type_converter,
             &attributes_pk_type_converter,
             &directions_pk_type_converter,
         )?;
+        log::info!("Time elapsed for journeys parsing: {:?}", now.elapsed());
 
-        // let mut keys = journeys.data().keys().copied().collect::<Vec<_>>();
-        // keys.sort();
-        // let mut old_keys = old_journeys.data().keys().copied().collect::<Vec<_>>();
-        // old_keys.sort();
-        //
-        // let bla = keys
-        //     .into_iter()
-        //     .zip(old_keys)
-        //     .filter(|(lhs, rhs)| {
-        //         let vlhs = journeys.data().get(lhs).unwrap();
-        //         let vrhs= old_journeys.data().get(rhs).unwrap();
-        //         let (new, old) = get_json_values_complete(vlhs, vrhs).unwrap();
-        //         let cond = new != old;
-        //         if cond {
-        //             log::info!("=================================");
-        //             log::info!("{new},\n {old}");
-        //         }
-        //         cond
-        //     })
-        //     .collect::<Vec<_>>();
-        // let mut keys = journeys_pk_type_converter.into_iter().collect::<Vec<_>>();
-        // keys.sort();
-        // let mut old_keys = old_journeys_pk_type_converter
-        //     .into_iter()
-        //     .collect::<Vec<_>>();
-        // old_keys.sort();
-        //
-        // let bla2 = keys
-        //     .into_iter()
-        //     .zip(old_keys)
-        //     .filter(|(lhs, rhs)| {
-        //         let cond = lhs != rhs;
-        //         if cond {
-        //             log::info!("{lhs:?}, {rhs:?}");
-        //         }
-        //         cond
-        //     })
-        //     .collect::<Vec<_>>();
-        // return Err(format!("{:?}\n {:?} \n", bla, bla2).into());
+        let now = Instant::now();
         let (journey_platform, platforms) =
             parsing::load_platforms(version, path, &journeys_pk_type_converter)?;
+        log::info!("Time elapsed for platforms parsing: {:?}", now.elapsed());
+        let now = Instant::now();
         let through_service = parsing::load_through_service(path, &journeys_pk_type_converter)?;
+        log::info!(
+            "Time elapsed for through_service parsing: {:?}",
+            now.elapsed()
+        );
 
         // Exchange times
+        let now = Instant::now();
         let exchange_times_administration = parsing::load_exchange_times_administration(path)?;
+        log::info!(
+            "Time elapsed for exchange_times_administration parsing: {:?}",
+            now.elapsed()
+        );
+        let now = Instant::now();
         let exchange_times_journey =
             parsing::load_exchange_times_journey(path, &journeys_pk_type_converter)?;
+        log::info!(
+            "Time elapsed for exchange_times_journey parsing: {:?}",
+            now.elapsed()
+        );
+        let now = Instant::now();
         let exchange_times_line =
             parsing::load_exchange_times_line(path, &transport_types_pk_type_converter)?;
+        log::info!(
+            "Time elapsed for exchange_times_line parsing: {:?}",
+            now.elapsed()
+        );
+
+        log::info!("Parsing of all HRDF files in {:?}", complete.elapsed());
 
         log::info!("Building bit_fields_by_day...");
         let bit_fields_by_day = create_bit_fields_by_day(&bit_fields, &timetable_metadata)?;
