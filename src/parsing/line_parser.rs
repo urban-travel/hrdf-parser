@@ -46,6 +46,7 @@
 use std::error::Error;
 
 use nom::{branch::alt, bytes::tag, character::char, combinator::map, Parser};
+use rustc_hash::FxHashMap;
 
 use crate::{
     models::{Color, Line, Model},
@@ -156,15 +157,17 @@ fn row_f_b_combinator<'a>(
     )
 }
 
-fn parse_line(line: &str, data: &mut Vec<Line>) -> Result<(), Box<dyn Error>> {
+fn parse_line(line: &str, data: &mut FxHashMap<i32, Line>) -> Result<(), Box<dyn Error>> {
     let (_, line_row) = alt((row_k_nt_lt_w_combinator(), row_f_b_combinator()))
         .parse(line)
         .map_err(|e| format!("Error {e} while parsing {line}"))?;
 
     match line_row.ok_or("Error missing line type")? {
-        LineType::Kline { id, name } => data.push(Line::new(id, name)),
+        LineType::Kline { id, name } => {
+            data.insert(id, Line::new(id, name));
+        }
         LineType::NTline { id, short_name } => {
-            let line = data.last_mut().ok_or("Type K row missing.")?;
+            let line = data.get_mut(&id).ok_or("Type K row missing.")?;
             if id != line.id() {
                 return Err(
                     format!("Error: Line id not corresponding, {id}, {}", line.id()).into(),
@@ -173,7 +176,7 @@ fn parse_line(line: &str, data: &mut Vec<Line>) -> Result<(), Box<dyn Error>> {
             line.set_short_name(short_name);
         }
         LineType::LTline { id, long_name } => {
-            let line = data.last_mut().ok_or("Type K row missing.")?;
+            let line = data.get_mut(&id).ok_or("Type K row missing.")?;
             if id != line.id() {
                 return Err(
                     format!("Error: Line id not corresponding, {id}, {}", line.id()).into(),
@@ -185,7 +188,7 @@ fn parse_line(line: &str, data: &mut Vec<Line>) -> Result<(), Box<dyn Error>> {
             id,
             internal_designation,
         } => {
-            let line = data.last_mut().ok_or("Type K row missing.")?;
+            let line = data.get_mut(&id).ok_or("Type K row missing.")?;
             if id != line.id() {
                 return Err(
                     format!("Error: Line id not corresponding, {id}, {}", line.id()).into(),
@@ -195,7 +198,7 @@ fn parse_line(line: &str, data: &mut Vec<Line>) -> Result<(), Box<dyn Error>> {
         }
 
         LineType::Fline { id, r, g, b } => {
-            let line = data.last_mut().ok_or("Type K row missing.")?;
+            let line = data.get_mut(&id).ok_or("Type K row missing.")?;
             if id != line.id() {
                 return Err(
                     format!("Error: Line id not corresponding, {id}, {}", line.id()).into(),
@@ -204,7 +207,7 @@ fn parse_line(line: &str, data: &mut Vec<Line>) -> Result<(), Box<dyn Error>> {
             line.set_text_color(Color::new(r, g, b));
         }
         LineType::Bline { id, r, g, b } => {
-            let line = data.last_mut().ok_or("Type K row missing.")?;
+            let line = data.get_mut(&id).ok_or("Type K row missing.")?;
             if id != line.id() {
                 return Err(
                     format!("Error: Line id not corresponding, {id}, {}", line.id()).into(),
@@ -223,13 +226,12 @@ pub fn parse(path: &str) -> Result<ResourceStorage<Line>, Box<dyn Error>> {
 
     let lines = read_lines(&format!("{path}/LINIE"), 0)?;
 
-    let mut data = Vec::new();
+    let mut data = FxHashMap::default();
 
     lines
         .into_iter()
         .filter(|line| !line.trim().is_empty())
         .try_for_each(|line| parse_line(&line, &mut data))?;
-    let data = Line::vec_to_map(data);
 
     Ok(ResourceStorage::new(data))
 }

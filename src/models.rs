@@ -24,14 +24,6 @@ pub trait Model<M: Model<M>> {
     type K: Copy + Eq + Hash + Serialize + for<'a> Deserialize<'a>;
 
     fn id(&self) -> M::K;
-
-    fn vec_to_map(data: Vec<M>) -> FxHashMap<M::K, M> {
-        data.into_iter()
-            .fold(FxHashMap::default(), |mut acc, item| {
-                acc.insert(item.id(), item);
-                acc
-            })
-    }
 }
 
 macro_rules! impl_Model {

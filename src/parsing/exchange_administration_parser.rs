@@ -24,10 +24,11 @@
 /// UMSTEIGV
 use std::error::Error;
 
-use nom::{IResult, Parser, character::char};
+use nom::{character::char, IResult, Parser};
+use rustc_hash::FxHashMap;
 
 use crate::{
-    models::{ExchangeTimeAdministration, Model},
+    models::ExchangeTimeAdministration,
     parsing::helpers::{
         i16_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
         string_from_n_chars_parser,
@@ -55,17 +56,15 @@ pub fn parse_exchange_administration_row(
 fn parse_line(
     line: &str,
     auto_increment: &AutoIncrement,
-) -> Result<ExchangeTimeAdministration, Box<dyn Error>> {
+) -> Result<(i32, ExchangeTimeAdministration), Box<dyn Error>> {
     let (_, (stop_id, administration_1, administration_2, duration)) =
         parse_exchange_administration_row(line)
             .map_err(|e| format!("Error {e} while parsing {line}"))?;
+    let id = auto_increment.next();
 
-    Ok(ExchangeTimeAdministration::new(
-        auto_increment.next(),
-        stop_id,
-        administration_1,
-        administration_2,
-        duration,
+    Ok((
+        id,
+        ExchangeTimeAdministration::new(id, stop_id, administration_1, administration_2, duration),
     ))
 }
 
@@ -78,8 +77,7 @@ pub fn parse(path: &str) -> Result<ResourceStorage<ExchangeTimeAdministration>, 
         .into_iter()
         .filter(|line| !line.trim().is_empty())
         .map(|line| parse_line(&line, &auto_increment))
-        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
-    let exchanges = ExchangeTimeAdministration::vec_to_map(exchanges);
+        .collect::<Result<FxHashMap<i32, ExchangeTimeAdministration>, Box<dyn Error>>>()?;
 
     Ok(ResourceStorage::new(exchanges))
 }
@@ -136,9 +134,8 @@ mod tests {
             .into_iter()
             .filter(|line| !line.trim().is_empty())
             .map(|line| parse_line(&line, &auto_increment))
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()
+            .collect::<Result<FxHashMap<i32, ExchangeTimeAdministration>, Box<dyn Error>>>()
             .unwrap();
-        let exchanges = ExchangeTimeAdministration::vec_to_map(exchanges);
         // First row
         let attribute = exchanges.get(&1).unwrap();
         let reference = r#"

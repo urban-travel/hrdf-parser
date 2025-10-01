@@ -26,23 +26,23 @@
 /// UMSTEIGZ
 use std::error::Error;
 
-use nom::{IResult, Parser, character::char, combinator::map};
-use rustc_hash::FxHashSet;
+use nom::{character::char, combinator::map, sequence::preceded, IResult, Parser};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-    JourneyId,
-    models::{ExchangeTimeJourney, Model},
+    models::ExchangeTimeJourney,
     parsing::helpers::{
         i16_from_n_digits_parser, i32_from_n_digits_parser, optional_i32_from_n_digits_parser,
         read_lines, string_from_n_chars_parser,
     },
     storage::ResourceStorage,
     utils::AutoIncrement,
+    JourneyId,
 };
 
-fn parse_exchange_journey_row(
-    input: &str,
-) -> IResult<&str, (i32, i32, String, i32, String, i16, bool, Option<i32>)> {
+type ExchangeTimeJourneyLine = (i32, i32, String, i32, String, i16, bool, Option<i32>);
+
+fn parse_exchange_journey_row(input: &str) -> IResult<&str, ExchangeTimeJourneyLine> {
     // TODO: I haven't seen an is_guaranteed field in the doc. Check if this makes sense.
     // It is present in UMSTEIGL. Mabe a copy/paste leftover
     //
@@ -51,35 +51,23 @@ fn parse_exchange_journey_row(
         res,
         (
             stop_id,
-            _,
             journey_id_1,
-            _,
             administration_1,
-            _,
             journey_id_2,
-            _,
             administration_2,
-            _,
             duration,
             is_guaranteed,
-            _,
             bitfield_id,
         ),
     ) = (
         i32_from_n_digits_parser(7),
-        char(' '),
-        i32_from_n_digits_parser(6),
-        char(' '),
-        string_from_n_chars_parser(6),
-        char(' '),
-        i32_from_n_digits_parser(6),
-        char(' '),
-        string_from_n_chars_parser(6),
-        char(' '),
-        i16_from_n_digits_parser(3),
+        preceded(char(' '), i32_from_n_digits_parser(6)),
+        preceded(char(' '), string_from_n_chars_parser(6)),
+        preceded(char(' '), i32_from_n_digits_parser(6)),
+        preceded(char(' '), string_from_n_chars_parser(6)),
+        preceded(char(' '), i16_from_n_digits_parser(3)),
         map(string_from_n_chars_parser(1), |s| s == "!"),
-        char(' '),
-        optional_i32_from_n_digits_parser(6),
+        preceded(char(' '), optional_i32_from_n_digits_parser(6)),
     )
         .parse(input)?;
     Ok((
@@ -101,7 +89,7 @@ fn parse_line(
     line: &str,
     auto_increment: &AutoIncrement,
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
-) -> Result<ExchangeTimeJourney, Box<dyn Error>> {
+) -> Result<(i32, ExchangeTimeJourney), Box<dyn Error>> {
     let (
         _,
         (
@@ -127,15 +115,19 @@ fn parse_line(
         .ok_or(format!(
             "Unknown legacy ID for ({journey_id_2}, {administration_2})"
         ))?;
+    let id = auto_increment.next();
 
-    Ok(ExchangeTimeJourney::new(
-        auto_increment.next(),
-        stop_id,
-        (journey_id_1, administration_1),
-        (journey_id_2, administration_2),
-        duration,
-        is_guaranteed,
-        bitfield_id,
+    Ok((
+        id,
+        ExchangeTimeJourney::new(
+            id,
+            stop_id,
+            (journey_id_1, administration_1),
+            (journey_id_2, administration_2),
+            duration,
+            is_guaranteed,
+            bitfield_id,
+        ),
     ))
 }
 
@@ -151,8 +143,7 @@ pub fn parse(
         .into_iter()
         .filter(|line| !line.trim().is_empty())
         .map(|line| parse_line(&line, &auto_increment, journeys_pk_type_converter))
-        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
-    let exchanges = ExchangeTimeJourney::vec_to_map(exchanges);
+        .collect::<Result<FxHashMap<i32, ExchangeTimeJourney>, Box<dyn Error>>>()?;
 
     Ok(ResourceStorage::new(exchanges))
 }
@@ -256,9 +247,8 @@ mod tests {
             .into_iter()
             .filter(|line| !line.trim().is_empty())
             .map(|line| parse_line(&line, &auto_increment, &journeys_pk_type_converter))
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()
+            .collect::<Result<FxHashMap<_, _>, Box<dyn Error>>>()
             .unwrap();
-        let exchanges = ExchangeTimeJourney::vec_to_map(exchanges);
 
         // First row
         let attribute = exchanges.get(&1).unwrap();

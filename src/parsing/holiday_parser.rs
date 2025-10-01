@@ -15,11 +15,11 @@
 use std::{error::Error, str::FromStr};
 
 use chrono::NaiveDate;
-use nom::{IResult, Parser, character::char, sequence::separated_pair};
+use nom::{character::char, sequence::separated_pair, IResult, Parser};
 use rustc_hash::FxHashMap;
 
 use crate::{
-    models::{Holiday, Language, Model},
+    models::{Holiday, Language},
     parsing::helpers::{read_lines, string_from_n_chars_parser, string_till_eol_parser},
     storage::ResourceStorage,
     utils::AutoIncrement,
@@ -34,10 +34,18 @@ fn parse_holiday_row(input: &str) -> IResult<&str, (String, String)> {
     .parse(input)
 }
 
-fn parse_line(line: &str, auto_increment: &AutoIncrement) -> Result<Holiday, Box<dyn Error>> {
+fn parse_line(
+    line: &str,
+    auto_increment: &AutoIncrement,
+) -> Result<(i32, Holiday), Box<dyn Error>> {
     let (_, (date, translations)) =
         parse_holiday_row(line).map_err(|e| format!("Failed to parse line '{}': {}", line, e))?;
-    create_instance(date, translations, auto_increment)
+
+    let date = NaiveDate::parse_from_str(&date, "%d.%m.%Y")?;
+    let name = parse_name_translations(translations)?;
+    let id = auto_increment.next();
+
+    Ok((id, Holiday::new(id, date, name)))
 }
 
 pub fn parse(path: &str) -> Result<ResourceStorage<Holiday>, Box<dyn Error>> {
@@ -48,24 +56,8 @@ pub fn parse(path: &str) -> Result<ResourceStorage<Holiday>, Box<dyn Error>> {
         .into_iter()
         .filter(|line| !line.trim().is_empty())
         .map(|line| parse_line(&line, &auto_increment))
-        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
-    let data = Holiday::vec_to_map(holidays);
-    Ok(ResourceStorage::new(data))
-}
-
-// ------------------------------------------------------------------------------------------------
-// --- Data Processing Functions
-// ------------------------------------------------------------------------------------------------
-//
-fn create_instance(
-    date: String,
-    translations: String,
-    auto_increment: &AutoIncrement,
-) -> Result<Holiday, Box<dyn Error>> {
-    let date = NaiveDate::parse_from_str(&date, "%d.%m.%Y")?;
-    let name = parse_name_translations(translations)?;
-
-    Ok(Holiday::new(auto_increment.next(), date, name))
+        .collect::<Result<FxHashMap<_, _>, Box<dyn Error>>>()?;
+    Ok(ResourceStorage::new(holidays))
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -116,7 +108,7 @@ mod tests {
     fn row_converter_v207() {
         let auto_increment = AutoIncrement::new();
         let input = "25.12.2024 Weihnachtstag<deu>Noël<fra>Natale<ita>Christmas Day<eng>";
-        let instance = parse_line(input, &auto_increment).unwrap();
+        let (_, instance) = parse_line(input, &auto_increment).unwrap();
 
         // First row (id: 1)
         let reference = r#"

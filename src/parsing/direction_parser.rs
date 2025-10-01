@@ -13,11 +13,11 @@
 /// RICHTUNG
 use std::error::Error;
 
-use nom::{IResult, Parser, character::char};
+use nom::{character::char, IResult, Parser};
 use rustc_hash::FxHashMap;
 
 use crate::{
-    models::{Direction, Model},
+    models::Direction,
     parsing::helpers::{direction_parser, read_lines, string_till_eol_parser},
     storage::ResourceStorage,
 };
@@ -33,7 +33,7 @@ pub fn parse_direction_row(input: &str) -> IResult<&str, (String, i32, String)> 
 fn parse_line(
     line: &str,
     pk_type_converter: &mut FxHashMap<String, i32>,
-) -> Result<Direction, Box<dyn Error>> {
+) -> Result<(i32, Direction), Box<dyn Error>> {
     let (_, (prefix, id, name)) =
         parse_direction_row(line).map_err(|e| format!("Failed to parse line '{}': {}", line, e))?;
     let legacy_id = format!("{prefix}{id}");
@@ -42,7 +42,7 @@ fn parse_line(
             "Warning: previous id {previous} for {legacy_id}. The legacy_id, {legacy_id} is not unique."
         );
     }
-    Ok(Direction::new(id, name))
+    Ok((id, Direction::new(id, name)))
 }
 
 pub fn parse(path: &str) -> Result<DirectionAndTypeConverter, Box<dyn Error>> {
@@ -54,8 +54,7 @@ pub fn parse(path: &str) -> Result<DirectionAndTypeConverter, Box<dyn Error>> {
         .into_iter()
         .filter(|line| !line.trim().is_empty())
         .map(|line| parse_line(&line, &mut pk_type_converter))
-        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
-    let directions = Direction::vec_to_map(directions);
+        .collect::<Result<FxHashMap<i32, Direction>, Box<dyn Error>>>()?;
     Ok((ResourceStorage::new(directions), pk_type_converter))
 }
 
@@ -99,9 +98,8 @@ mod tests {
             .into_iter()
             .filter(|line| !line.trim().is_empty())
             .map(|line| parse_line(&line, &mut pk_type_converter))
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()
+            .collect::<Result<FxHashMap<i32, Direction>, Box<dyn Error>>>()
             .unwrap();
-        let directions = Direction::vec_to_map(directions);
         println!("LET'S GO: {pk_type_converter:?}");
         assert_eq!(*pk_type_converter.get("R8").unwrap(), 8);
         assert_eq!(*pk_type_converter.get("R192").unwrap(), 192);

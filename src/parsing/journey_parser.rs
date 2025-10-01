@@ -21,7 +21,7 @@ use nom::{
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-    models::{Journey, JourneyMetadataEntry, JourneyMetadataType, JourneyRouteEntry, Model},
+    models::{Journey, JourneyMetadataEntry, JourneyMetadataType, JourneyRouteEntry},
     parsing::helpers::{
         direction_parser, i32_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
         string_from_n_chars_parser,
@@ -138,27 +138,13 @@ fn row_z_combinator<'a>(
             tag("*Z "),
             (
                 i32_from_n_digits_parser(6),
-                char(' '),
-                string_from_n_chars_parser(6),
-                space1,
-                i32_from_n_digits_parser(3), // Maybe need to make optional
-                char(' '),
-                optional_i32_from_n_digits_parser(3),
-                char(' '),
-                optional_i32_from_n_digits_parser(3),
+                preceded(char(' '), string_from_n_chars_parser(6)),
+                preceded(space1, i32_from_n_digits_parser(3)), // Maybe need to make optional
+                preceded(char(' '), optional_i32_from_n_digits_parser(3)),
+                preceded(char(' '), optional_i32_from_n_digits_parser(3)),
             ),
         ),
-        |(
-            journey_id,
-            _,
-            transport_company_id,
-            _,
-            transport_variant,
-            _,
-            num_cycles,
-            _,
-            cycle_dura_min,
-        )| {
+        |(journey_id, transport_company_id, transport_variant, num_cycles, cycle_dura_min)| {
             JourneyLines::Zline {
                 journey_id,
                 transport_company_id,
@@ -192,13 +178,11 @@ fn row_g_combinator<'a>(
             tag("*G "),
             (
                 string_from_n_chars_parser(3),
-                char(' '),
-                optional_i32_from_n_digits_parser(7),
-                char(' '),
-                optional_i32_from_n_digits_parser(7),
+                preceded(char(' '), optional_i32_from_n_digits_parser(7)),
+                preceded(char(' '), optional_i32_from_n_digits_parser(7)),
             ),
         ),
-        |(offer, _, stop_from_id, _, stop_to_id)| JourneyLines::Gline {
+        |(offer, stop_from_id, stop_to_id)| JourneyLines::Gline {
             offer,
             stop_from_id,
             stop_to_id,
@@ -228,13 +212,11 @@ fn row_a_ve_combinator<'a>(
             tag("*A VE "),
             (
                 optional_i32_from_n_digits_parser(7),
-                char(' '),
-                optional_i32_from_n_digits_parser(7),
-                char(' '),
-                optional_i32_from_n_digits_parser(6),
+                preceded(char(' '), optional_i32_from_n_digits_parser(7)),
+                preceded(char(' '), optional_i32_from_n_digits_parser(6)),
             ),
         ),
-        |(stop_from_id, _, stop_to_id, _, bit_field_id)| JourneyLines::AVEline {
+        |(stop_from_id, stop_to_id, bit_field_id)| JourneyLines::AVEline {
             stop_from_id,
             stop_to_id,
             bit_field_id,
@@ -270,15 +252,12 @@ fn row_a_combinator<'a>(
             tag("*A "),
             (
                 string_from_n_chars_parser(2),
-                char(' '),
-                optional_i32_from_n_digits_parser(7),
-                char(' '),
-                optional_i32_from_n_digits_parser(7),
-                char(' '),
-                optional_i32_from_n_digits_parser(6),
+                preceded(char(' '), optional_i32_from_n_digits_parser(7)),
+                preceded(char(' '), optional_i32_from_n_digits_parser(7)),
+                preceded(char(' '), optional_i32_from_n_digits_parser(6)),
             ),
         ),
-        |(offer, _, stop_from_id, _, stop_to_id, _, reference)| JourneyLines::Aline {
+        |(offer, stop_from_id, stop_to_id, reference)| JourneyLines::Aline {
             offer,
             stop_from_id,
             stop_to_id,
@@ -320,33 +299,21 @@ fn row_i_combinator<'a>(
             tag("*I "),
             (
                 string_from_n_chars_parser(2),
-                char(' '),
-                optional_i32_from_n_digits_parser(7),
-                char(' '),
-                optional_i32_from_n_digits_parser(7),
-                char(' '),
-                optional_i32_from_n_digits_parser(6),
-                char(' '),
-                i32_from_n_digits_parser(9),
-                char(' '),
-                optional_i32_from_n_digits_parser(6),
-                char(' '),
-                optional_i32_from_n_digits_parser(6),
+                preceded(char(' '), optional_i32_from_n_digits_parser(7)),
+                preceded(char(' '), optional_i32_from_n_digits_parser(7)),
+                preceded(char(' '), optional_i32_from_n_digits_parser(6)),
+                preceded(char(' '), i32_from_n_digits_parser(9)),
+                preceded(char(' '), optional_i32_from_n_digits_parser(6)),
+                preceded(char(' '), optional_i32_from_n_digits_parser(6)),
             ),
         ),
         |(
             info_code,
-            _,
             stop_from_id,
-            _,
             stop_to_id,
-            _,
             validity_ref,
-            _,
             info_ref,
-            _,
             departure_time,
-            _,
             arrival_time,
         )| {
             JourneyLines::Iline {
@@ -390,24 +357,18 @@ fn row_l_combinator<'a>(
             tag("*L "),
             (
                 string_from_n_chars_parser(8),
-                char(' '),
-                optional_i32_from_n_digits_parser(7),
-                char(' '),
-                optional_i32_from_n_digits_parser(7),
-                char(' '),
-                optional_i32_from_n_digits_parser(6),
-                char(' '),
-                optional_i32_from_n_digits_parser(6),
+                preceded(char(' '), optional_i32_from_n_digits_parser(7)),
+                preceded(char(' '), optional_i32_from_n_digits_parser(7)),
+                preceded(char(' '), optional_i32_from_n_digits_parser(6)),
+                preceded(char(' '), optional_i32_from_n_digits_parser(6)),
             ),
         ),
-        |(line_info, _, stop_from_id, _, stop_to_id, _, departure_time, _, arrival_time)| {
-            JourneyLines::Lline {
-                line_info,
-                stop_from_id,
-                stop_to_id,
-                departure_time,
-                arrival_time,
-            }
+        |(line_info, stop_from_id, stop_to_id, departure_time, arrival_time)| JourneyLines::Lline {
+            line_info,
+            stop_from_id,
+            stop_to_id,
+            departure_time,
+            arrival_time,
         },
     )
 }
@@ -444,32 +405,25 @@ fn row_r_combinator<'a>(
             tag("*R "),
             (
                 string_from_n_chars_parser(1),
-                char(' '),
-                alt((
-                    map(direction_parser(), |(prefix, id)| format!("{prefix}{id}")),
-                    string_from_n_chars_parser(7),
-                )),
-                char(' '),
-                optional_i32_from_n_digits_parser(7),
-                char(' '),
-                optional_i32_from_n_digits_parser(7),
-                char(' '),
-                optional_i32_from_n_digits_parser(6),
-                char(' '),
-                optional_i32_from_n_digits_parser(6),
+                preceded(
+                    char(' '),
+                    alt((
+                        map(direction_parser(), |(prefix, id)| format!("{prefix}{id}")),
+                        string_from_n_chars_parser(7),
+                    )),
+                ),
+                preceded(char(' '), optional_i32_from_n_digits_parser(7)),
+                preceded(char(' '), optional_i32_from_n_digits_parser(7)),
+                preceded(char(' '), optional_i32_from_n_digits_parser(6)),
+                preceded(char(' '), optional_i32_from_n_digits_parser(6)),
             ),
         ),
         |(
             direction,
-            _,
             ref_direction_code,
-            _,
             stop_from_id,
-            _,
             stop_to_id,
-            _,
             departure_time,
-            _,
             arrival_time,
         )| {
             JourneyLines::Rline {
@@ -513,30 +467,13 @@ fn row_ci_co_combinator<'a>(
     map(
         (
             alt((tag("*CI"), tag("*CO"))),
-            char(' '),
-            i32_from_n_digits_parser(4),
-            char(' '),
-            optional_i32_from_n_digits_parser(7),
-            char(' '),
-            optional_i32_from_n_digits_parser(7),
-            char(' '),
-            optional_i32_from_n_digits_parser(6),
-            char(' '),
-            optional_i32_from_n_digits_parser(6),
+            preceded(char(' '), i32_from_n_digits_parser(4)),
+            preceded(char(' '), optional_i32_from_n_digits_parser(7)),
+            preceded(char(' '), optional_i32_from_n_digits_parser(7)),
+            preceded(char(' '), optional_i32_from_n_digits_parser(6)),
+            preceded(char(' '), optional_i32_from_n_digits_parser(6)),
         ),
-        |(
-            ci_co,
-            _,
-            num_minutes,
-            _,
-            stop_from_id,
-            _,
-            stop_to_id,
-            _,
-            departure_time,
-            _,
-            arrival_time,
-        )| {
+        |(ci_co, num_minutes, stop_from_id, stop_to_id, departure_time, arrival_time)| {
             if ci_co == "*CI" {
                 JourneyLines::CiLine {
                     num_minutes,
@@ -589,30 +526,13 @@ fn row_journey_description_combinator<'a>(
     map(
         (
             i32_from_n_digits_parser(7),
-            char(' '),
-            string_from_n_chars_parser(20),
-            char(' '),
-            optional_i32_from_n_digits_parser(6),
-            char(' '),
-            optional_i32_from_n_digits_parser(6),
-            char(' '),
-            optional_i32_from_n_digits_parser(6),
-            char(' '),
-            string_from_n_chars_parser(6),
+            preceded(char(' '), string_from_n_chars_parser(20)),
+            preceded(char(' '), optional_i32_from_n_digits_parser(6)),
+            preceded(char(' '), optional_i32_from_n_digits_parser(6)),
+            preceded(char(' '), optional_i32_from_n_digits_parser(6)),
+            preceded(char(' '), string_from_n_chars_parser(6)),
         ),
-        |(
-            stop_id,
-            _,
-            stop_name,
-            _,
-            arrival_time,
-            _,
-            departure_time,
-            _,
-            journey_id,
-            _,
-            administration,
-        )| {
+        |(stop_id, stop_name, arrival_time, departure_time, journey_id, administration)| {
             JourneyLines::JourneyLine {
                 stop_id,
                 stop_name,
@@ -627,7 +547,7 @@ fn row_journey_description_combinator<'a>(
 
 fn parse_line(
     line: &str,
-    data: &mut Vec<Journey>,
+    data: &mut FxHashMap<i32, Journey>,
     pk_type_converter: &mut FxHashSet<JourneyId>,
     auto_increment: &AutoIncrement,
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
@@ -658,14 +578,16 @@ fn parse_line(
         } => {
             let id = auto_increment.next();
             pk_type_converter.insert((journey_id, transport_company_id.to_owned()));
-            data.push(Journey::new(id, journey_id, transport_company_id));
+            data.insert(id, Journey::new(id, journey_id, transport_company_id));
         }
         JourneyLines::Gline {
             offer,
             stop_from_id,
             stop_to_id,
         } => {
-            let journey = data.last_mut().ok_or("Type A row missing.")?;
+            let journey = data
+                .get_mut(&auto_increment.get())
+                .ok_or("Type A row missing.")?;
             let transport_type_id = *transport_types_pk_type_converter
                 .get(&offer)
                 .ok_or("Unknown legacy ID")?;
@@ -689,7 +611,9 @@ fn parse_line(
             stop_to_id,
             bit_field_id,
         } => {
-            let journey = data.last_mut().ok_or("Type A row missing.")?;
+            let journey = data
+                .get_mut(&auto_increment.get())
+                .ok_or("Type A row missing.")?;
             journey.add_metadata_entry(
                 JourneyMetadataType::BitField,
                 JourneyMetadataEntry::new(
@@ -710,7 +634,9 @@ fn parse_line(
             stop_to_id,
             reference: _,
         } => {
-            let journey = data.last_mut().ok_or("Type A row missing.")?;
+            let journey = data
+                .get_mut(&auto_increment.get())
+                .ok_or("Type A row missing.")?;
             let attribute_id = *attributes_pk_type_converter
                 .get(&offer)
                 .ok_or("Unknown legacy ID")?;
@@ -738,7 +664,9 @@ fn parse_line(
             departure_time,
             arrival_time,
         } => {
-            let journey = data.last_mut().ok_or("Type A row missing.")?;
+            let journey = data
+                .get_mut(&auto_increment.get())
+                .ok_or("Type A row missing.")?;
             let arrival_time = create_time(arrival_time);
             let departure_time = create_time(departure_time);
 
@@ -764,7 +692,9 @@ fn parse_line(
             departure_time,
             arrival_time,
         } => {
-            let journey = data.last_mut().ok_or("Type A row missing.")?;
+            let journey = data
+                .get_mut(&auto_increment.get())
+                .ok_or("Type A row missing.")?;
             let arrival_time = create_time(arrival_time);
             let departure_time = create_time(departure_time);
 
@@ -798,7 +728,9 @@ fn parse_line(
             departure_time,
             arrival_time,
         } => {
-            let journey = data.last_mut().ok_or("Type A row missing.")?;
+            let journey = data
+                .get_mut(&auto_increment.get())
+                .ok_or("Type A row missing.")?;
             let arrival_time = create_time(arrival_time);
             let departure_time = create_time(departure_time);
 
@@ -835,7 +767,9 @@ fn parse_line(
             departure_time,
             arrival_time,
         } => {
-            let journey = data.last_mut().ok_or("Type A row missing.")?;
+            let journey = data
+                .get_mut(&auto_increment.get())
+                .ok_or("Type A row missing.")?;
             let arrival_time = create_time(arrival_time);
             let departure_time = create_time(departure_time);
 
@@ -860,7 +794,9 @@ fn parse_line(
             departure_time,
             arrival_time,
         } => {
-            let journey = data.last_mut().ok_or("Type A row missing.")?;
+            let journey = data
+                .get_mut(&auto_increment.get())
+                .ok_or("Type A row missing.")?;
             let arrival_time = create_time(arrival_time);
             let departure_time = create_time(departure_time);
 
@@ -886,7 +822,9 @@ fn parse_line(
             journey_id: _,
             administration: _,
         } => {
-            let journey = data.last_mut().ok_or("Type A row missing.")?;
+            let journey = data
+                .get_mut(&auto_increment.get())
+                .ok_or("Type A row missing.")?;
             let arrival_time = create_time(arrival_time);
             let departure_time = create_time(departure_time);
 
@@ -910,7 +848,7 @@ pub fn parse(
     let lines = read_lines(&format!("{path}/FPLAN"), 0)?;
 
     let auto_increment = AutoIncrement::new();
-    let mut data = Vec::new();
+    let mut data = FxHashMap::default();
     let mut pk_type_converter = FxHashSet::default();
 
     lines
@@ -928,7 +866,6 @@ pub fn parse(
             )
         })?;
 
-    let data = Journey::vec_to_map(data);
     Ok((ResourceStorage::new(data), pk_type_converter))
 }
 
@@ -972,7 +909,7 @@ mod tests {
             "8509000 Chur                  00948                        %".to_string(),
         ];
         let auto_increment = AutoIncrement::new();
-        let mut data = Vec::new();
+        let mut data = FxHashMap::default();
         let mut pk_type_converter = FxHashSet::default();
         let mut transport_types_pk_type_converter = FxHashMap::<String, i32>::default();
         transport_types_pk_type_converter.insert("IR".to_string(), 100);
@@ -1109,7 +1046,7 @@ mod tests {
           ]
         }"#;
 
-        let (attribute, reference) = get_json_values(&data[0], reference).unwrap();
+        let (attribute, reference) = get_json_values(data.get(&1).unwrap(), reference).unwrap();
         assert_eq!(attribute, reference);
     }
 
@@ -1118,10 +1055,9 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        fn row_z_parser<'a>(
-            input: &'a str,
-        ) -> Result<(&'a str, i32, String, i32, Option<i32>, Option<i32>), Box<dyn Error + 'a>>
-        {
+        type ZlineRow = (i32, String, i32, Option<i32>, Option<i32>);
+
+        fn row_z_parser<'a>(input: &'a str) -> Result<(&'a str, ZlineRow), Box<dyn Error + 'a>> {
             let (res, row_z) = row_z_combinator().parse(input)?;
             match row_z {
                 JourneyLines::Zline {
@@ -1132,11 +1068,13 @@ mod tests {
                     cycle_dura_min,
                 } => Ok((
                     res,
-                    journey_id,
-                    transport_company_id,
-                    transport_variant,
-                    num_cycles,
-                    cycle_dura_min,
+                    (
+                        journey_id,
+                        transport_company_id,
+                        transport_variant,
+                        num_cycles,
+                        cycle_dura_min,
+                    ),
                 )),
                 l => Err(format!("Zline expected but got {l:?}").into()),
             }
@@ -1147,11 +1085,7 @@ mod tests {
             let input = "*Z 000003 000011   101         % Fahrtnummer 3, für TU 11 (SBB), mit Variante 101 (ignore)";
             let (
                 res,
-                journey_id,
-                transport_company_id,
-                transport_variant,
-                num_cycles,
-                cycle_dura_min,
+                (journey_id, transport_company_id, transport_variant, num_cycles, cycle_dura_min),
             ) = row_z_parser(input).unwrap();
             assert_eq!(3, journey_id);
             assert_eq!("000011", transport_company_id);
@@ -1169,11 +1103,7 @@ mod tests {
             let input = "*Z 123456 000011   101 012 060 % Fahrtnummer 123456, für TU 11 (SBB), mit Variante 101 (ignore), 12 mal, alle 60 Minuten";
             let (
                 res,
-                journey_id,
-                transport_company_id,
-                transport_variant,
-                num_cycles,
-                cycle_dura_min,
+                (journey_id, transport_company_id, transport_variant, num_cycles, cycle_dura_min),
             ) = row_z_parser(input).unwrap();
             assert_eq!(123456, journey_id);
             assert_eq!("000011", transport_company_id);
@@ -1192,16 +1122,15 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        fn row_g_parser<'a>(
-            input: &'a str,
-        ) -> Result<(&'a str, String, Option<i32>, Option<i32>), Box<dyn Error + 'a>> {
+        type GlineRow = (String, Option<i32>, Option<i32>);
+        fn row_g_parser<'a>(input: &'a str) -> Result<(&'a str, GlineRow), Box<dyn Error + 'a>> {
             let (res, row_g) = row_g_combinator().parse(input)?;
             match row_g {
                 JourneyLines::Gline {
                     offer,
                     stop_from_id,
                     stop_to_id,
-                } => Ok((res, offer, stop_from_id, stop_to_id)),
+                } => Ok((res, (offer, stop_from_id, stop_to_id))),
                 l => Err(format!("Gline expected but got {l:?}").into()),
             }
         }
@@ -1210,7 +1139,7 @@ mod tests {
         fn success_with_options() {
             let input = "*G ICE 8500090 8503000 % Angebotskategorie ICE gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000";
 
-            let (res, offer, stop_from_id, stop_to_id) = row_g_parser(input).unwrap();
+            let (res, (offer, stop_from_id, stop_to_id)) = row_g_parser(input).unwrap();
             assert_eq!("ICE", offer);
             assert_eq!(Some(8500090), stop_from_id);
             assert_eq!(Some(8503000), stop_to_id);
@@ -1224,7 +1153,7 @@ mod tests {
         fn success_no_options() {
             let input = "*G ICE                 % Angebotskategorie ICE gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000";
 
-            let (res, offer, stop_from_id, stop_to_id) = row_g_parser(input).unwrap();
+            let (res, (offer, stop_from_id, stop_to_id)) = row_g_parser(input).unwrap();
             assert_eq!("ICE", offer);
             assert_eq!(None, stop_from_id);
             assert_eq!(None, stop_to_id);
@@ -1240,16 +1169,18 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
+        type AVElineRow = (Option<i32>, Option<i32>, Option<i32>);
+
         fn row_a_ve_parser<'a>(
             input: &'a str,
-        ) -> Result<(&'a str, Option<i32>, Option<i32>, Option<i32>), Box<dyn Error + 'a>> {
+        ) -> Result<(&'a str, AVElineRow), Box<dyn Error + 'a>> {
             let (res, row_a_ve) = row_a_ve_combinator().parse(input)?;
             match row_a_ve {
                 JourneyLines::AVEline {
                     stop_from_id,
                     stop_to_id,
                     bit_field_id: reference,
-                } => Ok((res, stop_from_id, stop_to_id, reference)),
+                } => Ok((res, (stop_from_id, stop_to_id, reference))),
                 l => Err(format!("AVEline expected but got {l:?}").into()),
             }
         }
@@ -1257,7 +1188,7 @@ mod tests {
         #[test]
         fn success_with_options() {
             let input = "*A VE 8500090 8503000 001417 % Ab HS-Nr. 8500090 bis HS-Nr. 8503000, gelten die Gültigkeitstage 001417 (Bitfeld für bspw. alle Montage)";
-            let (res, stop_from_id, stop_to_id, reference) = row_a_ve_parser(input).unwrap();
+            let (res, (stop_from_id, stop_to_id, reference)) = row_a_ve_parser(input).unwrap();
 
             assert_eq!(Some(8500090), stop_from_id);
             assert_eq!(Some(8503000), stop_to_id);
@@ -1271,7 +1202,7 @@ mod tests {
         #[test]
         fn success_no_options() {
             let input = "*A VE                        % Ab HS-Nr. 8500090 bis HS-Nr. 8503000, gelten die Gültigkeitstage 001417 (Bitfeld für bspw. alle Montage)";
-            let (res, stop_from_id, stop_to_id, reference) = row_a_ve_parser(input).unwrap();
+            let (res, (stop_from_id, stop_to_id, reference)) = row_a_ve_parser(input).unwrap();
 
             assert_eq!(None, stop_from_id);
             assert_eq!(None, stop_to_id);
@@ -1288,10 +1219,9 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        fn row_a_parser<'a>(
-            input: &'a str,
-        ) -> Result<(&'a str, String, Option<i32>, Option<i32>, Option<i32>), Box<dyn Error + 'a>>
-        {
+        type AlineRow = (String, Option<i32>, Option<i32>, Option<i32>);
+
+        fn row_a_parser<'a>(input: &'a str) -> Result<(&'a str, AlineRow), Box<dyn Error + 'a>> {
             let (res, row_a) = row_a_combinator().parse(input)?;
             match row_a {
                 JourneyLines::Aline {
@@ -1299,7 +1229,7 @@ mod tests {
                     stop_from_id,
                     stop_to_id,
                     reference,
-                } => Ok((res, offer, stop_from_id, stop_to_id, reference)),
+                } => Ok((res, (offer, stop_from_id, stop_to_id, reference))),
                 l => Err(format!("Aline expected but got {l:?}").into()),
             }
         }
@@ -1307,7 +1237,7 @@ mod tests {
         #[test]
         fn success_with_partial_options1() {
             let input = "*A R  8500090 8503000        % Attribut R gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000";
-            let (res, offer, stop_from_id, stop_to_id, reference) = row_a_parser(input).unwrap();
+            let (res, (offer, stop_from_id, stop_to_id, reference)) = row_a_parser(input).unwrap();
 
             assert_eq!("R", offer);
             assert_eq!(Some(8500090), stop_from_id);
@@ -1322,7 +1252,7 @@ mod tests {
         #[test]
         fn success_partial_options() {
             let input = "*A VR 8500090 8503000        % Attribut VR gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000";
-            let (res, offer, stop_from_id, stop_to_id, reference) = row_a_parser(input).unwrap();
+            let (res, (offer, stop_from_id, stop_to_id, reference)) = row_a_parser(input).unwrap();
 
             assert_eq!("VR", offer);
             assert_eq!(Some(8500090), stop_from_id);
@@ -1337,7 +1267,7 @@ mod tests {
         #[test]
         fn success_with_options() {
             let input = "*A WR 8500090 8503000 047873 % Attribut WR gilt ab HS-Nr. 8500090 bis HS-Nr. 8503000 mit den Gültigkeitstagen 047873";
-            let (res, offer, stop_from_id, stop_to_id, reference) = row_a_parser(input).unwrap();
+            let (res, (offer, stop_from_id, stop_to_id, reference)) = row_a_parser(input).unwrap();
 
             assert_eq!("WR", offer);
             assert_eq!(Some(8500090), stop_from_id);
@@ -1355,21 +1285,17 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        fn row_i_parser<'a>(
-            input: &'a str,
-        ) -> Result<
-            (
-                &'a str,
-                String,
-                Option<i32>,
-                Option<i32>,
-                Option<i32>,
-                i32,
-                Option<i32>,
-                Option<i32>,
-            ),
-            Box<dyn Error + 'a>,
-        > {
+        type IlineRow = (
+            String,
+            Option<i32>,
+            Option<i32>,
+            Option<i32>,
+            i32,
+            Option<i32>,
+            Option<i32>,
+        );
+
+        fn row_i_parser<'a>(input: &'a str) -> Result<(&'a str, IlineRow), Box<dyn Error + 'a>> {
             let (res, row_i) = row_i_combinator().parse(input)?;
             match row_i {
                 JourneyLines::Iline {
@@ -1382,13 +1308,15 @@ mod tests {
                     arrival_time,
                 } => Ok((
                     res,
-                    info_code,
-                    stop_from_id,
-                    stop_to_id,
-                    validity_ref,
-                    info_ref,
-                    departure_time,
-                    arrival_time,
+                    (
+                        info_code,
+                        stop_from_id,
+                        stop_to_id,
+                        validity_ref,
+                        info_ref,
+                        departure_time,
+                        arrival_time,
+                    ),
                 )),
                 l => Err(format!("Iline expected but got {l:?}").into()),
             }
@@ -1399,13 +1327,15 @@ mod tests {
             let input = "*I hi 8573602 8587744        000018040             % Hinweis auf Infotext (hi) ab HS-Nr. 8573602 bis HS-Nr. 8587744  mit Infotext 18040";
             let (
                 res,
-                info_code,
-                stop_from_id,
-                stop_to_id,
-                validity_ref,
-                info_ref,
-                departure_time,
-                arrival_time,
+                (
+                    info_code,
+                    stop_from_id,
+                    stop_to_id,
+                    validity_ref,
+                    info_ref,
+                    departure_time,
+                    arrival_time,
+                ),
             ) = row_i_parser(input).unwrap();
             assert_eq!("hi", info_code);
             assert_eq!(Some(8573602), stop_from_id);
@@ -1425,13 +1355,15 @@ mod tests {
             let input = "*I hi 8578157 8589334        000018037  01126  01159 % Hinweis auf Infotext (hi) ab HS-Nr. 8578157 bis HS-Nr. 8589334 mit Infotext 18037 Abfahrt 11:26 Ankunft 11:59";
             let (
                 res,
-                info_code,
-                stop_from_id,
-                stop_to_id,
-                validity_ref,
-                info_ref,
-                departure_time,
-                arrival_time,
+                (
+                    info_code,
+                    stop_from_id,
+                    stop_to_id,
+                    validity_ref,
+                    info_ref,
+                    departure_time,
+                    arrival_time,
+                ),
             ) = row_i_parser(input).unwrap();
             assert_eq!("hi", info_code);
             assert_eq!(Some(8578157), stop_from_id);
@@ -1452,19 +1384,9 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        fn row_l_parser<'a>(
-            input: &'a str,
-        ) -> Result<
-            (
-                &'a str,
-                String,
-                Option<i32>,
-                Option<i32>,
-                Option<i32>,
-                Option<i32>,
-            ),
-            Box<dyn Error + 'a>,
-        > {
+        type LlineRow = (String, Option<i32>, Option<i32>, Option<i32>, Option<i32>);
+
+        fn row_l_parser<'a>(input: &'a str) -> Result<(&'a str, LlineRow), Box<dyn Error + 'a>> {
             let (res, row_l) = row_l_combinator().parse(input)?;
             match row_l {
                 JourneyLines::Lline {
@@ -1475,11 +1397,13 @@ mod tests {
                     arrival_time,
                 } => Ok((
                     res,
-                    line_info,
-                    stop_from_id,
-                    stop_to_id,
-                    departure_time,
-                    arrival_time,
+                    (
+                        line_info,
+                        stop_from_id,
+                        stop_to_id,
+                        departure_time,
+                        arrival_time,
+                    ),
                 )),
                 l => Err(format!("Lline expected but got {l:?}").into()),
             }
@@ -1488,7 +1412,7 @@ mod tests {
         #[test]
         fn success_with_options() {
             let input = "*L 8        8578157 8589334  01126  01159 % Linie 8 ab HS-Nr. 8578157 bis HS-Nr. 8589334 Abfahrt 11:26 Ankunft 11:59";
-            let (res, line_info, stop_from_id, stop_to_id, departure_time, arrival_time) =
+            let (res, (line_info, stop_from_id, stop_to_id, departure_time, arrival_time)) =
                 row_l_parser(input).unwrap();
             assert_eq!("8", line_info);
             assert_eq!(Some(8578157), stop_from_id);
@@ -1504,7 +1428,7 @@ mod tests {
         #[test]
         fn success_with_partial_options() {
             let input = "*L #0000022 8589601 8589913             % Referenz auf Linie No. 22 ab HS-Nr. 8589601 bis HS-Nr. 8589913";
-            let (res, line_info, stop_from_id, stop_to_id, departure_time, arrival_time) =
+            let (res, (line_info, stop_from_id, stop_to_id, departure_time, arrival_time)) =
                 row_l_parser(input).unwrap();
             assert_eq!("#0000022", line_info);
             assert_eq!(Some(8589601), stop_from_id);
@@ -1520,7 +1444,7 @@ mod tests {
         #[test]
         fn success_with_partial_options61() {
             let input = "*L 61       8500010 8507492                                %";
-            let (res, line_info, stop_from_id, stop_to_id, departure_time, arrival_time) =
+            let (res, (line_info, stop_from_id, stop_to_id, departure_time, arrival_time)) =
                 row_l_parser(input).unwrap();
             assert_eq!("61", line_info);
             assert_eq!(Some(8500010), stop_from_id);
@@ -1536,20 +1460,16 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        fn row_r_parser<'a>(
-            input: &'a str,
-        ) -> Result<
-            (
-                &'a str,
-                String,
-                String,
-                Option<i32>,
-                Option<i32>,
-                Option<i32>,
-                Option<i32>,
-            ),
-            Box<dyn Error + 'a>,
-        > {
+        type RlineRow = (
+            String,
+            String,
+            Option<i32>,
+            Option<i32>,
+            Option<i32>,
+            Option<i32>,
+        );
+
+        fn row_r_parser<'a>(input: &'a str) -> Result<(&'a str, RlineRow), Box<dyn Error + 'a>> {
             let (res, row_r) = row_r_combinator().parse(input)?;
             match row_r {
                 JourneyLines::Rline {
@@ -1562,12 +1482,14 @@ mod tests {
                 } => {
                     Ok((
                         res.trim(), // res contains the comments that are useful to determine the direction
-                        direction,
-                        ref_direction_code,
-                        stop_from_id,
-                        stop_to_id,
-                        departure_time,
-                        arrival_time,
+                        (
+                            direction,
+                            ref_direction_code,
+                            stop_from_id,
+                            stop_to_id,
+                            departure_time,
+                            arrival_time,
+                        ),
                     ))
                 }
                 l => Err(format!("Rline expected but got {l:?}").into()),
@@ -1579,12 +1501,14 @@ mod tests {
             let input = "*R R R000063 1300146 8574808             % gilt für Rück-Richtung 63 ab HS-Nr. 1300146 bis HS-Nr. 8574808";
             let (
                 res, // res contains the comments that are useful to determine the direction
-                direction,
-                ref_direction_code,
-                stop_from_id,
-                stop_to_id,
-                departure_time,
-                arrival_time,
+                (
+                    direction,
+                    ref_direction_code,
+                    stop_from_id,
+                    stop_to_id,
+                    departure_time,
+                    arrival_time,
+                ),
             ) = row_r_parser(input).unwrap();
 
             assert_eq!("R", direction);
@@ -1605,12 +1529,14 @@ mod tests {
                 "*R H                                     % gilt für die gesamte Hin-Richtung";
             let (
                 res, // res contains the comments that are useful to determine the direction
-                direction,
-                ref_direction_code,
-                stop_from_id,
-                stop_to_id,
-                departure_time,
-                arrival_time,
+                (
+                    direction,
+                    ref_direction_code,
+                    stop_from_id,
+                    stop_to_id,
+                    departure_time,
+                    arrival_time,
+                ),
             ) = row_r_parser(input).unwrap();
             assert_eq!("H", direction);
             assert_eq!("", ref_direction_code);
@@ -1627,20 +1553,18 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
+        type CiCoLine<'a> = (
+            &'a str,
+            i32,
+            Option<i32>,
+            Option<i32>,
+            Option<i32>,
+            Option<i32>,
+        );
+
         fn row_ci_co_parser<'a>(
             input: &'a str,
-        ) -> Result<
-            (
-                &'a str,
-                &'a str,
-                i32,
-                Option<i32>,
-                Option<i32>,
-                Option<i32>,
-                Option<i32>,
-            ),
-            Box<dyn Error + 'a>,
-        > {
+        ) -> Result<(&'a str, CiCoLine<'a>), Box<dyn Error + 'a>> {
             let (res, row_ci_co) = row_ci_co_combinator().parse(input)?;
             match row_ci_co {
                 JourneyLines::CiLine {
@@ -1651,12 +1575,14 @@ mod tests {
                     arrival_time,
                 } => Ok((
                     res,
-                    "*CI",
-                    num_minutes,
-                    stop_from_id,
-                    stop_to_id,
-                    departure_time,
-                    arrival_time,
+                    (
+                        "*CI",
+                        num_minutes,
+                        stop_from_id,
+                        stop_to_id,
+                        departure_time,
+                        arrival_time,
+                    ),
                 )),
                 JourneyLines::CoLine {
                     num_minutes,
@@ -1666,12 +1592,14 @@ mod tests {
                     arrival_time,
                 } => Ok((
                     res,
-                    "*CO",
-                    num_minutes,
-                    stop_from_id,
-                    stop_to_id,
-                    departure_time,
-                    arrival_time,
+                    (
+                        "*CO",
+                        num_minutes,
+                        stop_from_id,
+                        stop_to_id,
+                        departure_time,
+                        arrival_time,
+                    ),
                 )),
                 l => Err(format!("Rline expected but got {l:?}").into()),
             }
@@ -1680,7 +1608,7 @@ mod tests {
         #[test]
         fn success_ci_options() {
             let input = "*CI 0002 8507000 8507000                                   % Check-in 2 Min. ab HS-Nr. 8507000 bis HS-Nr. 8507000";
-            let (res, ci_co, num_minutes, stop_from_id, stop_to_id, departure_time, arrival_time) =
+            let (res, (ci_co, num_minutes, stop_from_id, stop_to_id, departure_time, arrival_time)) =
                 row_ci_co_parser(input).unwrap();
 
             assert_eq!("*CI", ci_co);
@@ -1698,7 +1626,7 @@ mod tests {
         #[test]
         fn success_with_partial_options() {
             let input = "*CO 0002 8507000 8507000                                   % Check-out 2 Min. ab HS-Nr. 8507000 bis HS-Nr. 8507000";
-            let (res, ci_co, num_minutes, stop_from_id, stop_to_id, departure_time, arrival_time) =
+            let (res, (ci_co, num_minutes, stop_from_id, stop_to_id, departure_time, arrival_time)) =
                 row_ci_co_parser(input).unwrap();
 
             assert_eq!("*CO", ci_co);
@@ -1715,21 +1643,11 @@ mod tests {
     }
 
     mod row_journey_description {
+        type JourneyDescriptorRow = (i32, String, Option<i32>, Option<i32>, Option<i32>, String);
 
         fn row_journey_description_parser<'a>(
             input: &'a str,
-        ) -> Result<
-            (
-                &'a str,
-                i32,
-                String,
-                Option<i32>,
-                Option<i32>,
-                Option<i32>,
-                String,
-            ),
-            Box<dyn Error + 'a>,
-        > {
+        ) -> Result<(&'a str, JourneyDescriptorRow), Box<dyn Error + 'a>> {
             let (res, row_j) = row_journey_description_combinator().parse(input)?;
             match row_j {
                 JourneyLines::JourneyLine {
@@ -1741,12 +1659,14 @@ mod tests {
                     administration,
                 } => Ok((
                     res,
-                    stop_id,
-                    stop_name,
-                    arrival_time,
-                    departure_time,
-                    journey_id,
-                    administration,
+                    (
+                        stop_id,
+                        stop_name,
+                        arrival_time,
+                        departure_time,
+                        journey_id,
+                        administration,
+                    ),
                 )),
                 l => Err(format!("Rline expected but got {l:?}").into()),
             }
@@ -1759,8 +1679,10 @@ mod tests {
         fn success_journey_options1() {
             let input = "0053301 S Wannsee DB                02014                % HS-Nr. 0053301 Ankunft N/A,   Abfahrt 20:14";
             // let input = "0053291 Wannseebrücke        02015 02015 052344 80____ % HS-Nr. 0053291 Ankunft 20:15, Abfahrt 20:15, Fahrtnummer 052344, Verwaltung 80____ (DB)";
-            let (res, stop_id, stop_name, arrival_time, departure_time, journey_id, administration) =
-                row_journey_description_parser(input).unwrap();
+            let (
+                res,
+                (stop_id, stop_name, arrival_time, departure_time, journey_id, administration),
+            ) = row_journey_description_parser(input).unwrap();
 
             assert_eq!(53301, stop_id);
             assert_eq!("S Wannsee DB", stop_name);
@@ -1774,8 +1696,10 @@ mod tests {
         #[test]
         fn success_journey_options2() {
             let input = "0053202 Am Kl. Wannsee/Am Gr  02016  02016               %";
-            let (res, stop_id, stop_name, arrival_time, departure_time, journey_id, administration) =
-                row_journey_description_parser(input).unwrap();
+            let (
+                res,
+                (stop_id, stop_name, arrival_time, departure_time, journey_id, administration),
+            ) = row_journey_description_parser(input).unwrap();
 
             assert_eq!(53202, stop_id);
             assert_eq!("Am Kl. Wannsee/Am Gr", stop_name);
@@ -1789,8 +1713,10 @@ mod tests {
         #[test]
         fn success_journey_all_options() {
             let input = "0053291 Wannseebrücke         02015  02015 052344 80____ % HS-Nr. 0053291 Ankunft 20:15, Abfahrt 20:15, Fahrtnummer 052344, Verwaltung 80____ (DB)";
-            let (res, stop_id, stop_name, arrival_time, departure_time, journey_id, administration) =
-                row_journey_description_parser(input).unwrap();
+            let (
+                res,
+                (stop_id, stop_name, arrival_time, departure_time, journey_id, administration),
+            ) = row_journey_description_parser(input).unwrap();
 
             assert_eq!(53291, stop_id);
             assert_eq!("Wannseebrücke", stop_name);
@@ -1808,8 +1734,10 @@ mod tests {
         fn success_journey_negative_time() {
             // let input = "0053291 Wannseebrücke        02015 02015 052344 80____ % HS-Nr. 0053291 Ankunft 20:15, Abfahrt 20:15, Fahrtnummer 052344, Verwaltung 80____ (DB)";
             let input = "0000175 Hauenstein-Basistunn -00833 -00833                 %";
-            let (res, stop_id, stop_name, arrival_time, departure_time, journey_id, administration) =
-                row_journey_description_parser(input).unwrap();
+            let (
+                res,
+                (stop_id, stop_name, arrival_time, departure_time, journey_id, administration),
+            ) = row_journey_description_parser(input).unwrap();
 
             assert_eq!(175, stop_id);
             assert_eq!("Hauenstein-Basistunn", stop_name);

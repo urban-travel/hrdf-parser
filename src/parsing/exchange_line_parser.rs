@@ -34,11 +34,11 @@
 /// UMSTEIGL
 use std::{error::Error, str::FromStr};
 
-use nom::{IResult, Parser, character::char, combinator::map};
+use nom::{character::char, combinator::map, sequence::preceded, IResult, Parser};
 use rustc_hash::FxHashMap;
 
 use crate::{
-    models::{DirectionType, ExchangeTimeLine, LineInfo, Model},
+    models::{DirectionType, ExchangeTimeLine, LineInfo},
     parsing::helpers::{
         i16_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
         string_from_n_chars_parser,
@@ -47,24 +47,21 @@ use crate::{
     utils::AutoIncrement,
 };
 
-fn parse_exchange_line_row(
-    input: &str,
-) -> IResult<
-    &str,
-    (
-        Option<i32>,
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        i16,
-        bool,
-    ),
-> {
+type ExchangeTimeLineRow = (
+    Option<i32>,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    i16,
+    bool,
+);
+
+fn parse_exchange_line_row(input: &str) -> IResult<&str, ExchangeTimeLineRow> {
     // TODO: I haven't seen an is_guaranteed field in the doc. Check if this makes sense.
     // It is present in UMSTEIGL. Mabe a copy/paste leftover
     //
@@ -73,46 +70,28 @@ fn parse_exchange_line_row(
         res,
         (
             stop_id,
-            _,
             administration_1,
-            _,
             transport_type_1,
-            _,
             line_id_1,
-            _,
             direction_1,
-            _,
             administration_2,
-            _,
             transport_type_2,
-            _,
             line_id_2,
-            _,
             direction_2,
-            _,
             duration,
             is_guaranteed,
         ),
     ) = (
         optional_i32_from_n_digits_parser(7),
-        char(' '),
-        string_from_n_chars_parser(6),
-        char(' '),
-        string_from_n_chars_parser(3),
-        char(' '),
-        string_from_n_chars_parser(8),
-        char(' '),
-        string_from_n_chars_parser(1),
-        char(' '),
-        string_from_n_chars_parser(6),
-        char(' '),
-        string_from_n_chars_parser(3),
-        char(' '),
-        string_from_n_chars_parser(8),
-        char(' '),
-        string_from_n_chars_parser(1),
-        char(' '),
-        i16_from_n_digits_parser(3),
+        preceded(char(' '), string_from_n_chars_parser(6)),
+        preceded(char(' '), string_from_n_chars_parser(3)),
+        preceded(char(' '), string_from_n_chars_parser(8)),
+        preceded(char(' '), string_from_n_chars_parser(1)),
+        preceded(char(' '), string_from_n_chars_parser(6)),
+        preceded(char(' '), string_from_n_chars_parser(3)),
+        preceded(char(' '), string_from_n_chars_parser(8)),
+        preceded(char(' '), string_from_n_chars_parser(1)),
+        preceded(char(' '), i16_from_n_digits_parser(3)),
         map(string_from_n_chars_parser(1), |s| s == "!"),
     )
         .parse(input)?;
@@ -138,7 +117,7 @@ fn parse_line(
     line: &str,
     auto_increment: &AutoIncrement,
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<ExchangeTimeLine, Box<dyn Error>> {
+) -> Result<(i32, ExchangeTimeLine), Box<dyn Error>> {
     let (
         _res,
         (
@@ -201,13 +180,11 @@ fn parse_line(
         direction_2,
     );
 
-    Ok(ExchangeTimeLine::new(
-        auto_increment.next(),
-        stop_id,
-        line_1,
-        line_2,
-        duration,
-        is_guaranteed,
+    let id = auto_increment.next();
+
+    Ok((
+        id,
+        ExchangeTimeLine::new(id, stop_id, line_1, line_2, duration, is_guaranteed),
     ))
 }
 
@@ -222,8 +199,7 @@ pub fn parse(
         .into_iter()
         .filter(|line| !line.trim().is_empty())
         .map(|line| parse_line(&line, &auto_increment, transport_types_pk_type_converter))
-        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
-    let exchanges = ExchangeTimeLine::vec_to_map(exchanges);
+        .collect::<Result<FxHashMap<_, _>, Box<dyn Error>>>()?;
 
     Ok(ResourceStorage::new(exchanges))
 }
@@ -386,9 +362,8 @@ mod tests {
             .into_iter()
             .filter(|line| !line.trim().is_empty())
             .map(|line| parse_line(&line, &auto_increment, &transport_types_pk_type_converter))
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()
+            .collect::<Result<FxHashMap<_, _>, Box<dyn Error>>>()
             .unwrap();
-        let exchanges = ExchangeTimeLine::vec_to_map(exchanges);
 
         // Id 1
         let attribute = exchanges.get(&1).unwrap();

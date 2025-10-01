@@ -27,15 +27,16 @@
 use std::error::Error;
 
 use nom::{
-    IResult, Parser,
     character::{char, one_of},
     combinator::map_res,
     multi::count,
     sequence::separated_pair,
+    IResult, Parser,
 };
+use rustc_hash::FxHashMap;
 
 use crate::{
-    models::{BitField, Model},
+    models::BitField,
     parsing::helpers::{i32_from_n_digits_parser, read_lines},
     storage::ResourceStorage,
 };
@@ -56,10 +57,10 @@ fn parse_bitfield_row(input: &str) -> IResult<&str, (i32, Vec<u8>)> {
 }
 
 // TODO: Add test for parse line
-fn parse_line(line: &str) -> Result<BitField, Box<dyn Error>> {
+fn parse_line(line: &str) -> Result<(i32, BitField), Box<dyn Error>> {
     let (_, (id, bits)) =
         parse_bitfield_row(line).map_err(|e| format!("Failed to parse line '{}': {}", line, e))?;
-    Ok(BitField::new(id, bits))
+    Ok((id, BitField::new(id, bits)))
 }
 
 pub fn parse(path: &str) -> Result<ResourceStorage<BitField>, Box<dyn Error>> {
@@ -69,9 +70,8 @@ pub fn parse(path: &str) -> Result<ResourceStorage<BitField>, Box<dyn Error>> {
         .into_iter()
         .filter(|line| !line.trim().is_empty())
         .map(|line| parse_line(&line))
-        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
-    let data = BitField::vec_to_map(bitfields);
-    Ok(ResourceStorage::new(data))
+        .collect::<Result<FxHashMap<i32, BitField>, Box<dyn Error>>>()?;
+    Ok(ResourceStorage::new(bitfields))
 }
 
 // ------------------------------------------------------------------------------------------------
