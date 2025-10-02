@@ -185,7 +185,7 @@ fn class_combinator(input: &str) -> IResult<&str, TransportTypeAndTypeLine> {
     map(
         (
             preceded(tag("class"), i16),
-            preceded(space1, string_till_eol_parser()),
+            preceded(space1, string_till_eol_parser),
         ),
         |(product_class_id, product_class_name)| TransportTypeAndTypeLine::Class {
             product_class_id,
@@ -199,7 +199,7 @@ fn category_combinator(input: &str) -> IResult<&str, TransportTypeAndTypeLine> {
     map(
         (
             preceded(tag("category"), i16),
-            preceded(space1, string_till_eol_parser()),
+            preceded(space1, string_till_eol_parser),
         ),
         |(category_id, category_name)| TransportTypeAndTypeLine::Category {
             category_id,
@@ -213,7 +213,7 @@ fn option_combinator(input: &str) -> IResult<&str, TransportTypeAndTypeLine> {
     map(
         (
             preceded(tag("option"), i16),
-            preceded(space1, string_till_eol_parser()),
+            preceded(space1, string_till_eol_parser),
         ),
         |(option_id, option_name)| TransportTypeAndTypeLine::Option {
             option_id,

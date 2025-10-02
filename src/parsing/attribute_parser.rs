@@ -110,7 +110,7 @@ fn row_language_combinator(input: &str) -> IResult<&str, AttributeLine> {
 }
 
 fn row_description_combinator(input: &str) -> IResult<&str, AttributeLine> {
-    preceded(tag("#"), string_till_eol_parser())
+    preceded(tag("#"), string_till_eol_parser)
         .map(AttributeLine::Description)
         .parse(input)
 }
@@ -119,7 +119,7 @@ fn row_language_description_combinator(input: &str) -> IResult<&str, AttributeLi
     (
         string_from_n_chars_parser(2),
         multispace1,
-        string_till_eol_parser(),
+        string_till_eol_parser,
     )
         .map(
             |(legacy_id, _, description)| AttributeLine::LanguageDescription {

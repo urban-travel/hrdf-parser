@@ -407,7 +407,7 @@ fn row_r_combinator(input: &str) -> IResult<&str, JourneyLines> {
                 preceded(
                     char(' '),
                     alt((
-                        map(direction_parser(), |(prefix, id)| format!("{prefix}{id}")),
+                        map(direction_parser, |(prefix, id)| format!("{prefix}{id}")),
                         string_from_n_chars_parser(7),
                     )),
                 ),

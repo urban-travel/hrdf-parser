@@ -77,7 +77,7 @@ enum StopConnectionLine {
 }
 
 fn a_line_combinator(input: &str) -> IResult<&str, StopConnectionLine> {
-    map(preceded(tag("*A"), string_till_eol_parser()), |s| {
+    map(preceded(tag("*A"), string_till_eol_parser), |s| {
         StopConnectionLine::Aline(s)
     })
     .parse(input)

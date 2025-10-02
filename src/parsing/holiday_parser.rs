@@ -15,7 +15,7 @@
 use std::{error::Error, str::FromStr};
 
 use chrono::NaiveDate;
-use nom::{character::char, sequence::separated_pair, IResult, Parser};
+use nom::{IResult, Parser, character::char, sequence::separated_pair};
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -29,7 +29,7 @@ fn parse_holiday_row(input: &str) -> IResult<&str, (String, String)> {
     separated_pair(
         string_from_n_chars_parser(10),
         char(' '),
-        string_till_eol_parser(),
+        string_till_eol_parser,
     )
     .parse(input)
 }

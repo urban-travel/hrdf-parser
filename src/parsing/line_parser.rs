@@ -116,7 +116,7 @@ fn row_k_nt_lt_w_combinator(input: &str) -> IResult<&str, Option<LineType>> {
                 char(' '),
                 alt((tag("K "), tag("N T "), tag("L T "), tag("W "))),
             ),
-            string_till_eol_parser(),
+            string_till_eol_parser,
         ),
         |(id, line_type, name)| match line_type {
             "K " => Some(LineType::Kline { id, name }),

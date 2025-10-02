@@ -332,7 +332,7 @@ fn sloid_combinator(input: &str) -> IResult<&str, DescriptionLine> {
             i32,
             preceded(
                 preceded(space1, tag("G A")),
-                preceded(space1, string_till_eol_parser()),
+                preceded(space1, string_till_eol_parser),
             ),
         ),
         |(stop_id, sloid)| DescriptionLine::Sloid { stop_id, sloid },
@@ -346,7 +346,7 @@ fn boarding_combinator(input: &str) -> IResult<&str, DescriptionLine> {
             i32,
             preceded(
                 preceded(space1, tag("G a")),
-                preceded(space1, string_till_eol_parser()),
+                preceded(space1, string_till_eol_parser),
             ),
         ),
         |(stop_id, sloid)| DescriptionLine::Boarding { stop_id, sloid },
@@ -522,7 +522,7 @@ fn prios_combinator<'a>()
         (
             i32,
             preceded(space1, i16),
-            preceded(space1, string_till_eol_parser()),
+            preceded(space1, string_till_eol_parser),
         ),
         |(stop_id, exchange_priority, name)| PriosLine {
             stop_id,

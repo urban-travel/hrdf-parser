@@ -13,7 +13,7 @@
 /// RICHTUNG
 use std::error::Error;
 
-use nom::{character::char, IResult, Parser};
+use nom::{IResult, Parser, character::char};
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -26,7 +26,7 @@ type DirectionAndTypeConverter = (ResourceStorage<Direction>, FxHashMap<String, 
 
 pub fn parse_direction_row(input: &str) -> IResult<&str, (String, i32, String)> {
     let (res, ((prefix, id), _, name)) =
-        (direction_parser(), char(' '), string_till_eol_parser()).parse(input)?;
+        (direction_parser, char(' '), string_till_eol_parser).parse(input)?;
     Ok((res, (prefix, id, name)))
 }
 

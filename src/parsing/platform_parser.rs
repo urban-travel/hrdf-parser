@@ -195,7 +195,7 @@ fn section_combinator(input: &str) -> IResult<&str, PlatformLine> {
         (
             i32_from_n_digits_parser(7),
             preceded(tag(" #"), i32_from_n_digits_parser(7)),
-            preceded(tag(" A "), string_till_eol_parser()),
+            preceded(tag(" A "), string_till_eol_parser),
         ),
         |(stop_id, index, section_data)| PlatformLine::Section {
             stop_id,
@@ -237,8 +237,8 @@ fn sloid_combinator(input: &str) -> IResult<&str, PlatformLine> {
             i32_from_n_digits_parser(7),
             preceded(tag(" #"), i32_from_n_digits_parser(7)),
             alt((
-                preceded(tag(" g A "), string_till_eol_parser()),
-                preceded(tag(" I A "), string_till_eol_parser()),
+                preceded(tag(" g A "), string_till_eol_parser),
+                preceded(tag(" I A "), string_till_eol_parser),
             )),
         ),
         |(stop_id, index, sloid)| PlatformLine::Sloid {

@@ -19,7 +19,7 @@
 /// INFOTEXT_DE, INFOTEXT_EN, INFOTEXT_FR, INFOTEXT_IT
 use std::{error::Error, str::FromStr};
 
-use nom::{character::char, sequence::separated_pair, IResult, Parser};
+use nom::{IResult, Parser, character::char, sequence::separated_pair};
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -32,7 +32,7 @@ fn parse_infotext_row(input: &str) -> IResult<&str, (i32, String)> {
     separated_pair(
         i32_from_n_digits_parser(9),
         char(' '),
-        string_till_eol_parser(),
+        string_till_eol_parser,
     )
     .parse(input)
 }

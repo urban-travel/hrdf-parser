@@ -144,7 +144,7 @@ fn colon_combinator(input: &str) -> IResult<&str, TransportCompanyLine> {
             i32,
             preceded(
                 space1,
-                preceded(tag(":"), preceded(space1, string_till_eol_parser())),
+                preceded(tag(":"), preceded(space1, string_till_eol_parser)),
             ),
         ),
         |(id, administrations)| {
