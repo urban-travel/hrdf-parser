@@ -441,24 +441,23 @@ fn parse_description_line(
     Ok(())
 }
 
-fn designation_number_combinator<'a>()
--> impl Parser<&'a str, Output = i8, Error = nom::error::Error<&'a str>> {
+fn designation_number_combinator(input: &str) -> IResult<&str, i8> {
     map_res(
         terminated(preceded(tag("$<"), digit1), tag(">")),
         |num: &str| num.parse::<i8>(),
     )
+    .parse(input)
 }
 
-fn station_combinator<'a>()
--> impl Parser<&'a str, Output = StopLine, Error = nom::error::Error<&'a str>> {
+fn station_combinator(input: &str) -> IResult<&str, StopLine> {
     map_res(
         (
             i32,
             preceded(space1, map(take_until("$<"), |s: &str| String::from(s))),
-            designation_number_combinator(),
+            designation_number_combinator,
             many0((
                 preceded(tag("$"), take_until("$<")),
-                designation_number_combinator(),
+                designation_number_combinator,
             )),
         ),
         |(stop_id, designation, num, optional_designations)| {
@@ -496,10 +495,10 @@ fn station_combinator<'a>()
             }
         },
     )
+    .parse(input)
 }
 
-fn coordinates_combinator<'a>()
--> impl Parser<&'a str, Output = CoordLine, Error = nom::error::Error<&'a str>> {
+fn coordinates_combinator(input: &str) -> IResult<&str, CoordLine> {
     map(
         (
             i32,
@@ -514,10 +513,10 @@ fn coordinates_combinator<'a>()
             altitude,
         },
     )
+    .parse(input)
 }
 
-fn prios_combinator<'a>()
--> impl Parser<&'a str, Output = PriosLine, Error = nom::error::Error<&'a str>> {
+fn prios_combinator(input: &str) -> IResult<&str, PriosLine> {
     map(
         (
             i32,
@@ -530,20 +529,20 @@ fn prios_combinator<'a>()
             name,
         },
     )
+    .parse(input)
 }
 
-fn flags_combinator<'a>()
--> impl Parser<&'a str, Output = FlagsLine, Error = nom::error::Error<&'a str>> {
+fn flags_combinator(input: &str) -> IResult<&str, FlagsLine> {
     map((i32, preceded(space1, i16)), |(stop_id, exchange_flag)| {
         FlagsLine {
             stop_id,
             exchange_flag,
         }
     })
+    .parse(input)
 }
 
-fn times_combinator<'a>()
--> impl Parser<&'a str, Output = TimesLines, Error = nom::error::Error<&'a str>> {
+fn times_combinator(input: &str) -> IResult<&str, TimesLines> {
     map(
         (i32, preceded(space1, i16), preceded(space1, i16)),
         |(stop_id, exchange_time_inter_city, exchange_time_other)| TimesLines {
@@ -552,6 +551,7 @@ fn times_combinator<'a>()
             exchange_time_other,
         },
     )
+    .parse(input)
 }
 
 fn parse_stop_line(line: &str, stops: &mut FxHashMap<i32, Stop>) -> Result<(), Box<dyn Error>> {
@@ -564,7 +564,7 @@ fn parse_stop_line(line: &str, stops: &mut FxHashMap<i32, Stop>) -> Result<(), B
             abbreviation,
             synonyms,
         },
-    ) = station_combinator()
+    ) = station_combinator
         .parse(line)
         .map_err(|e| format!("Error {e} while parsing {line}"))?;
 
@@ -588,7 +588,7 @@ fn parse_coord_line(
             y,
             altitude: _, // altitude is not stored at the moment
         },
-    ) = coordinates_combinator()
+    ) = coordinates_combinator
         .parse(line)
         .map_err(|e| format!("Error {e} while parsing {line}"))?;
 
@@ -618,7 +618,7 @@ fn parse_prios_line(line: &str, stops: &mut FxHashMap<i32, Stop>) -> Result<(), 
             exchange_priority,
             name: _,
         },
-    ) = prios_combinator()
+    ) = prios_combinator
         .parse(line)
         .map_err(|e| format!("Error {e} while parsing {line}"))?;
 
@@ -637,7 +637,7 @@ fn parse_flags_line(line: &str, stops: &mut FxHashMap<i32, Stop>) -> Result<(), 
             stop_id,
             exchange_flag,
         },
-    ) = flags_combinator()
+    ) = flags_combinator
         .parse(line)
         .map_err(|e| format!("Error {e} while parsing {line}"))?;
 
@@ -660,7 +660,7 @@ fn parse_times_line(
             exchange_time_inter_city,
             exchange_time_other,
         },
-    ) = times_combinator()
+    ) = times_combinator
         .parse(line)
         .map_err(|e| format!("Error {e} while parsing {line}"))?;
 
