@@ -153,7 +153,7 @@ fn parse_line(
             stop_group: _,
         } => {
             // Do nothing for the moment
-            // TODO: this lin coud be useful to look faster for connections maybe
+            // TODO: this line could be useful to look faster for connections maybe
         }
     }
     Ok(())

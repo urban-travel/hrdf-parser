@@ -738,7 +738,7 @@ pub fn parse(version: Version, path: &str) -> Result<StopStorageAndExchangeTimes
             (_, Some(w)) => Ok(Some(w)),
             (Ok(Some(v)), None) => Ok(Some(v)),
         })?
-        .ok_or("Error default exchante time not defined")?;
+        .ok_or("Error default exchange time not defined")?;
 
     let bhfart = match version {
         Version::V_5_40_41_2_0_4 | Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6 => {

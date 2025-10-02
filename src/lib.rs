@@ -30,7 +30,7 @@ mod tests {
             Err(err) => {
                 assert!(
                     err.to_string().to_lowercase().contains("404 not found"),
-                    "The error whould be indicate '404 Not Found'"
+                    "The error should indicate '404 Not Found'"
                 );
             }
         }

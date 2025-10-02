@@ -1,7 +1,7 @@
 /// # Attribute parsing
 ///
 /// List of abbreviations describing additional offers (e.g.: dining car)
-/// or restrictions (e.g.: seat reservation obligatory). See [https://opentransportdata.swiss/en/cookbook/hafas-rohdaten-format-hrdf/#Technical_description_What_is_in_the_HRDF_files_contents](the documentaion) for more informations.
+/// or restrictions (e.g.: seat reservation obligatory). See [https://opentransportdata.swiss/en/cookbook/hafas-rohdaten-format-hrdf/#Technical_description_What_is_in_the_HRDF_files_contents](the documentation) for more information.
 ///
 /// This file contains:
 ///
