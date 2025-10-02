@@ -45,7 +45,9 @@
 /// LINIE
 use std::error::Error;
 
-use nom::{branch::alt, bytes::tag, character::char, combinator::map, Parser};
+use nom::{
+    IResult, Parser, branch::alt, bytes::tag, character::char, combinator::map, sequence::preceded,
+};
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -106,16 +108,17 @@ enum LineType {
     Iline,
 }
 
-fn row_k_nt_lt_w_combinator<'a>(
-) -> impl Parser<&'a str, Output = Option<LineType>, Error = nom::error::Error<&'a str>> {
+fn row_k_nt_lt_w_combinator(input: &str) -> IResult<&str, Option<LineType>> {
     map(
         (
             i32_from_n_digits_parser(7),
-            char(' '),
-            alt((tag("K "), tag("N T "), tag("L T "), tag("W "))),
+            preceded(
+                char(' '),
+                alt((tag("K "), tag("N T "), tag("L T "), tag("W "))),
+            ),
             string_till_eol_parser(),
         ),
-        |(id, _, line_type, name)| match line_type {
+        |(id, line_type, name)| match line_type {
             "K " => Some(LineType::Kline { id, name }),
             "N T " => Some(LineType::NTline {
                 id,
@@ -132,33 +135,31 @@ fn row_k_nt_lt_w_combinator<'a>(
             _ => None,
         },
     )
+    .parse(input)
 }
 
-fn row_f_b_combinator<'a>(
-) -> impl Parser<&'a str, Output = Option<LineType>, Error = nom::error::Error<&'a str>> {
+fn row_f_b_combinator(input: &str) -> IResult<&str, Option<LineType>> {
     map(
         (
             i32_from_n_digits_parser(7),
-            char(' '),
-            alt((tag("F "), tag("B "))),
+            preceded(char(' '), alt((tag("F "), tag("B ")))),
             (
                 i16_from_n_digits_parser(3),
-                char(' '),
-                i16_from_n_digits_parser(3),
-                char(' '),
-                i16_from_n_digits_parser(3),
+                preceded(char(' '), i16_from_n_digits_parser(3)),
+                preceded(char(' '), i16_from_n_digits_parser(3)),
             ),
         ),
-        |(id, _, line_type, (r, _, g, _, b))| match line_type {
+        |(id, line_type, (r, g, b))| match line_type {
             "F " => Some(LineType::Fline { id, r, g, b }),
             "B " => Some(LineType::Bline { id, r, g, b }),
             _ => None,
         },
     )
+    .parse(input)
 }
 
 fn parse_line(line: &str, data: &mut FxHashMap<i32, Line>) -> Result<(), Box<dyn Error>> {
-    let (_, line_row) = alt((row_k_nt_lt_w_combinator(), row_f_b_combinator()))
+    let (_, line_row) = alt((row_k_nt_lt_w_combinator, row_f_b_combinator))
         .parse(line)
         .map_err(|e| format!("Error {e} while parsing {line}"))?;
 

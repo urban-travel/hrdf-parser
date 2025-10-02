@@ -14,13 +14,10 @@ use std::error::Error;
 
 use chrono::NaiveDate;
 use nom::{
-    Parser,
+    IResult, Parser,
     branch::alt,
     bytes::{complete::is_not, tag},
-    character::{
-        complete::char,
-        complete::{i32, u32},
-    },
+    character::complete::{char, i32, u32},
     combinator::{map, map_res},
     multi::separated_list1,
     sequence::preceded,
@@ -39,8 +36,7 @@ enum InfoLines {
     MetaData(Vec<String>),
 }
 
-fn date_combinator<'a>()
--> impl Parser<&'a str, Output = InfoLines, Error = nom::error::Error<&'a str>> {
+fn date_combinator(input: &str) -> IResult<&str, InfoLines> {
     map(
         map_res(
             (u32, preceded(tag("."), u32), preceded(tag("."), i32)),
@@ -51,14 +47,15 @@ fn date_combinator<'a>()
         ),
         InfoLines::Date,
     )
+    .parse(input)
 }
 
-fn info_combinator<'a>()
--> impl Parser<&'a str, Output = InfoLines, Error = nom::error::Error<&'a str>> {
+fn info_combinator(input: &str) -> IResult<&str, InfoLines> {
     map(
         separated_list1(char('$'), map(is_not("$"), String::from)),
         InfoLines::MetaData,
     )
+    .parse(input)
 }
 
 pub fn parse(path: &str) -> Result<ResourceStorage<TimetableMetadataEntry>, Box<dyn Error>> {
@@ -78,7 +75,7 @@ pub fn parse(path: &str) -> Result<ResourceStorage<TimetableMetadataEntry>, Box<
         .into_iter()
         .filter(|line| !line.trim().is_empty())
         .try_for_each(|line| {
-            let (_, res) = alt((date_combinator(), info_combinator()))
+            let (_, res) = alt((date_combinator, info_combinator))
                 .parse(&line)
                 .map_err(|e| format!("Error: {e}, for line: {line}"))?;
             match res {

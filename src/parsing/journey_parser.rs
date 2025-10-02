@@ -11,24 +11,24 @@ use std::error::Error;
 
 use chrono::NaiveTime;
 use nom::{
+    IResult, Parser,
     branch::alt,
     bytes::tag,
     character::{char, complete::space1},
     combinator::map,
     sequence::preceded,
-    Parser,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
+    JourneyId,
     models::{Journey, JourneyMetadataEntry, JourneyMetadataType, JourneyRouteEntry},
     parsing::helpers::{
         direction_parser, i32_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
         string_from_n_chars_parser,
     },
     storage::ResourceStorage,
-    utils::{create_time_from_value, AutoIncrement},
-    JourneyId,
+    utils::{AutoIncrement, create_time_from_value},
 };
 
 type JourneyAndTypeConverter = (ResourceStorage<Journey>, FxHashSet<JourneyId>);
@@ -131,8 +131,7 @@ enum JourneyLines {
 /// ...
 /// *Z 123456 000011   101 012 060 % Fahrtnummer 123456, für TU 11 (SBB), mit Variante 101 (ignore), 12 mal, alle 60 Minuten
 /// ...
-fn row_z_combinator<'a>(
-) -> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
+fn row_z_combinator(input: &str) -> IResult<&str, JourneyLines> {
     map(
         preceded(
             tag("*Z "),
@@ -154,6 +153,7 @@ fn row_z_combinator<'a>(
             }
         },
     )
+    .parse(input)
 }
 
 /// ## G-lines
@@ -171,8 +171,7 @@ fn row_z_combinator<'a>(
 /// ...
 /// `
 ///
-fn row_g_combinator<'a>(
-) -> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
+fn row_g_combinator(input: &str) -> IResult<&str, JourneyLines> {
     map(
         preceded(
             tag("*G "),
@@ -188,6 +187,7 @@ fn row_g_combinator<'a>(
             stop_to_id,
         },
     )
+    .parse(input)
 }
 
 /// ## A VE-lines
@@ -205,8 +205,7 @@ fn row_g_combinator<'a>(
 /// *A VE 8500090 8503000 001417 % Ab HS-Nr. 8500090 bis HS-Nr. 8503000, gelten die Gültigkeitstage 001417 (Bitfeld für bspw. alle Montage)
 /// ...
 /// `
-fn row_a_ve_combinator<'a>(
-) -> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
+fn row_a_ve_combinator(input: &str) -> IResult<&str, JourneyLines> {
     map(
         preceded(
             tag("*A VE "),
@@ -222,6 +221,7 @@ fn row_a_ve_combinator<'a>(
             bit_field_id,
         },
     )
+    .parse(input)
 }
 
 /// ## A *-lines
@@ -245,8 +245,7 @@ fn row_a_ve_combinator<'a>(
 /// ...
 /// `
 ///
-fn row_a_combinator<'a>(
-) -> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
+fn row_a_combinator(input: &str) -> IResult<&str, JourneyLines> {
     map(
         preceded(
             tag("*A "),
@@ -264,6 +263,7 @@ fn row_a_combinator<'a>(
             reference,
         },
     )
+    .parse(input)
 }
 
 /// ## I-lines
@@ -292,8 +292,7 @@ fn row_a_combinator<'a>(
 /// ...
 /// `
 ///
-fn row_i_combinator<'a>(
-) -> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
+fn row_i_combinator(input: &str) -> IResult<&str, JourneyLines> {
     map(
         preceded(
             tag("*I "),
@@ -327,6 +326,7 @@ fn row_i_combinator<'a>(
             }
         },
     )
+    .parse(input)
 }
 
 /// ## L-lines
@@ -350,8 +350,7 @@ fn row_i_combinator<'a>(
 /// *L #0000022 8589601 8589913             % Referenz auf Linie No. 22 ab HS-Nr. 8589601 bis HS-Nr. 8589913
 /// ...
 /// `
-fn row_l_combinator<'a>(
-) -> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
+fn row_l_combinator(input: &str) -> IResult<&str, JourneyLines> {
     map(
         preceded(
             tag("*L "),
@@ -371,6 +370,7 @@ fn row_l_combinator<'a>(
             arrival_time,
         },
     )
+    .parse(input)
 }
 
 /// ## R-lines
@@ -398,8 +398,7 @@ fn row_l_combinator<'a>(
 /// *R R R000063 1300146 8574808             % gilt für Rück-Richtung 63 ab HS-Nr. 1300146 bis HS-Nr. 8574808
 /// ...
 /// `
-fn row_r_combinator<'a>(
-) -> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
+fn row_r_combinator(input: &str) -> IResult<&str, JourneyLines> {
     map(
         preceded(
             tag("*R "),
@@ -436,6 +435,7 @@ fn row_r_combinator<'a>(
             }
         },
     )
+    .parse(input)
 }
 
 /// ## CI/CO lines
@@ -462,8 +462,7 @@ fn row_r_combinator<'a>(
 /// *CO 0002 8507000 8507000                                   % Check-out 2 Min. ab HS-Nr. 8507000 bis HS-Nr. 8507000
 /// ...
 /// `
-fn row_ci_co_combinator<'a>(
-) -> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
+fn row_ci_co_combinator(input: &str) -> IResult<&str, JourneyLines> {
     map(
         (
             alt((tag("*CI"), tag("*CO"))),
@@ -493,6 +492,7 @@ fn row_ci_co_combinator<'a>(
             }
         },
     )
+    .parse(input)
 }
 
 /// ## Journey description
@@ -521,8 +521,7 @@ fn row_ci_co_combinator<'a>(
 /// 0053202 Am Kl. Wannsee/Am Gr  02016  02016               %
 /// `
 ///
-fn row_journey_description_combinator<'a>(
-) -> impl Parser<&'a str, Output = JourneyLines, Error = nom::error::Error<&'a str>> {
+fn row_journey_description_combinator(input: &str) -> IResult<&str, JourneyLines> {
     map(
         (
             i32_from_n_digits_parser(7),
@@ -543,6 +542,7 @@ fn row_journey_description_combinator<'a>(
             }
         },
     )
+    .parse(input)
 }
 
 fn parse_line(
@@ -555,15 +555,15 @@ fn parse_line(
     directions_pk_type_converter: &FxHashMap<String, i32>,
 ) -> Result<(), Box<dyn Error>> {
     let (_res, journey_lines) = alt((
-        row_z_combinator(),
-        row_g_combinator(),
-        row_a_ve_combinator(),
-        row_a_combinator(),
-        row_i_combinator(),
-        row_l_combinator(),
-        row_r_combinator(),
-        row_ci_co_combinator(),
-        row_journey_description_combinator(),
+        row_z_combinator,
+        row_g_combinator,
+        row_a_ve_combinator,
+        row_a_combinator,
+        row_i_combinator,
+        row_l_combinator,
+        row_r_combinator,
+        row_ci_co_combinator,
+        row_journey_description_combinator,
     ))
     .parse(line)
     .map_err(|e| format!("Failed to parse line '{}': {}", line, e))?;
@@ -1058,7 +1058,7 @@ mod tests {
         type ZlineRow = (i32, String, i32, Option<i32>, Option<i32>);
 
         fn row_z_parser<'a>(input: &'a str) -> Result<(&'a str, ZlineRow), Box<dyn Error + 'a>> {
-            let (res, row_z) = row_z_combinator().parse(input)?;
+            let (res, row_z) = row_z_combinator(input)?;
             match row_z {
                 JourneyLines::Zline {
                     journey_id,
@@ -1124,7 +1124,7 @@ mod tests {
 
         type GlineRow = (String, Option<i32>, Option<i32>);
         fn row_g_parser<'a>(input: &'a str) -> Result<(&'a str, GlineRow), Box<dyn Error + 'a>> {
-            let (res, row_g) = row_g_combinator().parse(input)?;
+            let (res, row_g) = row_g_combinator(input)?;
             match row_g {
                 JourneyLines::Gline {
                     offer,
@@ -1174,7 +1174,7 @@ mod tests {
         fn row_a_ve_parser<'a>(
             input: &'a str,
         ) -> Result<(&'a str, AVElineRow), Box<dyn Error + 'a>> {
-            let (res, row_a_ve) = row_a_ve_combinator().parse(input)?;
+            let (res, row_a_ve) = row_a_ve_combinator(input)?;
             match row_a_ve {
                 JourneyLines::AVEline {
                     stop_from_id,
@@ -1222,7 +1222,7 @@ mod tests {
         type AlineRow = (String, Option<i32>, Option<i32>, Option<i32>);
 
         fn row_a_parser<'a>(input: &'a str) -> Result<(&'a str, AlineRow), Box<dyn Error + 'a>> {
-            let (res, row_a) = row_a_combinator().parse(input)?;
+            let (res, row_a) = row_a_combinator(input)?;
             match row_a {
                 JourneyLines::Aline {
                     offer,
@@ -1296,7 +1296,7 @@ mod tests {
         );
 
         fn row_i_parser<'a>(input: &'a str) -> Result<(&'a str, IlineRow), Box<dyn Error + 'a>> {
-            let (res, row_i) = row_i_combinator().parse(input)?;
+            let (res, row_i) = row_i_combinator(input)?;
             match row_i {
                 JourneyLines::Iline {
                     info_code,
@@ -1387,7 +1387,7 @@ mod tests {
         type LlineRow = (String, Option<i32>, Option<i32>, Option<i32>, Option<i32>);
 
         fn row_l_parser<'a>(input: &'a str) -> Result<(&'a str, LlineRow), Box<dyn Error + 'a>> {
-            let (res, row_l) = row_l_combinator().parse(input)?;
+            let (res, row_l) = row_l_combinator(input)?;
             match row_l {
                 JourneyLines::Lline {
                     line_info,
@@ -1470,7 +1470,7 @@ mod tests {
         );
 
         fn row_r_parser<'a>(input: &'a str) -> Result<(&'a str, RlineRow), Box<dyn Error + 'a>> {
-            let (res, row_r) = row_r_combinator().parse(input)?;
+            let (res, row_r) = row_r_combinator(input)?;
             match row_r {
                 JourneyLines::Rline {
                     direction,
@@ -1565,7 +1565,7 @@ mod tests {
         fn row_ci_co_parser<'a>(
             input: &'a str,
         ) -> Result<(&'a str, CiCoLine<'a>), Box<dyn Error + 'a>> {
-            let (res, row_ci_co) = row_ci_co_combinator().parse(input)?;
+            let (res, row_ci_co) = row_ci_co_combinator(input)?;
             match row_ci_co {
                 JourneyLines::CiLine {
                     num_minutes,
@@ -1648,7 +1648,7 @@ mod tests {
         fn row_journey_description_parser<'a>(
             input: &'a str,
         ) -> Result<(&'a str, JourneyDescriptorRow), Box<dyn Error + 'a>> {
-            let (res, row_j) = row_journey_description_combinator().parse(input)?;
+            let (res, row_j) = row_journey_description_combinator(input)?;
             match row_j {
                 JourneyLines::JourneyLine {
                     stop_id,

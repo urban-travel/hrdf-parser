@@ -82,9 +82,9 @@
 use std::error::Error;
 
 use nom::{
+    IResult, Parser,
     branch::alt,
-    bytes::complete::tag,
-    bytes::streaming::take_until,
+    bytes::{complete::tag, streaming::take_until},
     character::{
         char,
         complete::{multispace0, multispace1, space1},
@@ -92,19 +92,18 @@ use nom::{
     combinator::{map, opt},
     number::complete::double,
     sequence::{delimited, preceded},
-    Parser,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
+    JourneyId, Version,
     models::{CoordinateSystem, Coordinates, JourneyPlatform, Model, Platform},
     parsing::helpers::{
         i32_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
         string_from_n_chars_parser, string_till_eol_parser,
     },
     storage::ResourceStorage,
-    utils::{create_time_from_value, AutoIncrement},
-    JourneyId, Version,
+    utils::{AutoIncrement, create_time_from_value},
 };
 
 enum PlatformLine {
@@ -146,8 +145,7 @@ enum PlatformLine {
     },
 }
 
-fn journey_platform_combinator<'a>(
-) -> impl Parser<&'a str, Output = PlatformLine, Error = nom::error::Error<&'a str>> {
+fn journey_platform_combinator(input: &str) -> IResult<&str, PlatformLine> {
     map(
         (
             i32_from_n_digits_parser(7),
@@ -168,10 +166,10 @@ fn journey_platform_combinator<'a>(
             }
         },
     )
+    .parse(input)
 }
 
-fn platform_combinator<'a>(
-) -> impl Parser<&'a str, Output = PlatformLine, Error = nom::error::Error<&'a str>> {
+fn platform_combinator(input: &str) -> IResult<&str, PlatformLine> {
     map(
         (
             i32_from_n_digits_parser(7),
@@ -189,10 +187,10 @@ fn platform_combinator<'a>(
             code: code.map(String::from),
         },
     )
+    .parse(input)
 }
 
-fn section_combinator<'a>(
-) -> impl Parser<&'a str, Output = PlatformLine, Error = nom::error::Error<&'a str>> {
+fn section_combinator(input: &str) -> IResult<&str, PlatformLine> {
     map(
         (
             i32_from_n_digits_parser(7),
@@ -205,10 +203,10 @@ fn section_combinator<'a>(
             section_data,
         },
     )
+    .parse(input)
 }
 
-fn coord_combinator<'a>(
-) -> impl Parser<&'a str, Output = PlatformLine, Error = nom::error::Error<&'a str>> {
+fn coord_combinator(input: &str) -> IResult<&str, PlatformLine> {
     map(
         (
             i32_from_n_digits_parser(7),
@@ -230,10 +228,10 @@ fn coord_combinator<'a>(
             altitude,
         },
     )
+    .parse(input)
 }
 
-fn sloid_combinator<'a>(
-) -> impl Parser<&'a str, Output = PlatformLine, Error = nom::error::Error<&'a str>> {
+fn sloid_combinator(input: &str) -> IResult<&str, PlatformLine> {
     map(
         (
             i32_from_n_digits_parser(7),
@@ -249,6 +247,7 @@ fn sloid_combinator<'a>(
             sloid,
         },
     )
+    .parse(input)
 }
 
 fn parse_line(
@@ -261,11 +260,11 @@ fn parse_line(
     coordinate_system: CoordinateSystem,
 ) -> Result<(), Box<dyn Error>> {
     let (_, platform_row) = alt((
-        journey_platform_combinator(),
-        platform_combinator(),
-        section_combinator(),
-        sloid_combinator(),
-        coord_combinator(),
+        journey_platform_combinator,
+        platform_combinator,
+        section_combinator,
+        sloid_combinator,
+        coord_combinator,
     ))
     .parse(line)
     .map_err(|e| format!("Error {e} while parsing {line}"))?;

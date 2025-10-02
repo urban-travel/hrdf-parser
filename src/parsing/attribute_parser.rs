@@ -49,7 +49,7 @@
 use std::{error::Error, str::FromStr};
 
 use nom::{
-    Parser,
+    IResult, Parser,
     branch::alt,
     bytes::{tag, take_until},
     character::{char, complete::multispace1},
@@ -83,19 +83,15 @@ enum AttributeLine {
     Description(String),
 }
 
-fn row_offer_combinator<'a>()
--> impl Parser<&'a str, Output = AttributeLine, Error = nom::error::Error<&'a str>> {
+fn row_offer_combinator(input: &str) -> IResult<&str, AttributeLine> {
     (
         string_from_n_chars_parser(2),
-        char(' '),
-        i16_from_n_digits_parser(1),
-        char(' '),
-        i16_from_n_digits_parser(3),
-        char(' '),
-        i16_from_n_digits_parser(2),
+        preceded(char(' '), i16_from_n_digits_parser(1)),
+        preceded(char(' '), i16_from_n_digits_parser(3)),
+        preceded(char(' '), i16_from_n_digits_parser(2)),
     )
         .map(
-            |(designation_id, _, stop_scope, _, priority, _, secondary_sorting_priority)| {
+            |(designation_id, stop_scope, priority, secondary_sorting_priority)| {
                 AttributeLine::Offer {
                     designation_id,
                     stop_scope,
@@ -104,21 +100,22 @@ fn row_offer_combinator<'a>()
                 }
             },
         )
+        .parse(input)
 }
 
-fn row_language_combinator<'a>()
--> impl Parser<&'a str, Output = AttributeLine, Error = nom::error::Error<&'a str>> {
+fn row_language_combinator(input: &str) -> IResult<&str, AttributeLine> {
     preceded(tag("<"), terminated(take_until(">"), tag(">")))
         .map(|s| AttributeLine::Language(String::from(s)))
+        .parse(input)
 }
 
-fn row_description_combinator<'a>()
--> impl Parser<&'a str, Output = AttributeLine, Error = nom::error::Error<&'a str>> {
-    preceded(tag("#"), string_till_eol_parser()).map(AttributeLine::Description)
+fn row_description_combinator(input: &str) -> IResult<&str, AttributeLine> {
+    preceded(tag("#"), string_till_eol_parser())
+        .map(AttributeLine::Description)
+        .parse(input)
 }
 
-fn row_language_description_combinator<'a>()
--> impl Parser<&'a str, Output = AttributeLine, Error = nom::error::Error<&'a str>> {
+fn row_language_description_combinator(input: &str) -> IResult<&str, AttributeLine> {
     (
         string_from_n_chars_parser(2),
         multispace1,
@@ -130,6 +127,7 @@ fn row_language_description_combinator<'a>()
                 description,
             },
         )
+        .parse(input)
 }
 
 fn parse_line(
@@ -140,10 +138,10 @@ fn parse_line(
     current_language: &mut Language,
 ) -> Result<(), Box<dyn Error>> {
     let (_, attribute_row) = alt((
-        row_offer_combinator(),
-        row_language_combinator(),
-        row_language_description_combinator(),
-        row_description_combinator(),
+        row_offer_combinator,
+        row_language_combinator,
+        row_language_description_combinator,
+        row_description_combinator,
     ))
     .parse(line)
     .map_err(|e| format!("Error {e} while parsing {line}"))?;
@@ -230,8 +228,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     fn row_language_description_parser(input: &str) -> Result<(String, String), Box<dyn Error>> {
-        let (_, ld) = row_language_description_combinator()
-            .parse(input)
+        let (_, ld) = row_language_description_combinator(input)
             .map_err(|e| format!("Error {e}: Unable to parse {input}"))?;
 
         match ld {
@@ -270,8 +267,7 @@ mod tests {
     }
 
     fn row_description_parser(input: &str) -> Result<String, Box<dyn Error>> {
-        let (_, lang) = row_description_combinator()
-            .parse(input)
+        let (_, lang) = row_description_combinator(input)
             .map_err(|e| format!("Error {e}: Unable to parse {input}"))?;
 
         match lang {
@@ -288,8 +284,7 @@ mod tests {
     }
 
     fn row_offer_parser(input: &str) -> Result<(String, i16, i16, i16), Box<dyn Error>> {
-        let (_, line) = row_offer_combinator()
-            .parse(input)
+        let (_, line) = row_offer_combinator(input)
             .map_err(|e| format!("Error {e}: Unable to parse {input}"))?;
         match line {
             AttributeLine::Offer {
@@ -318,8 +313,7 @@ mod tests {
     }
 
     fn row_language_parser(input: &str) -> Result<String, Box<dyn Error>> {
-        let (_, line) = row_language_combinator()
-            .parse(input)
+        let (_, line) = row_language_combinator(input)
             .map_err(|e| format!("Error {e}: Unable to parse {input}"))?;
 
         match line {

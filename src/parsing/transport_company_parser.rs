@@ -39,12 +39,12 @@
 use std::error::Error;
 
 use nom::{
+    IResult, Parser,
     branch::alt,
     bytes::{complete::take_until, tag},
     character::complete::{i32, space1},
     combinator::map,
     sequence::{preceded, terminated},
-    Parser,
 };
 use rustc_hash::FxHashMap;
 
@@ -73,8 +73,7 @@ enum TransportCompanyLine {
     },
 }
 
-fn kline_combinator<'a>(
-) -> impl Parser<&'a str, Output = TransportCompanyLine, Error = nom::error::Error<&'a str>> {
+fn kline_combinator(input: &str) -> IResult<&str, TransportCompanyLine> {
     map(
         (
             i32,
@@ -116,10 +115,10 @@ fn kline_combinator<'a>(
             full_name,
         },
     )
+    .parse(input)
 }
 
-fn nline_combinator<'a>(
-) -> impl Parser<&'a str, Output = TransportCompanyLine, Error = nom::error::Error<&'a str>> {
+fn nline_combinator(input: &str) -> IResult<&str, TransportCompanyLine> {
     map(
         (
             i32,
@@ -136,10 +135,10 @@ fn nline_combinator<'a>(
         ),
         |(id, sboid)| TransportCompanyLine::Nline { id, sboid },
     )
+    .parse(input)
 }
 
-fn colon_combinator<'a>(
-) -> impl Parser<&'a str, Output = TransportCompanyLine, Error = nom::error::Error<&'a str>> {
+fn colon_combinator(input: &str) -> IResult<&str, TransportCompanyLine> {
     map(
         (
             i32,
@@ -160,6 +159,7 @@ fn colon_combinator<'a>(
             }
         },
     )
+    .parse(input)
 }
 
 fn parse_transport_company_line(
@@ -167,7 +167,7 @@ fn parse_transport_company_line(
     transport_company: &mut FxHashMap<i32, TransportCompany>,
     language: Language,
 ) -> Result<(), Box<dyn Error>> {
-    let (_, tcl) = alt((kline_combinator(), nline_combinator(), colon_combinator()))
+    let (_, tcl) = alt((kline_combinator, nline_combinator, colon_combinator))
         .parse(line)
         .map_err(|e| format!("Error {e} while parsing {line}"))?;
 

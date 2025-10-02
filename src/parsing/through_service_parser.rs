@@ -32,7 +32,7 @@
 /// DURCHBI
 use std::error::Error;
 
-use nom::{Parser, character::char, combinator::map, sequence::preceded};
+use nom::{IResult, Parser, character::char, combinator::map, sequence::preceded};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
@@ -55,8 +55,7 @@ enum TroughServiceLine {
     },
 }
 
-fn through_service_combinator<'a>()
--> impl Parser<&'a str, Output = TroughServiceLine, Error = nom::error::Error<&'a str>> {
+fn through_service_combinator(input: &str) -> IResult<&str, TroughServiceLine> {
     map(
         (
             i32_from_n_digits_parser(6),
@@ -86,6 +85,7 @@ fn through_service_combinator<'a>()
             journey_2_stop_id,
         },
     )
+    .parse(input)
 }
 
 fn parse_line(
@@ -94,9 +94,8 @@ fn parse_line(
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
     auto_increment: &AutoIncrement,
 ) -> Result<(), Box<dyn Error>> {
-    let (_, through_service_line) = through_service_combinator()
-        .parse(line)
-        .map_err(|e| format!("Error {e} while parsing {line}"))?;
+    let (_, through_service_line) =
+        through_service_combinator(line).map_err(|e| format!("Error {e} while parsing {line}"))?;
 
     match through_service_line {
         TroughServiceLine::ThroughService {

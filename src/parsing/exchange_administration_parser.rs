@@ -24,7 +24,7 @@
 /// UMSTEIGV
 use std::error::Error;
 
-use nom::{character::char, IResult, Parser};
+use nom::{IResult, Parser, character::char, sequence::preceded};
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -40,14 +40,11 @@ use crate::{
 pub fn parse_exchange_administration_row(
     input: &str,
 ) -> IResult<&str, (Option<i32>, String, String, i16)> {
-    let (res, (stop_id, _, administration_1, _, administration_2, _, duration)) = (
+    let (res, (stop_id, administration_1, administration_2, duration)) = (
         optional_i32_from_n_digits_parser(7),
-        char(' '),
-        string_from_n_chars_parser(6),
-        char(' '),
-        string_from_n_chars_parser(6),
-        char(' '),
-        i16_from_n_digits_parser(2),
+        preceded(char(' '), string_from_n_chars_parser(6)),
+        preceded(char(' '), string_from_n_chars_parser(6)),
+        preceded(char(' '), i16_from_n_digits_parser(2)),
     )
         .parse(input)?;
     Ok((res, (stop_id, administration_1, administration_2, duration)))

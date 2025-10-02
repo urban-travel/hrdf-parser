@@ -84,12 +84,12 @@
 use std::error::Error;
 
 use nom::{
+    IResult, Parser,
     branch::alt,
     bytes::complete::{tag, take_until1},
     character::complete::{char, i16, space1},
     combinator::map,
     sequence::{preceded, terminated},
-    Parser,
 };
 use rustc_hash::FxHashMap;
 
@@ -139,8 +139,7 @@ enum TransportTypeAndTypeLine {
     },
 }
 
-fn offer_definition_combinator<'a>(
-) -> impl Parser<&'a str, Output = TransportTypeAndTypeLine, Error = nom::error::Error<&'a str>> {
+fn offer_definition_combinator(input: &str) -> IResult<&str, TransportTypeAndTypeLine> {
     map(
         (
             string_from_n_chars_parser(3),
@@ -171,18 +170,18 @@ fn offer_definition_combinator<'a>(
             }
         },
     )
+    .parse(input)
 }
 
-fn language_combinator<'a>(
-) -> impl Parser<&'a str, Output = TransportTypeAndTypeLine, Error = nom::error::Error<&'a str>> {
+fn language_combinator(input: &str) -> IResult<&str, TransportTypeAndTypeLine> {
     map(
         terminated(preceded(tag("<"), take_until1(">")), tag(">")),
         |s: &str| TransportTypeAndTypeLine::LanguageDefinition(s.to_string()),
     )
+    .parse(input)
 }
 
-fn class_combinator<'a>(
-) -> impl Parser<&'a str, Output = TransportTypeAndTypeLine, Error = nom::error::Error<&'a str>> {
+fn class_combinator(input: &str) -> IResult<&str, TransportTypeAndTypeLine> {
     map(
         (
             preceded(tag("class"), i16),
@@ -193,10 +192,10 @@ fn class_combinator<'a>(
             product_class_name,
         },
     )
+    .parse(input)
 }
 
-fn category_combinator<'a>(
-) -> impl Parser<&'a str, Output = TransportTypeAndTypeLine, Error = nom::error::Error<&'a str>> {
+fn category_combinator(input: &str) -> IResult<&str, TransportTypeAndTypeLine> {
     map(
         (
             preceded(tag("category"), i16),
@@ -207,10 +206,10 @@ fn category_combinator<'a>(
             category_name,
         },
     )
+    .parse(input)
 }
 
-fn option_combinator<'a>(
-) -> impl Parser<&'a str, Output = TransportTypeAndTypeLine, Error = nom::error::Error<&'a str>> {
+fn option_combinator(input: &str) -> IResult<&str, TransportTypeAndTypeLine> {
     map(
         (
             preceded(tag("option"), i16),
@@ -221,10 +220,10 @@ fn option_combinator<'a>(
             option_name,
         },
     )
+    .parse(input)
 }
 
-fn iline_combinator<'a>(
-) -> impl Parser<&'a str, Output = TransportTypeAndTypeLine, Error = nom::error::Error<&'a str>> {
+fn iline_combinator(input: &str) -> IResult<&str, TransportTypeAndTypeLine> {
     map(
         (
             preceded(preceded(tag("*I"), space1), string_from_n_chars_parser(2)),
@@ -232,6 +231,7 @@ fn iline_combinator<'a>(
         ),
         |(code_name, id)| TransportTypeAndTypeLine::Information { code_name, id },
     )
+    .parse(input)
 }
 
 fn parse_line(
@@ -242,12 +242,12 @@ fn parse_line(
     current_language: &mut Language,
 ) -> Result<(), Box<dyn Error>> {
     let (_, transport_row) = alt((
-        offer_definition_combinator(),
-        language_combinator(),
-        category_combinator(),
-        class_combinator(),
-        option_combinator(),
-        iline_combinator(),
+        offer_definition_combinator,
+        language_combinator,
+        category_combinator,
+        class_combinator,
+        option_combinator,
+        iline_combinator,
     ))
     .parse(line)
     .map_err(|e| format!("Error {e} while parsing {line}"))?;
@@ -266,8 +266,8 @@ fn parse_line(
 
             if let Some(previous) = pk_type_converter.insert(designation.to_owned(), id) {
                 log::error!(
-            "Warning: previous id {previous} for {designation}. The designation, {designation}, is not unique."
-        );
+                    "Warning: previous id {previous} for {designation}. The designation, {designation}, is not unique."
+                );
             };
             let tt = TransportType::new(
                 id,
