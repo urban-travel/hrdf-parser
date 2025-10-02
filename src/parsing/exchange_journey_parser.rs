@@ -26,10 +26,11 @@
 /// UMSTEIGZ
 use std::error::Error;
 
-use nom::{character::char, combinator::map, sequence::preceded, IResult, Parser};
+use nom::{IResult, Parser, character::char, combinator::map, sequence::preceded};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
+    JourneyId,
     models::ExchangeTimeJourney,
     parsing::helpers::{
         i16_from_n_digits_parser, i32_from_n_digits_parser, optional_i32_from_n_digits_parser,
@@ -37,7 +38,6 @@ use crate::{
     },
     storage::ResourceStorage,
     utils::AutoIncrement,
-    JourneyId,
 };
 
 type ExchangeTimeJourneyLine = (i32, i32, String, i32, String, i16, bool, Option<i32>);

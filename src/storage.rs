@@ -5,6 +5,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    JourneyId,
     models::{
         Attribute, BitField, Direction, ExchangeTimeAdministration, ExchangeTimeJourney,
         ExchangeTimeLine, Holiday, InformationText, Journey, JourneyPlatform, Line, Model,
@@ -13,7 +14,6 @@ use crate::{
     },
     parsing,
     utils::{count_days_between_two_dates, timetable_end_date, timetable_start_date},
-    JourneyId,
 };
 
 // ------------------------------------------------------------------------------------------------

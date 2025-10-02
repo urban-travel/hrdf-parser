@@ -34,7 +34,7 @@
 /// UMSTEIGL
 use std::{error::Error, str::FromStr};
 
-use nom::{character::char, combinator::map, sequence::preceded, IResult, Parser};
+use nom::{IResult, Parser, character::char, combinator::map, sequence::preceded};
 use rustc_hash::FxHashMap;
 
 use crate::{

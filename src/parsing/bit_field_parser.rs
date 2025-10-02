@@ -27,11 +27,11 @@
 use std::error::Error;
 
 use nom::{
+    IResult, Parser,
     character::{char, one_of},
     combinator::map_res,
     multi::count,
     sequence::separated_pair,
-    IResult, Parser,
 };
 use rustc_hash::FxHashMap;
 
