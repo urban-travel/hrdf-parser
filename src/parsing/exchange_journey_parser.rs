@@ -26,47 +26,109 @@
 /// UMSTEIGZ
 use std::error::Error;
 
+use nom::{IResult, Parser, character::char, combinator::map, sequence::preceded};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     JourneyId,
-    models::{ExchangeTimeJourney, Model},
-    parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
+    models::ExchangeTimeJourney,
+    parsing::helpers::{
+        i16_from_n_digits_parser, i32_from_n_digits_parser, optional_i32_from_n_digits_parser,
+        read_lines, string_from_n_chars_parser,
+    },
     storage::ResourceStorage,
     utils::AutoIncrement,
 };
 
-fn exchange_journey_row_parser() -> RowParser {
-    RowParser::new(vec![
-        // This row is used to create a JourneyExchangeTime instance.
-        RowDefinition::from(vec![
-            ColumnDefinition::new(1, 7, ExpectedType::Integer32),
-            ColumnDefinition::new(9, 14, ExpectedType::Integer32),
-            ColumnDefinition::new(16, 21, ExpectedType::String),
-            ColumnDefinition::new(23, 28, ExpectedType::Integer32),
-            ColumnDefinition::new(30, 35, ExpectedType::String),
-            ColumnDefinition::new(37, 39, ExpectedType::Integer16),
-            ColumnDefinition::new(40, 40, ExpectedType::String),
-            ColumnDefinition::new(42, 47, ExpectedType::OptionInteger32),
-        ]),
-    ])
-}
-fn exchange_journey_row_converter(
-    parser: FileParser,
-    journeys_pk_type_converter: &FxHashSet<JourneyId>,
-) -> Result<FxHashMap<i32, ExchangeTimeJourney>, Box<dyn Error>> {
-    let auto_increment = AutoIncrement::new();
+type ExchangeTimeJourneyLine = (i32, i32, String, i32, String, i16, bool, Option<i32>);
 
-    let data = parser
-        .parse()
-        .map(|x| {
-            x.and_then(|(_, _, values)| {
-                create_instance(values, &auto_increment, journeys_pk_type_converter)
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let data = ExchangeTimeJourney::vec_to_map(data);
-    Ok(data)
+fn parse_exchange_journey_row(input: &str) -> IResult<&str, ExchangeTimeJourneyLine> {
+    // TODO: I haven't seen an is_guaranteed field in the doc. Check if this makes sense.
+    // It is present in UMSTEIGL. Mabe a copy/paste leftover
+    //
+    // TODO: There is still a String after all the parsing is done that remains (a name)
+    let (
+        res,
+        (
+            stop_id,
+            journey_id_1,
+            administration_1,
+            journey_id_2,
+            administration_2,
+            duration,
+            is_guaranteed,
+            bitfield_id,
+        ),
+    ) = (
+        i32_from_n_digits_parser(7),
+        preceded(char(' '), i32_from_n_digits_parser(6)),
+        preceded(char(' '), string_from_n_chars_parser(6)),
+        preceded(char(' '), i32_from_n_digits_parser(6)),
+        preceded(char(' '), string_from_n_chars_parser(6)),
+        preceded(char(' '), i16_from_n_digits_parser(3)),
+        map(string_from_n_chars_parser(1), |s| s == "!"),
+        preceded(char(' '), optional_i32_from_n_digits_parser(6)),
+    )
+        .parse(input)?;
+    Ok((
+        res,
+        (
+            stop_id,
+            journey_id_1,
+            administration_1,
+            journey_id_2,
+            administration_2,
+            duration,
+            is_guaranteed,
+            bitfield_id,
+        ),
+    ))
+}
+
+fn parse_line(
+    line: &str,
+    auto_increment: &AutoIncrement,
+    journeys_pk_type_converter: &FxHashSet<JourneyId>,
+) -> Result<(i32, ExchangeTimeJourney), Box<dyn Error>> {
+    let (
+        _,
+        (
+            stop_id,
+            journey_id_1,
+            administration_1,
+            journey_id_2,
+            administration_2,
+            duration,
+            is_guaranteed,
+            bitfield_id,
+        ),
+    ) = parse_exchange_journey_row(line).map_err(|e| format!("Error {e} while parsing {line}"))?;
+
+    let _journey_id_1 = journeys_pk_type_converter
+        .get(&(journey_id_1, administration_1.clone()))
+        .ok_or(format!(
+            "Unknown legacy ID for ({journey_id_1}, {administration_1})"
+        ))?;
+
+    let _journey_id_2 = journeys_pk_type_converter
+        .get(&(journey_id_2, administration_2.clone()))
+        .ok_or(format!(
+            "Unknown legacy ID for ({journey_id_2}, {administration_2})"
+        ))?;
+    let id = auto_increment.next();
+
+    Ok((
+        id,
+        ExchangeTimeJourney::new(
+            id,
+            stop_id,
+            (journey_id_1, administration_1),
+            (journey_id_2, administration_2),
+            duration,
+            is_guaranteed,
+            bitfield_id,
+        ),
+    ))
 }
 
 pub fn parse(
@@ -74,52 +136,16 @@ pub fn parse(
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
 ) -> Result<ResourceStorage<ExchangeTimeJourney>, Box<dyn Error>> {
     log::info!("Parsing UMSTEIGZ...");
-    let row_parser = exchange_journey_row_parser();
-    let parser = FileParser::new(&format!("{path}/UMSTEIGZ"), row_parser)?;
-    let data = exchange_journey_row_converter(parser, journeys_pk_type_converter)?;
 
-    Ok(ResourceStorage::new(data))
-}
+    let lines = read_lines(&format!("{path}/UMSTEIGZ"), 0)?;
+    let auto_increment = AutoIncrement::new();
+    let exchanges = lines
+        .into_iter()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| parse_line(&line, &auto_increment, journeys_pk_type_converter))
+        .collect::<Result<FxHashMap<i32, ExchangeTimeJourney>, Box<dyn Error>>>()?;
 
-// ------------------------------------------------------------------------------------------------
-// --- Data Processing Functions
-// ------------------------------------------------------------------------------------------------
-
-fn create_instance(
-    mut values: Vec<ParsedValue>,
-    auto_increment: &AutoIncrement,
-    journeys_pk_type_converter: &FxHashSet<JourneyId>,
-) -> Result<ExchangeTimeJourney, Box<dyn Error>> {
-    let stop_id: i32 = values.remove(0).into();
-    let journey_id_1: i32 = values.remove(0).into();
-    let administration_1: String = values.remove(0).into();
-    let journey_id_2: i32 = values.remove(0).into();
-    let administration_2: String = values.remove(0).into();
-    let duration: i16 = values.remove(0).into();
-    let is_guaranteed: String = values.remove(0).into();
-    let bit_field_id: Option<i32> = values.remove(0).into();
-
-    let _journey_id_1 = journeys_pk_type_converter
-        .get(&(journey_id_1, administration_1.clone()))
-        .ok_or("Unknown legacy ID")?;
-
-    let _journey_id_2 = journeys_pk_type_converter
-        .get(&(journey_id_2, administration_2.clone()))
-        .ok_or("Unknown legacy ID")?;
-
-    // TODO: I haven't seen an is_guaranteed field in the doc. Check if this makes sense.
-    // It is present in UMSTEIGL. Mabe a copy/paste leftover
-    let is_guaranteed = is_guaranteed == "!";
-
-    Ok(ExchangeTimeJourney::new(
-        auto_increment.next(),
-        stop_id,
-        (journey_id_1, administration_1),
-        (journey_id_2, administration_2),
-        duration,
-        is_guaranteed,
-        bit_field_id,
-    ))
+    Ok(ResourceStorage::new(exchanges))
 }
 
 #[cfg(test)]
@@ -130,64 +156,82 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn row_parser_v207() {
-        let rows = vec![
-            "8501008 023057 000011 001671 000011 002  000010 Genève".to_string(),
-            "8501120 001929 000011 024256 000011 999         Lausanne".to_string(),
-        ];
-        let parser = FileParser {
-            row_parser: exchange_journey_row_parser(),
-            rows,
-        };
-        let mut parser_iterator = parser.parse();
-        // First row
-        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let stop_id: i32 = parsed_values.remove(0).into();
+    fn row_parser() {
+        let line = "8501008 023057 000011 001671 000011 002  000010 Genève";
+        let (
+            _res,
+            (
+                stop_id,
+                journey_id_1,
+                administration_1,
+                journey_id_2,
+                administration_2,
+                duration,
+                is_guaranteed,
+                bit_field_id,
+            ),
+        ) = parse_exchange_journey_row(line).unwrap();
         assert_eq!(8501008, stop_id);
-        let journey_id_1: i32 = parsed_values.remove(0).into();
         assert_eq!(23057, journey_id_1);
-        let administration_1: String = parsed_values.remove(0).into();
         assert_eq!("000011", &administration_1);
-        let journey_id_2: i32 = parsed_values.remove(0).into();
         assert_eq!(1671, journey_id_2);
-        let administration_2: String = parsed_values.remove(0).into();
         assert_eq!("000011", &administration_2);
-        let duration: i16 = parsed_values.remove(0).into();
         assert_eq!(2, duration);
-        let is_guaranteed: String = parsed_values.remove(0).into();
-        assert_eq!("", &is_guaranteed);
-        let bit_field_id: Option<i32> = parsed_values.remove(0).into();
+        assert!(!is_guaranteed);
         assert_eq!(Some(10), bit_field_id);
-        // Second row
-        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let stop_id: i32 = parsed_values.remove(0).into();
+        let line = "8501120 001929 000011 024256 000011 999         Lausanne";
+        let (
+            _res,
+            (
+                stop_id,
+                journey_id_1,
+                administration_1,
+                journey_id_2,
+                administration_2,
+                duration,
+                is_guaranteed,
+                bit_field_id,
+            ),
+        ) = parse_exchange_journey_row(line).unwrap();
         assert_eq!(8501120, stop_id);
-        let journey_id_1: i32 = parsed_values.remove(0).into();
         assert_eq!(1929, journey_id_1);
-        let administration_1: String = parsed_values.remove(0).into();
         assert_eq!("000011", &administration_1);
-        let journey_id_2: i32 = parsed_values.remove(0).into();
         assert_eq!(24256, journey_id_2);
-        let administration_2: String = parsed_values.remove(0).into();
         assert_eq!("000011", &administration_2);
-        let duration: i16 = parsed_values.remove(0).into();
         assert_eq!(999, duration);
-        let is_guaranteed: String = parsed_values.remove(0).into();
-        assert_eq!("", &is_guaranteed);
-        let bit_field_id: Option<i32> = parsed_values.remove(0).into();
+        assert!(!is_guaranteed);
         assert_eq!(None, bit_field_id);
+        let line = "8575489 000020 000801 000045 000801 004! 000019 Crana, Ponte Oscuro";
+        let (
+            _res,
+            (
+                stop_id,
+                journey_id_1,
+                administration_1,
+                journey_id_2,
+                administration_2,
+                duration,
+                is_guaranteed,
+                bit_field_id,
+            ),
+        ) = parse_exchange_journey_row(line).unwrap();
+        assert_eq!(8575489, stop_id);
+        assert_eq!(20, journey_id_1);
+        assert_eq!("000801", &administration_1);
+        assert_eq!(45, journey_id_2);
+        assert_eq!("000801", &administration_2);
+        assert_eq!(4, duration);
+        assert!(is_guaranteed);
+        assert_eq!(Some(19), bit_field_id);
     }
 
     #[test]
-    fn type_converter_v207() {
-        let rows = vec![
+    fn multiple_row_parsing() {
+        let lines = vec![
             "8501008 023057 000011 001671 000011 002  000010 Genève".to_string(),
             "8501120 001929 000011 024256 000011 999         Lausanne".to_string(),
+            "8575489 000020 000801 000045 000801 004! 000019 Crana, Ponte Oscuro".to_string(),
         ];
-        let parser = FileParser {
-            row_parser: exchange_journey_row_parser(),
-            rows,
-        };
 
         // The journeys_pk_type_converter is dummy and created just for testing purposes
         let mut journeys_pk_type_converter: FxHashSet<JourneyId> = FxHashSet::default();
@@ -195,10 +239,19 @@ mod tests {
         journeys_pk_type_converter.insert((1929, "000011".to_string()));
         journeys_pk_type_converter.insert((1671, "000011".to_string()));
         journeys_pk_type_converter.insert((24256, "000011".to_string()));
+        journeys_pk_type_converter.insert((20, "000801".to_string()));
+        journeys_pk_type_converter.insert((45, "000801".to_string()));
 
-        let data = exchange_journey_row_converter(parser, &journeys_pk_type_converter).unwrap();
+        let auto_increment = AutoIncrement::new();
+        let exchanges = lines
+            .into_iter()
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| parse_line(&line, &auto_increment, &journeys_pk_type_converter))
+            .collect::<Result<FxHashMap<_, _>, Box<dyn Error>>>()
+            .unwrap();
+
         // First row
-        let attribute = data.get(&1).unwrap();
+        let attribute = exchanges.get(&1).unwrap();
         let reference = r#"
             {
                 "id":1,
@@ -213,7 +266,7 @@ mod tests {
             }"#;
         let (attribute, reference) = get_json_values(attribute, reference).unwrap();
         assert_eq!(attribute, reference);
-        let attribute = data.get(&2).unwrap();
+        let attribute = exchanges.get(&2).unwrap();
         let reference = r#"
             {
                 "id":2,
@@ -225,6 +278,21 @@ mod tests {
                 "duration": 999,
                 "is_guaranteed": false,
                 "bit_field_id": null
+            }"#;
+        let (attribute, reference) = get_json_values(attribute, reference).unwrap();
+        assert_eq!(attribute, reference);
+        let attribute = exchanges.get(&3).unwrap();
+        let reference = r#"
+            {
+                "id":3,
+                "stop_id": 8575489,
+                "journey_legacy_id_1": 20,
+                "administration_1": "000801",
+                "journey_legacy_id_2": 45,
+                "administration_2": "000801",
+                "duration": 4,
+                "is_guaranteed": true,
+                "bit_field_id": 19
             }"#;
         let (attribute, reference) = get_json_values(attribute, reference).unwrap();
         assert_eq!(attribute, reference);

@@ -15,60 +15,49 @@
 use std::{error::Error, str::FromStr};
 
 use chrono::NaiveDate;
+use nom::{IResult, Parser, character::char, sequence::separated_pair};
 use rustc_hash::FxHashMap;
 
 use crate::{
-    models::{Holiday, Language, Model},
-    parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
+    models::{Holiday, Language},
+    parsing::helpers::{read_lines, string_from_n_chars_parser, string_till_eol_parser},
     storage::ResourceStorage,
     utils::AutoIncrement,
 };
 
-fn holiday_row_parser() -> RowParser {
-    RowParser::new(vec![
-        // This row is used to create a Holiday instance.
-        RowDefinition::from(vec![
-            ColumnDefinition::new(1, 10, ExpectedType::String),
-            ColumnDefinition::new(12, -1, ExpectedType::String),
-        ]),
-    ])
+fn parse_holiday_row(input: &str) -> IResult<&str, (String, String)> {
+    separated_pair(
+        string_from_n_chars_parser(10),
+        char(' '),
+        string_till_eol_parser,
+    )
+    .parse(input)
 }
 
-fn holiday_row_converter(parser: FileParser) -> Result<FxHashMap<i32, Holiday>, Box<dyn Error>> {
-    let auto_increment = AutoIncrement::new();
+fn parse_line(
+    line: &str,
+    auto_increment: &AutoIncrement,
+) -> Result<(i32, Holiday), Box<dyn Error>> {
+    let (_, (date, translations)) =
+        parse_holiday_row(line).map_err(|e| format!("Failed to parse line '{}': {}", line, e))?;
 
-    let data = parser
-        .parse()
-        .map(|x| x.and_then(|(_, _, values)| create_instance(values, &auto_increment)))
-        .collect::<Result<Vec<_>, _>>()?;
-    let data = Holiday::vec_to_map(data);
-    Ok(data)
+    let date = NaiveDate::parse_from_str(&date, "%d.%m.%Y")?;
+    let name = parse_name_translations(translations)?;
+    let id = auto_increment.next();
+
+    Ok((id, Holiday::new(id, date, name)))
 }
 
 pub fn parse(path: &str) -> Result<ResourceStorage<Holiday>, Box<dyn Error>> {
     log::info!("Parsing FEIERTAG...");
-    let row_parser = holiday_row_parser();
-    let parser = FileParser::new(&format!("{path}/FEIERTAG"), row_parser)?;
-    let data = holiday_row_converter(parser)?;
-
-    Ok(ResourceStorage::new(data))
-}
-
-// ------------------------------------------------------------------------------------------------
-// --- Data Processing Functions
-// ------------------------------------------------------------------------------------------------
-
-fn create_instance(
-    mut values: Vec<ParsedValue>,
-    auto_increment: &AutoIncrement,
-) -> Result<Holiday, Box<dyn Error>> {
-    let date: String = values.remove(0).into();
-    let name_translations: String = values.remove(0).into();
-
-    let date = NaiveDate::parse_from_str(&date, "%d.%m.%Y")?;
-    let name = parse_name_translations(name_translations)?;
-
-    Ok(Holiday::new(auto_increment.next(), date, name))
+    let lines = read_lines(&format!("{path}/FEIERTAG"), 0)?;
+    let auto_increment = AutoIncrement::new();
+    let holidays = lines
+        .into_iter()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| parse_line(&line, &auto_increment))
+        .collect::<Result<FxHashMap<_, _>, Box<dyn Error>>>()?;
+    Ok(ResourceStorage::new(holidays))
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -106,40 +95,22 @@ mod tests {
 
     #[test]
     fn row_parser_v207() {
-        let rows = vec![
-            "25.12.2024 Weihnachtstag<deu>Noël<fra>Natale<ita>Christmas Day<eng>".to_string(),
-            "26.12.2024 Stephanstag<deu>Saint Etienne<fra>Santo Stefano<ita>Boxing Day<eng>"
-                .to_string(),
-        ];
-        let parser = FileParser {
-            row_parser: holiday_row_parser(),
-            rows,
-        };
-        let mut parser_iterator = parser.parse();
-        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let date: String = parsed_values.remove(0).into();
+        let input = "25.12.2024 Weihnachtstag<deu>Noël<fra>Natale<ita>Christmas Day<eng>";
+        let (_, (date, translations)) = parse_holiday_row(input).unwrap();
         assert_eq!("25.12.2024", &date);
-        let name_translations: String = parsed_values.remove(0).into();
         assert_eq!(
             "Weihnachtstag<deu>Noël<fra>Natale<ita>Christmas Day<eng>",
-            &name_translations
+            &translations
         );
     }
 
     #[test]
-    fn type_converter_v207() {
-        let rows = vec![
-            "25.12.2024 Weihnachtstag<deu>Noël<fra>Natale<ita>Christmas Day<eng>".to_string(),
-            "26.12.2024 Stephanstag<deu>Saint Etienne<fra>Santo Stefano<ita>Boxing Day<eng>"
-                .to_string(),
-        ];
-        let parser = FileParser {
-            row_parser: holiday_row_parser(),
-            rows,
-        };
-        let data = holiday_row_converter(parser).unwrap();
+    fn row_converter_v207() {
+        let auto_increment = AutoIncrement::new();
+        let input = "25.12.2024 Weihnachtstag<deu>Noël<fra>Natale<ita>Christmas Day<eng>";
+        let (_, instance) = parse_line(input, &auto_increment).unwrap();
+
         // First row (id: 1)
-        let attribute = data.get(&1).unwrap();
         let reference = r#"
             {
                 "id": 1,
@@ -151,22 +122,7 @@ mod tests {
                     "Italian": "Natale"
                 }
             }"#;
-        let (attribute, reference) = get_json_values(attribute, reference).unwrap();
-        assert_eq!(attribute, reference);
-        // Second row (id: 2)
-        let attribute = data.get(&2).unwrap();
-        let reference = r#"
-            {
-                "id": 2,
-                "date": "2024-12-26",
-                "name": {
-                    "German": "Stephanstag",
-                    "English": "Boxing Day",
-                    "French": "Saint Etienne",
-                    "Italian": "Santo Stefano"
-                }
-            }"#;
-        let (attribute, reference) = get_json_values(attribute, reference).unwrap();
+        let (attribute, reference) = get_json_values(&instance, reference).unwrap();
         assert_eq!(attribute, reference);
     }
 }

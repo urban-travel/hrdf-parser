@@ -17,226 +17,98 @@
 /// 4 file(s).
 /// File(s) read by the parser:
 /// INFOTEXT_DE, INFOTEXT_EN, INFOTEXT_FR, INFOTEXT_IT
-use std::error::Error;
+use std::{error::Error, str::FromStr};
 
+use nom::{IResult, Parser, character::char, sequence::separated_pair};
 use rustc_hash::FxHashMap;
 
 use crate::{
-    models::{InformationText, Language, Model},
-    parsing::{ColumnDefinition, ExpectedType, FileParser, ParsedValue, RowDefinition, RowParser},
+    models::{InformationText, Language},
+    parsing::helpers::{i32_from_n_digits_parser, read_lines, string_till_eol_parser},
     storage::ResourceStorage,
 };
 
-fn id_row_parser() -> RowParser {
-    RowParser::new(vec![
-        // This row is used to create a InformationText instance.
-        RowDefinition::from(vec![ColumnDefinition::new(1, 9, ExpectedType::Integer32)]),
-    ])
+fn parse_infotext_row(input: &str) -> IResult<&str, (i32, String)> {
+    separated_pair(
+        i32_from_n_digits_parser(9),
+        char(' '),
+        string_till_eol_parser,
+    )
+    .parse(input)
 }
 
-fn id_row_converter(parser: FileParser) -> Result<FxHashMap<i32, InformationText>, Box<dyn Error>> {
-    let data = parser
-        .parse()
-        .map(|x| x.map(|(_, _, values)| create_instance(values)))
-        .collect::<Result<Vec<_>, _>>()?;
-    let data = InformationText::vec_to_map(data);
-    Ok(data)
-}
-
-fn infotext_row_parser() -> RowParser {
-    RowParser::new(vec![
-        // This row contains the content in a specific language.
-        RowDefinition::from(vec![
-            ColumnDefinition::new(1, 9, ExpectedType::Integer32),
-            ColumnDefinition::new(11, -1, ExpectedType::String),
-        ]),
-    ])
-}
-
-fn infotext_row_converter(
-    parser: FileParser,
-    data: &mut FxHashMap<i32, InformationText>,
-    language: Language,
+fn parse_line(
+    line: &str,
+    infotextmap: &mut FxHashMap<i32, InformationText>,
+    current_language: Language,
 ) -> Result<(), Box<dyn Error>> {
-    parser.parse().try_for_each(|x| {
-        let (_, _, values) = x?;
-        set_content(values, data, language)?;
-        Ok(())
-    })
+    let (_, (id, infotext)) =
+        parse_infotext_row(line).map_err(|e| format!("Failed to parse line '{}': {}", line, e))?;
+    if let Some(mut info) = infotextmap.remove(&id) {
+        info.set_content(current_language, &infotext);
+        infotextmap.insert(id, info);
+    } else {
+        let mut info = InformationText::new(id);
+        info.set_content(current_language, &infotext);
+        infotextmap.insert(id, info);
+    }
+    Ok::<(), Box<dyn Error>>(())
 }
 
 pub fn parse(path: &str) -> Result<ResourceStorage<InformationText>, Box<dyn Error>> {
-    log::info!("Parsing INFOTEXT_DE...");
-    log::info!("Parsing INFOTEXT_EN...");
-    log::info!("Parsing INFOTEXT_FR...");
-    log::info!("Parsing INFOTEXT_IT...");
+    let mut infotextmap: FxHashMap<i32, InformationText> = FxHashMap::default();
+    let languages = ["DE", "EN", "FR", "IT"];
+    for language in languages {
+        log::info!("Parsing INFOTEXT_{language}...");
 
-    let row_parser = id_row_parser();
-    let parser = FileParser::new(&format!("{path}/INFOTEXT_DE"), row_parser)?;
-    let mut data = id_row_converter(parser)?;
-
-    load_content(path, &mut data, Language::German)?;
-    load_content(path, &mut data, Language::English)?;
-    load_content(path, &mut data, Language::French)?;
-    load_content(path, &mut data, Language::Italian)?;
-
-    Ok(ResourceStorage::new(data))
-}
-
-fn load_content(
-    path: &str,
-    data: &mut FxHashMap<i32, InformationText>,
-    language: Language,
-) -> Result<(), Box<dyn Error>> {
-    let row_parser = infotext_row_parser();
-    let filename = match language {
-        Language::German => "INFOTEXT_DE",
-        Language::English => "INFOTEXT_EN",
-        Language::French => "INFOTEXT_FR",
-        Language::Italian => "INFOTEXT_IT",
-    };
-    let parser = FileParser::new(&format!("{path}/{filename}"), row_parser)?;
-    infotext_row_converter(parser, data, language)
+        let lines = read_lines(&format!("{path}/INFOTEXT_{language}"), 0)?;
+        let current_language = Language::from_str(language)?;
+        lines
+            .into_iter()
+            .filter(|line| !line.trim().is_empty())
+            .try_for_each(|line| parse_line(&line, &mut infotextmap, current_language))?;
+    }
+    Ok(ResourceStorage::new(infotextmap))
 }
 
 // ------------------------------------------------------------------------------------------------
 // --- Data Processing Functions
 // ------------------------------------------------------------------------------------------------
 
-fn create_instance(mut values: Vec<ParsedValue>) -> InformationText {
-    let id: i32 = values.remove(0).into();
-
-    InformationText::new(id)
-}
-
-fn set_content(
-    mut values: Vec<ParsedValue>,
-    data: &mut FxHashMap<i32, InformationText>,
-    language: Language,
-) -> Result<(), Box<dyn Error>> {
-    let id: i32 = values.remove(0).into();
-    let description: String = values.remove(0).into();
-
-    data.get_mut(&id)
-        .ok_or("Unknown ID")?
-        .set_content(language, &description);
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
+    use crate::parsing::tests::get_json_values;
+
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
-    use crate::parsing::tests::get_json_values;
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn id_row_parser_v207() {
-        let rows = vec![
-            "000001921 ch:1:sjyid:100001:3995-001".to_string(),
-            "000003459 2518".to_string(),
-        ];
-        let parser = FileParser {
-            row_parser: id_row_parser(),
-            rows,
-        };
-        let mut parser_iterator = parser.parse();
-        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let id: i32 = parsed_values.remove(0).into();
+    fn infotext_row_parser1() {
+        let input = "000001921 ch:1:sjyid:100001:3995-001";
+        let (_, (id, infotext)) = parse_infotext_row(input).unwrap();
         assert_eq!(1921, id);
-        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let id: i32 = parsed_values.remove(0).into();
+        assert_eq!("ch:1:sjyid:100001:3995-001", &infotext);
+    }
+
+    #[test]
+    fn infotext_row_parser2() {
+        let input = "000003459 2518 ";
+        let (_, (id, infotext)) = parse_infotext_row(input).unwrap();
         assert_eq!(3459, id);
+        assert_eq!("2518", &infotext);
     }
 
     #[test]
-    fn id_type_converter_v207() {
-        let rows = vec![
-            "000001921 ch:1:sjyid:100001:3995-001".to_string(),
-            "000003459 2518".to_string(),
-        ];
-        let parser = FileParser {
-            row_parser: id_row_parser(),
-            rows,
-        };
-        let data = id_row_converter(parser).unwrap();
+    fn parse_and_transform_infotext() {
+        let input = "000001921 ch:1:sjyid:100001:3995-001";
         // First row (id: 1)
-        let attribute = data.get(&1921).unwrap();
-        let reference = r#"
-            {
-                "id": 1921,
-                "content": {}
-            }"#;
-        let (attribute, reference) = get_json_values(attribute, reference).unwrap();
-        assert_eq!(attribute, reference);
-        // Second row (id: 2)
-        let attribute = data.get(&3459).unwrap();
-        let reference = r#"
-            {
-                "id": 3459,
-                "content": {}
-            }"#;
-        let (attribute, reference) = get_json_values(attribute, reference).unwrap();
-        assert_eq!(attribute, reference);
-    }
-
-    #[test]
-    fn infotext_row_parser_v207() {
-        let rows = vec![
-            "000001921 ch:1:sjyid:100001:3995-001".to_string(),
-            "000003459 2518".to_string(),
-        ];
-        let parser = FileParser {
-            row_parser: infotext_row_parser(),
-            rows,
-        };
-        let mut parser_iterator = parser.parse();
-        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let id: i32 = parsed_values.remove(0).into();
-        assert_eq!(1921, id);
-        let content: String = parsed_values.remove(0).into();
-        assert_eq!("ch:1:sjyid:100001:3995-001", &content);
-        let (_, _, mut parsed_values) = parser_iterator.next().unwrap().unwrap();
-        let id: i32 = parsed_values.remove(0).into();
-        assert_eq!(3459, id);
-        let content: String = parsed_values.remove(0).into();
-        assert_eq!("2518", &content);
-    }
-
-    #[test]
-    fn infotext_type_converter_v207() {
-        let rows = vec![
-            "000001921 ch:1:sjyid:100001:3995-001".to_string(),
-            "000003459 2518".to_string(),
-        ];
-        let parser_fr = FileParser {
-            row_parser: infotext_row_parser(),
-            rows: rows.clone(),
-        };
-        let parser_en = FileParser {
-            row_parser: infotext_row_parser(),
-            rows: rows.clone(),
-        };
-        let parser_de = FileParser {
-            row_parser: infotext_row_parser(),
-            rows: rows.clone(),
-        };
-        let parser_it = FileParser {
-            row_parser: infotext_row_parser(),
-            rows: rows.clone(),
-        };
-        let parser = FileParser {
-            row_parser: infotext_row_parser(),
-            rows,
-        };
-        let mut data = id_row_converter(parser).unwrap();
-        infotext_row_converter(parser_fr, &mut data, Language::French).unwrap();
-        infotext_row_converter(parser_en, &mut data, Language::English).unwrap();
-        infotext_row_converter(parser_de, &mut data, Language::German).unwrap();
-        infotext_row_converter(parser_it, &mut data, Language::Italian).unwrap();
-        // First row (id: 1)
-        let attribute = data.get(&1921).unwrap();
+        let mut infotext_map = FxHashMap::default();
+        parse_line(input, &mut infotext_map, Language::German).unwrap();
+        parse_line(input, &mut infotext_map, Language::French).unwrap();
+        parse_line(input, &mut infotext_map, Language::Italian).unwrap();
+        parse_line(input, &mut infotext_map, Language::English).unwrap();
+        println!("{infotext_map:?}");
         let reference = r#"
             {
                 "id": 1921,
@@ -247,21 +119,8 @@ mod tests {
                     "English": "ch:1:sjyid:100001:3995-001"
                 }
             }"#;
-        let (attribute, reference) = get_json_values(attribute, reference).unwrap();
-        assert_eq!(attribute, reference);
-        // Second row (id: 2)
-        let attribute = data.get(&3459).unwrap();
-        let reference = r#"
-            {
-                "id": 3459,
-                "content": {
-                    "French": "2518",
-                    "Italian": "2518",
-                    "German": "2518",
-                    "English": "2518"
-                }
-            }"#;
-        let (attribute, reference) = get_json_values(attribute, reference).unwrap();
+        let (attribute, reference) =
+            get_json_values(infotext_map.get(&1921).unwrap(), reference).unwrap();
         assert_eq!(attribute, reference);
     }
 }

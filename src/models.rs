@@ -24,14 +24,6 @@ pub trait Model<M: Model<M>> {
     type K: Copy + Eq + Hash + Serialize + for<'a> Deserialize<'a>;
 
     fn id(&self) -> M::K;
-
-    fn vec_to_map(data: Vec<M>) -> FxHashMap<M::K, M> {
-        data.into_iter()
-            .fold(FxHashMap::default(), |mut acc, item| {
-                acc.insert(item.id(), item);
-                acc
-            })
-    }
 }
 
 macro_rules! impl_Model {
@@ -866,16 +858,16 @@ impl Model<JourneyPlatform> for JourneyPlatform {
 )]
 pub enum Language {
     #[default]
-    #[strum(serialize = "deu")]
+    #[strum(serialize = "deu", serialize = "DE")]
     German,
 
-    #[strum(serialize = "fra")]
+    #[strum(serialize = "fra", serialize = "FR")]
     French,
 
-    #[strum(serialize = "ita")]
+    #[strum(serialize = "ita", serialize = "IT")]
     Italian,
 
-    #[strum(serialize = "eng")]
+    #[strum(serialize = "eng", serialize = "EN")]
     English,
 }
 
@@ -889,6 +881,7 @@ pub struct Line {
     name: String,
     short_name: String,
     long_name: String,
+    internal_designation: String,
     text_color: Color,
     background_color: Color,
 }
@@ -902,6 +895,7 @@ impl Line {
             name,
             short_name: String::default(),
             long_name: String::default(),
+            internal_designation: String::default(),
             text_color: Color::default(),
             background_color: Color::default(),
         }
@@ -915,6 +909,10 @@ impl Line {
 
     pub fn set_long_name(&mut self, value: String) {
         self.long_name = value;
+    }
+
+    pub fn set_internal_designation(&mut self, value: String) {
+        self.internal_designation = value;
     }
 
     pub fn set_text_color(&mut self, value: Color) {
@@ -1232,17 +1230,21 @@ pub struct TransportCompany {
 impl_Model!(TransportCompany);
 
 impl TransportCompany {
-    pub fn new(id: i32, administrations: Vec<String>) -> Self {
+    pub fn new(id: i32) -> Self {
         Self {
             id,
             short_name: FxHashMap::default(),
             long_name: FxHashMap::default(),
             full_name: FxHashMap::default(),
-            administrations,
+            administrations: Vec::new(),
         }
     }
 
     // Getters/Setters
+
+    pub fn set_administrations(&mut self, administrations: Vec<String>) {
+        self.administrations = administrations;
+    }
 
     pub fn set_short_name(&mut self, language: Language, value: &str) {
         self.short_name.insert(language, value.to_string());
@@ -1266,10 +1268,10 @@ pub struct TransportType {
     id: i32,
     designation: String,
     product_class_id: i16,
-    tarrif_group: String,
+    tariff_group: String,
     output_control: i16,
     short_name: String,
-    surchage: i16,
+    surcharge: i16,
     flag: String,
     product_class_name: FxHashMap<Language, String>,
     category_name: FxHashMap<Language, String>,
@@ -1283,20 +1285,20 @@ impl TransportType {
         id: i32,
         designation: String,
         product_class_id: i16,
-        tarrif_group: String,
+        tariff_group: String,
         output_control: i16,
         short_name: String,
-        surchage: i16,
+        surcharge: i16,
         flag: String,
     ) -> Self {
         Self {
             id,
             designation,
             product_class_id,
-            tarrif_group,
+            tariff_group,
             output_control,
             short_name,
-            surchage,
+            surcharge,
             flag,
             product_class_name: FxHashMap::default(),
             category_name: FxHashMap::default(),
