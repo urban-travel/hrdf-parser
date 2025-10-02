@@ -43,7 +43,7 @@ use crate::{
     utils::AutoIncrement,
 };
 
-enum TroughServiceLine {
+enum ThroughServiceLine {
     ThroughService {
         journey_1_id: i32,
         journey_1_administration: String,
@@ -55,7 +55,7 @@ enum TroughServiceLine {
     },
 }
 
-fn through_service_combinator(input: &str) -> IResult<&str, TroughServiceLine> {
+fn through_service_combinator(input: &str) -> IResult<&str, ThroughServiceLine> {
     map(
         (
             i32_from_n_digits_parser(6),
@@ -75,7 +75,7 @@ fn through_service_combinator(input: &str) -> IResult<&str, TroughServiceLine> {
             journey_2_administration,
             bit_field_id,
             journey_2_stop_id,
-        )| TroughServiceLine::ThroughService {
+        )| ThroughServiceLine::ThroughService {
             journey_1_id,
             journey_1_administration,
             journey_1_stop_id,
@@ -98,7 +98,7 @@ fn parse_line(
         through_service_combinator(line).map_err(|e| format!("Error {e} while parsing {line}"))?;
 
     match through_service_line {
-        TroughServiceLine::ThroughService {
+        ThroughServiceLine::ThroughService {
             journey_1_id,
             journey_1_administration,
             journey_1_stop_id,
@@ -165,4 +165,197 @@ pub fn parse(
             .map_err(|e| format!("Error: {e}, for line: {line}"))
         })?;
     Ok(ResourceStorage::new(through_services))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_through_service_combinator_basic() {
+        let input = "000001 000871 8576671 024064 000871 000010 8576671";
+        let result = through_service_combinator(input);
+        assert!(result.is_ok());
+        let (_, ts_line) = result.unwrap();
+        match ts_line {
+            ThroughServiceLine::ThroughService {
+                journey_1_id,
+                journey_1_administration,
+                journey_1_stop_id,
+                journey_2_id,
+                journey_2_administration,
+                bit_field_id,
+                journey_2_stop_id,
+            } => {
+                assert_eq!(journey_1_id, 1);
+                assert_eq!(journey_1_administration, "000871");
+                assert_eq!(journey_1_stop_id, 8576671);
+                assert_eq!(journey_2_id, 24064);
+                assert_eq!(journey_2_administration, "000871");
+                assert_eq!(bit_field_id, 10);
+                assert_eq!(journey_2_stop_id, 8576671);
+            }
+        }
+    }
+
+    #[test]
+    fn test_through_service_combinator_zero_bitfield() {
+        let input = "000002 000181 8530625 000003 000181 000000 8530625";
+        let result = through_service_combinator(input);
+        assert!(result.is_ok());
+        let (_, ts_line) = result.unwrap();
+        match ts_line {
+            ThroughServiceLine::ThroughService {
+                journey_1_id,
+                journey_1_administration,
+                journey_1_stop_id,
+                journey_2_id,
+                journey_2_administration,
+                bit_field_id,
+                journey_2_stop_id,
+            } => {
+                assert_eq!(journey_1_id, 2);
+                assert_eq!(journey_1_administration, "000181");
+                assert_eq!(journey_1_stop_id, 8530625);
+                assert_eq!(journey_2_id, 3);
+                assert_eq!(journey_2_administration, "000181");
+                assert_eq!(bit_field_id, 0);
+                assert_eq!(journey_2_stop_id, 8530625);
+            }
+        }
+    }
+
+    #[test]
+    fn test_through_service_combinator_different_stops() {
+        let input = "000002 000194 8503674 000004 000194 000001 8503674";
+        let result = through_service_combinator(input);
+        assert!(result.is_ok());
+        let (_, ts_line) = result.unwrap();
+        match ts_line {
+            ThroughServiceLine::ThroughService {
+                journey_1_id,
+                journey_2_id,
+                bit_field_id,
+                ..
+            } => {
+                assert_eq!(journey_1_id, 2);
+                assert_eq!(journey_2_id, 4);
+                assert_eq!(bit_field_id, 1);
+            }
+        }
+    }
+
+    #[test]
+    fn test_through_service_combinator_large_bitfield() {
+        let input = "000001 000882 8581701 000041 000882 063787 8581701";
+        let result = through_service_combinator(input);
+        assert!(result.is_ok());
+        let (_, ts_line) = result.unwrap();
+        match ts_line {
+            ThroughServiceLine::ThroughService {
+                journey_1_id,
+                journey_2_id,
+                bit_field_id,
+                ..
+            } => {
+                assert_eq!(journey_1_id, 1);
+                assert_eq!(journey_2_id, 41);
+                assert_eq!(bit_field_id, 63787);
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_line_creates_through_service() {
+        let mut data = FxHashMap::default();
+        let mut journeys = FxHashSet::default();
+        journeys.insert((1, "000871".to_string()));
+        journeys.insert((24064, "000871".to_string()));
+        let auto_increment = AutoIncrement::new();
+
+        let result = parse_line(
+            "000001 000871 8576671 024064 000871 000010 8576671",
+            &mut data,
+            &journeys,
+            &auto_increment,
+        );
+
+        assert!(result.is_ok());
+        assert_eq!(data.len(), 1);
+        let ts = data.get(&1).unwrap();
+        assert_eq!(ts.id(), 1);
+    }
+
+    #[test]
+    fn test_parse_line_missing_journey_logs_warning() {
+        let mut data = FxHashMap::default();
+        let journeys = FxHashSet::default(); // Empty - journeys not found
+        let auto_increment = AutoIncrement::new();
+
+        // Should still succeed but log warnings
+        let result = parse_line(
+            "000001 000871 8576671 024064 000871 000010 8576671",
+            &mut data,
+            &journeys,
+            &auto_increment,
+        );
+
+        assert!(result.is_ok());
+        // Still creates the through service despite missing journeys
+        assert_eq!(data.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_line_multiple_through_services() {
+        let mut data = FxHashMap::default();
+        let mut journeys = FxHashSet::default();
+        journeys.insert((1, "000871".to_string()));
+        journeys.insert((24064, "000871".to_string()));
+        journeys.insert((2, "000181".to_string()));
+        journeys.insert((3, "000181".to_string()));
+        let auto_increment = AutoIncrement::new();
+
+        parse_line(
+            "000001 000871 8576671 024064 000871 000010 8576671",
+            &mut data,
+            &journeys,
+            &auto_increment,
+        )
+        .unwrap();
+
+        parse_line(
+            "000002 000181 8530625 000003 000181 000000 8530625",
+            &mut data,
+            &journeys,
+            &auto_increment,
+        )
+        .unwrap();
+
+        assert_eq!(data.len(), 2);
+        assert!(data.contains_key(&1));
+        assert!(data.contains_key(&2));
+    }
+
+    #[test]
+    fn test_parse_line_matching_stops() {
+        let mut data = FxHashMap::default();
+        let journeys = FxHashSet::default();
+        let auto_increment = AutoIncrement::new();
+
+        // Same stop ID for journey 1 last stop and journey 2 first stop
+        let result = parse_line(
+            "000002 000181 8530625 000003 000181 000000 8530625",
+            &mut data,
+            &journeys,
+            &auto_increment,
+        );
+
+        assert!(result.is_ok());
+        let ts = data.get(&1).unwrap();
+        // Both stops should be the same
+        assert_eq!(ts.journey_1_stop_id(), 8530625);
+        assert_eq!(ts.journey_2_stop_id(), 8530625);
+    }
+
 }

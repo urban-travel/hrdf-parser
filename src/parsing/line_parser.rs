@@ -237,4 +237,233 @@ pub fn parse(path: &str) -> Result<ResourceStorage<Line>, Box<dyn Error>> {
     Ok(ResourceStorage::new(data))
 }
 
-// TODO: Add tests
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_row_k_combinator_valid() {
+        let input = "0000001 K ch:1:SLNID:33:1";
+        let result = row_k_nt_lt_w_combinator(input);
+        assert!(result.is_ok());
+        let (_, line_type) = result.unwrap();
+        match line_type {
+            Some(LineType::Kline { id, name }) => {
+                assert_eq!(id, 1);
+                assert_eq!(name, "ch:1:SLNID:33:1");
+            }
+            _ => panic!("Expected Kline variant"),
+        }
+    }
+
+    #[test]
+    fn test_row_k_combinator_with_spaces() {
+        let input = "0000010 K 68";
+        let result = row_k_nt_lt_w_combinator(input);
+        assert!(result.is_ok());
+        let (_, line_type) = result.unwrap();
+        match line_type {
+            Some(LineType::Kline { id, name }) => {
+                assert_eq!(id, 10);
+                assert_eq!(name, "68");
+            }
+            _ => panic!("Expected Kline variant"),
+        }
+    }
+
+    #[test]
+    fn test_row_nt_combinator_valid() {
+        let input = "0000001 N T Kurzname";
+        let result = row_k_nt_lt_w_combinator(input);
+        assert!(result.is_ok());
+        let (_, line_type) = result.unwrap();
+        match line_type {
+            Some(LineType::NTline { id, short_name }) => {
+                assert_eq!(id, 1);
+                assert_eq!(short_name, "Kurzname");
+            }
+            _ => panic!("Expected NTline variant"),
+        }
+    }
+
+    #[test]
+    fn test_row_lt_combinator_valid() {
+        let input = "0000001 L T Langname";
+        let result = row_k_nt_lt_w_combinator(input);
+        assert!(result.is_ok());
+        let (_, line_type) = result.unwrap();
+        match line_type {
+            Some(LineType::LTline { id, long_name }) => {
+                assert_eq!(id, 1);
+                assert_eq!(long_name, "Langname");
+            }
+            _ => panic!("Expected LTline variant"),
+        }
+    }
+
+    #[test]
+    fn test_row_w_combinator_valid() {
+        let input = "0000001 W interne Bezeichnung";
+        let result = row_k_nt_lt_w_combinator(input);
+        assert!(result.is_ok());
+        let (_, line_type) = result.unwrap();
+        match line_type {
+            Some(LineType::Wline {
+                id,
+                internal_designation,
+            }) => {
+                assert_eq!(id, 1);
+                assert_eq!(internal_designation, "interne Bezeichnung");
+            }
+            _ => panic!("Expected Wline variant"),
+        }
+    }
+
+    #[test]
+    fn test_row_f_combinator_valid() {
+        let input = "0000001 F 001 002 003";
+        let result = row_f_b_combinator(input);
+        assert!(result.is_ok());
+        let (_, line_type) = result.unwrap();
+        match line_type {
+            Some(LineType::Fline { id, r, g, b }) => {
+                assert_eq!(id, 1);
+                assert_eq!(r, 1);
+                assert_eq!(g, 2);
+                assert_eq!(b, 3);
+            }
+            _ => panic!("Expected Fline variant"),
+        }
+    }
+
+    #[test]
+    fn test_row_f_combinator_max_rgb() {
+        let input = "0000010 F 255 255 255";
+        let result = row_f_b_combinator(input);
+        assert!(result.is_ok());
+        let (_, line_type) = result.unwrap();
+        match line_type {
+            Some(LineType::Fline { id, r, g, b }) => {
+                assert_eq!(id, 10);
+                assert_eq!(r, 255);
+                assert_eq!(g, 255);
+                assert_eq!(b, 255);
+            }
+            _ => panic!("Expected Fline variant"),
+        }
+    }
+
+    #[test]
+    fn test_row_b_combinator_valid() {
+        let input = "0000001 B 001 002 003";
+        let result = row_f_b_combinator(input);
+        assert!(result.is_ok());
+        let (_, line_type) = result.unwrap();
+        match line_type {
+            Some(LineType::Bline { id, r, g, b }) => {
+                assert_eq!(id, 1);
+                assert_eq!(r, 1);
+                assert_eq!(g, 2);
+                assert_eq!(b, 3);
+            }
+            _ => panic!("Expected Bline variant"),
+        }
+    }
+
+    #[test]
+    fn test_row_b_combinator_complex_rgb() {
+        let input = "0000010 B 236 097 159";
+        let result = row_f_b_combinator(input);
+        assert!(result.is_ok());
+        let (_, line_type) = result.unwrap();
+        match line_type {
+            Some(LineType::Bline { id, r, g, b }) => {
+                assert_eq!(id, 10);
+                assert_eq!(r, 236);
+                assert_eq!(g, 97);
+                assert_eq!(b, 159);
+            }
+            _ => panic!("Expected Bline variant"),
+        }
+    }
+
+    #[test]
+    fn test_parse_line_k_creates_new_line() {
+        let mut data = FxHashMap::default();
+        let result = parse_line("0000001 K TestLine", &mut data);
+        assert!(result.is_ok());
+        assert_eq!(data.len(), 1);
+        assert!(data.contains_key(&1));
+    }
+
+    #[test]
+    fn test_parse_line_nt_requires_existing_k() {
+        let mut data = FxHashMap::default();
+        let result = parse_line("0000001 N T ShortName", &mut data);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Type K row missing"));
+    }
+
+    #[test]
+    fn test_parse_line_complete_sequence() {
+        let mut data = FxHashMap::default();
+
+        parse_line("0000001 K ch:1:SLNID:33:1", &mut data).unwrap();
+        parse_line("0000001 W internal", &mut data).unwrap();
+        parse_line("0000001 N T Short", &mut data).unwrap();
+        parse_line("0000001 L T Long Name", &mut data).unwrap();
+        parse_line("0000001 F 255 128 064", &mut data).unwrap();
+        parse_line("0000001 B 010 020 030", &mut data).unwrap();
+
+        assert_eq!(data.len(), 1);
+        let line = data.get(&1).unwrap();
+        assert_eq!(line.id(), 1);
+    }
+
+    #[test]
+    fn test_parse_line_multiple_lines() {
+        let mut data = FxHashMap::default();
+
+        parse_line("0000001 K Line1", &mut data).unwrap();
+        parse_line("0000002 K Line2", &mut data).unwrap();
+        parse_line("0000001 N T L1", &mut data).unwrap();
+        parse_line("0000002 N T L2", &mut data).unwrap();
+
+        assert_eq!(data.len(), 2);
+        assert!(data.contains_key(&1));
+        assert!(data.contains_key(&2));
+    }
+
+    #[test]
+    fn test_parse_line_id_mismatch_error() {
+        let mut data = FxHashMap::default();
+        data.insert(1, Line::new(999, "Wrong".to_string()));
+
+        let result = parse_line("0000001 N T Test", &mut data);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not corresponding"));
+    }
+
+    #[test]
+    fn test_empty_lines_are_filtered() {
+        let mut data = FxHashMap::default();
+
+        // Empty line should not cause error
+        let result = parse_line("", &mut data);
+        // This will error because it can't parse, but in the actual parse() function
+        // empty lines are filtered out
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_color_parsing() {
+        let mut data = FxHashMap::default();
+        parse_line("0000123 K ColorTest", &mut data).unwrap();
+        parse_line("0000123 F 255 000 128", &mut data).unwrap();
+        parse_line("0000123 B 064 128 255", &mut data).unwrap();
+
+        let line = data.get(&123).unwrap();
+        assert_eq!(line.id(), 123);
+    }
+}

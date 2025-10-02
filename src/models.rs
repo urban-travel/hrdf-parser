@@ -1208,8 +1208,7 @@ impl TimetableMetadataEntry {
     }
 
     /// unwrap: Do not call this function if the value is not a date.
-    #[allow(non_snake_case)]
-    pub fn value_as_NaiveDate(&self) -> NaiveDate {
+    pub fn value_as_naive_date(&self) -> NaiveDate {
         NaiveDate::parse_from_str(self.value(), "%Y-%m-%d").unwrap()
     }
 }

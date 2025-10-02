@@ -238,3 +238,222 @@ pub fn parse(path: &str) -> Result<ResourceStorage<TransportCompany>, Box<dyn Er
 
     Ok(ResourceStorage::new(transport_company))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::Model;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_kline_combinator_basic() {
+        let input = "00379 K \"SBB\" L \"SBB\" V \"Schweizerische Bundesbahnen SBB\"";
+        let result = kline_combinator(input);
+        assert!(result.is_ok());
+        let (_, tc_line) = result.unwrap();
+        match tc_line {
+            TransportCompanyLine::Kline {
+                id,
+                short_name,
+                long_name,
+                full_name,
+            } => {
+                assert_eq!(id, 379);
+                assert_eq!(short_name, "SBB");
+                assert_eq!(long_name, "SBB");
+                assert_eq!(full_name, "Schweizerische Bundesbahnen SBB");
+            }
+            _ => panic!("Expected Kline variant"),
+        }
+    }
+
+    #[test]
+    fn test_kline_combinator_sob() {
+        let input = "00380 K \"SOB\" L \"SOB-bt\" V \"Schweizerische Südostbahn (bt)\"";
+        let result = kline_combinator(input);
+        assert!(result.is_ok());
+        let (_, tc_line) = result.unwrap();
+        match tc_line {
+            TransportCompanyLine::Kline {
+                id,
+                short_name,
+                long_name,
+                full_name,
+            } => {
+                assert_eq!(id, 380);
+                assert_eq!(short_name, "SOB");
+                assert_eq!(long_name, "SOB-bt");
+                assert_eq!(full_name, "Schweizerische Südostbahn (bt)");
+            }
+            _ => panic!("Expected Kline variant"),
+        }
+    }
+
+    #[test]
+    fn test_kline_combinator_with_spaces_in_names() {
+        let input = "00381 K \"SOB\" L \"SOB-sob\" V \"Schweizerische Südostbahn (sob)\"";
+        let result = kline_combinator(input);
+        assert!(result.is_ok());
+        let (_, tc_line) = result.unwrap();
+        match tc_line {
+            TransportCompanyLine::Kline {
+                id,
+                short_name,
+                long_name,
+                full_name,
+            } => {
+                assert_eq!(id, 381);
+                assert_eq!(short_name, "SOB");
+                assert_eq!(long_name, "SOB-sob");
+                assert_eq!(full_name, "Schweizerische Südostbahn (sob)");
+            }
+            _ => panic!("Expected Kline variant"),
+        }
+    }
+
+    #[test]
+    fn test_nline_combinator() {
+        let input = "00379 N \"ch:1:sboid:379\"";
+        let result = nline_combinator(input);
+        assert!(result.is_ok());
+        let (_, tc_line) = result.unwrap();
+        match tc_line {
+            TransportCompanyLine::Nline { id, sboid } => {
+                assert_eq!(id, 379);
+                assert_eq!(sboid, "ch:1:sboid:379");
+            }
+            _ => panic!("Expected Nline variant"),
+        }
+    }
+
+    #[test]
+    fn test_colon_combinator_single_admin() {
+        let input = "00379 : 000011";
+        let result = colon_combinator(input);
+        assert!(result.is_ok());
+        let (_, tc_line) = result.unwrap();
+        match tc_line {
+            TransportCompanyLine::ColonLine {
+                id,
+                administrations,
+            } => {
+                assert_eq!(id, 379);
+                assert_eq!(administrations.len(), 1);
+                assert_eq!(administrations[0], "000011");
+            }
+            _ => panic!("Expected ColonLine variant"),
+        }
+    }
+
+    #[test]
+    fn test_colon_combinator_multiple_admins() {
+        let input = "00380 : 000036 000082";
+        let result = colon_combinator(input);
+        assert!(result.is_ok());
+        let (_, tc_line) = result.unwrap();
+        match tc_line {
+            TransportCompanyLine::ColonLine {
+                id,
+                administrations,
+            } => {
+                assert_eq!(id, 380);
+                assert_eq!(administrations.len(), 2);
+                assert_eq!(administrations[0], "000036");
+                assert_eq!(administrations[1], "000082");
+            }
+            _ => panic!("Expected ColonLine variant"),
+        }
+    }
+
+    #[test]
+    fn test_parse_transport_company_line_creates_new_company() {
+        let mut companies = FxHashMap::default();
+        let result = parse_transport_company_line(
+            "00379 K \"SBB\" L \"SBB\" V \"Schweizerische Bundesbahnen SBB\"",
+            &mut companies,
+            Language::German,
+        );
+        assert!(result.is_ok());
+        assert_eq!(companies.len(), 1);
+        assert!(companies.contains_key(&379));
+    }
+
+    #[test]
+    fn test_parse_transport_company_line_updates_existing() {
+        let mut companies = FxHashMap::default();
+
+        // Create company
+        parse_transport_company_line(
+            "00379 K \"SBB\" L \"SBB\" V \"Schweizerische Bundesbahnen SBB\"",
+            &mut companies,
+            Language::German,
+        )
+        .unwrap();
+
+        // Update with colon line
+        parse_transport_company_line(
+            "00379 : 000011",
+            &mut companies,
+            Language::German,
+        )
+        .unwrap();
+
+        assert_eq!(companies.len(), 1);
+        let tc = companies.get(&379).unwrap();
+        assert_eq!(tc.id(), 379);
+    }
+
+    #[test]
+    fn test_parse_transport_company_line_multiple_languages() {
+        let mut companies = FxHashMap::default();
+
+        parse_transport_company_line(
+            "00379 K \"SBB\" L \"SBB\" V \"Schweizerische Bundesbahnen SBB\"",
+            &mut companies,
+            Language::German,
+        )
+        .unwrap();
+
+        parse_transport_company_line(
+            "00379 K \"CFF\" L \"CFF\" V \"Chemins de fer fédéraux CFF\"",
+            &mut companies,
+            Language::French,
+        )
+        .unwrap();
+
+        assert_eq!(companies.len(), 1);
+        let tc = companies.get(&379).unwrap();
+        assert_eq!(tc.id(), 379);
+    }
+
+    #[test]
+    fn test_colon_line_creates_company_if_not_exists() {
+        let mut companies = FxHashMap::default();
+
+        parse_transport_company_line(
+            "00379 : 000011",
+            &mut companies,
+            Language::German,
+        )
+        .unwrap();
+
+        assert_eq!(companies.len(), 1);
+        assert!(companies.contains_key(&379));
+    }
+
+    #[test]
+    fn test_nline_parsing_ignores_sboid() {
+        let mut companies = FxHashMap::default();
+        companies.insert(379, TransportCompany::new(379));
+
+        let result = parse_transport_company_line(
+            "00379 N \"ch:1:sboid:379\"",
+            &mut companies,
+            Language::German,
+        );
+
+        assert!(result.is_ok());
+        // SBOID is currently not used (TODO in code)
+        assert_eq!(companies.len(), 1);
+    }
+}

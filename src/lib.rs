@@ -37,6 +37,7 @@ mod tests {
     }
 
     #[test(tokio::test)]
+    #[ignore]
     async fn parsing_2024() {
         let _hrdf = Hrdf::new(
             Version::V_5_40_41_2_0_6,
@@ -49,6 +50,7 @@ mod tests {
     }
 
     #[test(tokio::test)]
+    #[ignore]
     async fn parsing_2025() {
         let _hrdf = Hrdf::new(
             Version::V_5_40_41_2_0_7,

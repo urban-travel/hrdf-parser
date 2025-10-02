@@ -360,3 +360,196 @@ pub fn parse(path: &str) -> Result<TransportTypeAndTypeConverter, Box<dyn Error>
 
     Ok((ResourceStorage::new(data), pk_type_converter))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_offer_definition_combinator_with_flag() {
+        let input = "RUB 6 A 0 RUB      0 B";
+        let result = offer_definition_combinator(input);
+        assert!(result.is_ok());
+        let (_, tt_line) = result.unwrap();
+        match tt_line {
+            TransportTypeAndTypeLine::OfferDefinition {
+                designation,
+                product_class_id,
+                flag,
+                ..
+            } => {
+                assert_eq!(designation.trim(), "RUB");
+                assert_eq!(product_class_id, 6);
+                assert_eq!(flag, "B");
+            }
+            _ => panic!("Expected OfferDefinition variant"),
+        }
+    }
+
+    #[test]
+    fn test_language_combinator_german() {
+        let input = "<Deutsch>";
+        let result = language_combinator(input);
+        assert!(result.is_ok());
+        let (_, tt_line) = result.unwrap();
+        match tt_line {
+            TransportTypeAndTypeLine::LanguageDefinition(lang) => {
+                assert_eq!(lang, "Deutsch");
+            }
+            _ => panic!("Expected LanguageDefinition variant"),
+        }
+    }
+
+    #[test]
+    fn test_language_combinator_english() {
+        let input = "<English>";
+        let result = language_combinator(input);
+        assert!(result.is_ok());
+        let (_, tt_line) = result.unwrap();
+        match tt_line {
+            TransportTypeAndTypeLine::LanguageDefinition(lang) => {
+                assert_eq!(lang, "English");
+            }
+            _ => panic!("Expected LanguageDefinition variant"),
+        }
+    }
+
+    #[test]
+    fn test_class_combinator_basic() {
+        let input = "class00 ICE/EN/CNL/ES/NZ/TGV/THA/X2";
+        let result = class_combinator(input);
+        assert!(result.is_ok());
+        let (_, tt_line) = result.unwrap();
+        match tt_line {
+            TransportTypeAndTypeLine::Class {
+                product_class_id,
+                product_class_name,
+            } => {
+                assert_eq!(product_class_id, 0);
+                assert_eq!(product_class_name, "ICE/EN/CNL/ES/NZ/TGV/THA/X2");
+            }
+            _ => panic!("Expected Class variant"),
+        }
+    }
+
+    #[test]
+    fn test_class_combinator_double_digit() {
+        let input = "class01 EuroCity/InterCity/ICN/InterCityNight/SuperCity";
+        let result = class_combinator(input);
+        assert!(result.is_ok());
+        let (_, tt_line) = result.unwrap();
+        match tt_line {
+            TransportTypeAndTypeLine::Class {
+                product_class_id,
+                product_class_name,
+            } => {
+                assert_eq!(product_class_id, 1);
+                assert_eq!(product_class_name, "EuroCity/InterCity/ICN/InterCityNight/SuperCity");
+            }
+            _ => panic!("Expected Class variant"),
+        }
+    }
+
+    #[test]
+    fn test_category_combinator_basic() {
+        let input = "category014 InterCity";
+        let result = category_combinator(input);
+        assert!(result.is_ok());
+        let (_, tt_line) = result.unwrap();
+        match tt_line {
+            TransportTypeAndTypeLine::Category {
+                category_id,
+                category_name,
+            } => {
+                assert_eq!(category_id, 14);
+                assert_eq!(category_name, "InterCity");
+            }
+            _ => panic!("Expected Category variant"),
+        }
+    }
+
+    #[test]
+    fn test_category_combinator_three_digits() {
+        let input = "category026 Rufbus";
+        let result = category_combinator(input);
+        assert!(result.is_ok());
+        let (_, tt_line) = result.unwrap();
+        match tt_line {
+            TransportTypeAndTypeLine::Category {
+                category_id,
+                category_name,
+            } => {
+                assert_eq!(category_id, 26);
+                assert_eq!(category_name, "Rufbus");
+            }
+            _ => panic!("Expected Category variant"),
+        }
+    }
+
+    #[test]
+    fn test_option_combinator_basic() {
+        let input = "option10 nur Direktverbindungen";
+        let result = option_combinator(input);
+        assert!(result.is_ok());
+        let (_, tt_line) = result.unwrap();
+        match tt_line {
+            TransportTypeAndTypeLine::Option {
+                option_id,
+                option_name,
+            } => {
+                assert_eq!(option_id, 10);
+                assert_eq!(option_name, "nur Direktverbindungen");
+            }
+            _ => panic!("Expected Option variant"),
+        }
+    }
+
+    #[test]
+    fn test_option_combinator_with_asterisk() {
+        let input = "option11 Direkt mit Schlafwagen*";
+        let result = option_combinator(input);
+        assert!(result.is_ok());
+        let (_, tt_line) = result.unwrap();
+        match tt_line {
+            TransportTypeAndTypeLine::Option {
+                option_id,
+                option_name,
+            } => {
+                assert_eq!(option_id, 11);
+                assert_eq!(option_name, "Direkt mit Schlafwagen*");
+            }
+            _ => panic!("Expected Option variant"),
+        }
+    }
+
+    #[test]
+    fn test_iline_combinator_basic() {
+        let input = "*I IC 0000014";
+        let result = iline_combinator(input);
+        assert!(result.is_ok());
+        let (_, tt_line) = result.unwrap();
+        match tt_line {
+            TransportTypeAndTypeLine::Information { code_name, id } => {
+                assert_eq!(code_name, "IC");
+                assert_eq!(id, Some(14));
+            }
+            _ => panic!("Expected Information variant"),
+        }
+    }
+
+    #[test]
+    fn test_iline_combinator_without_id() {
+        let input = "*I IC        ";
+        let result = iline_combinator(input);
+        assert!(result.is_ok());
+        let (_, tt_line) = result.unwrap();
+        match tt_line {
+            TransportTypeAndTypeLine::Information { code_name, id } => {
+                assert_eq!(code_name, "IC");
+                assert_eq!(id, None);
+            }
+            _ => panic!("Expected Information variant"),
+        }
+    }
+}
