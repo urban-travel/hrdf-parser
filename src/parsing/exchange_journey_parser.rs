@@ -24,17 +24,18 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// UMSTEIGZ
-use std::error::Error;
-
 use nom::{IResult, Parser, character::char, combinator::map, sequence::preceded};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     JourneyId,
     models::ExchangeTimeJourney,
-    parsing::helpers::{
-        i16_from_n_digits_parser, i32_from_n_digits_parser, optional_i32_from_n_digits_parser,
-        read_lines, string_from_n_chars_parser,
+    parsing::{
+        error::{PResult, ParsingError},
+        helpers::{
+            i16_from_n_digits_parser, i32_from_n_digits_parser, optional_i32_from_n_digits_parser,
+            read_lines, string_from_n_chars_parser,
+        },
     },
     storage::ResourceStorage,
     utils::AutoIncrement,
@@ -89,7 +90,7 @@ fn parse_line(
     line: &str,
     auto_increment: &AutoIncrement,
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
-) -> Result<(i32, ExchangeTimeJourney), Box<dyn Error>> {
+) -> PResult<(i32, ExchangeTimeJourney)> {
     let (
         _,
         (
@@ -102,19 +103,15 @@ fn parse_line(
             is_guaranteed,
             bitfield_id,
         ),
-    ) = parse_exchange_journey_row(line).map_err(|e| format!("Error {e} while parsing {line}"))?;
+    ) = parse_exchange_journey_row(line)?;
 
     let _journey_id_1 = journeys_pk_type_converter
         .get(&(journey_id_1, administration_1.clone()))
-        .ok_or(format!(
-            "Unknown legacy ID for ({journey_id_1}, {administration_1})"
-        ))?;
+        .ok_or_else(|| ParsingError::UnknownId(format!("({journey_id_1}, {administration_1})")))?;
 
     let _journey_id_2 = journeys_pk_type_converter
         .get(&(journey_id_2, administration_2.clone()))
-        .ok_or(format!(
-            "Unknown legacy ID for ({journey_id_2}, {administration_2})"
-        ))?;
+        .ok_or_else(|| ParsingError::UnknownId(format!("({journey_id_2}, {administration_2})")))?;
     let id = auto_increment.next();
 
     Ok((
@@ -134,7 +131,7 @@ fn parse_line(
 pub fn parse(
     path: &str,
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
-) -> Result<ResourceStorage<ExchangeTimeJourney>, Box<dyn Error>> {
+) -> PResult<ResourceStorage<ExchangeTimeJourney>> {
     log::info!("Parsing UMSTEIGZ...");
 
     let lines = read_lines(&format!("{path}/UMSTEIGZ"), 0)?;
@@ -143,7 +140,7 @@ pub fn parse(
         .into_iter()
         .filter(|line| !line.trim().is_empty())
         .map(|line| parse_line(&line, &auto_increment, journeys_pk_type_converter))
-        .collect::<Result<FxHashMap<i32, ExchangeTimeJourney>, Box<dyn Error>>>()?;
+        .collect::<PResult<FxHashMap<i32, ExchangeTimeJourney>>>()?;
 
     Ok(ResourceStorage::new(exchanges))
 }
@@ -247,7 +244,7 @@ mod tests {
             .into_iter()
             .filter(|line| !line.trim().is_empty())
             .map(|line| parse_line(&line, &auto_increment, &journeys_pk_type_converter))
-            .collect::<Result<FxHashMap<_, _>, Box<dyn Error>>>()
+            .collect::<PResult<FxHashMap<_, _>>>()
             .unwrap();
 
         // First row

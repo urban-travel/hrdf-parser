@@ -11,20 +11,21 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// RICHTUNG
-use std::error::Error;
-
 use nom::{IResult, Parser, character::char};
 use rustc_hash::FxHashMap;
 
 use crate::{
     models::Direction,
-    parsing::helpers::{direction_parser, read_lines, string_till_eol_parser},
+    parsing::{
+        error::PResult,
+        helpers::{direction_parser, read_lines, string_till_eol_parser},
+    },
     storage::ResourceStorage,
 };
 
 type DirectionAndTypeConverter = (ResourceStorage<Direction>, FxHashMap<String, i32>);
 
-pub fn parse_direction_row(input: &str) -> IResult<&str, (String, i32, String)> {
+fn parse_direction_row(input: &str) -> IResult<&str, (String, i32, String)> {
     let (res, ((prefix, id), _, name)) =
         (direction_parser, char(' '), string_till_eol_parser).parse(input)?;
     Ok((res, (prefix, id, name)))
@@ -33,9 +34,8 @@ pub fn parse_direction_row(input: &str) -> IResult<&str, (String, i32, String)> 
 fn parse_line(
     line: &str,
     pk_type_converter: &mut FxHashMap<String, i32>,
-) -> Result<(i32, Direction), Box<dyn Error>> {
-    let (_, (prefix, id, name)) =
-        parse_direction_row(line).map_err(|e| format!("Failed to parse line '{}': {}", line, e))?;
+) -> PResult<(i32, Direction)> {
+    let (_, (prefix, id, name)) = parse_direction_row(line)?;
     let legacy_id = format!("{prefix}{id}");
     if let Some(previous) = pk_type_converter.insert(legacy_id.clone(), id) {
         log::warn!(
@@ -45,7 +45,7 @@ fn parse_line(
     Ok((id, Direction::new(id, name)))
 }
 
-pub fn parse(path: &str) -> Result<DirectionAndTypeConverter, Box<dyn Error>> {
+pub fn parse(path: &str) -> PResult<DirectionAndTypeConverter> {
     log::info!("Parsing RICHTUNG...");
 
     let lines = read_lines(&format!("{path}/RICHTUNG"), 0)?;
@@ -54,7 +54,7 @@ pub fn parse(path: &str) -> Result<DirectionAndTypeConverter, Box<dyn Error>> {
         .into_iter()
         .filter(|line| !line.trim().is_empty())
         .map(|line| parse_line(&line, &mut pk_type_converter))
-        .collect::<Result<FxHashMap<i32, Direction>, Box<dyn Error>>>()?;
+        .collect::<PResult<FxHashMap<i32, Direction>>>()?;
     Ok((ResourceStorage::new(directions), pk_type_converter))
 }
 
@@ -98,7 +98,7 @@ mod tests {
             .into_iter()
             .filter(|line| !line.trim().is_empty())
             .map(|line| parse_line(&line, &mut pk_type_converter))
-            .collect::<Result<FxHashMap<i32, Direction>, Box<dyn Error>>>()
+            .collect::<PResult<FxHashMap<i32, Direction>>>()
             .unwrap();
         println!("LET'S GO: {pk_type_converter:?}");
         assert_eq!(*pk_type_converter.get("R8").unwrap(), 8);

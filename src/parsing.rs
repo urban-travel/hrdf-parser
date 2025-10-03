@@ -1,6 +1,7 @@
 mod attribute_parser;
 mod bit_field_parser;
 mod direction_parser;
+mod error;
 mod exchange_administration_parser;
 mod exchange_journey_parser;
 mod exchange_line_parser;

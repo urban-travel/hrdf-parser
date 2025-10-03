@@ -24,8 +24,6 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// BITFELD
-use std::error::Error;
-
 use nom::{
     IResult, Parser,
     character::{char, one_of},
@@ -37,7 +35,10 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     models::BitField,
-    parsing::helpers::{i32_from_n_digits_parser, read_lines},
+    parsing::{
+        error::{PResult, ParsingError},
+        helpers::{i32_from_n_digits_parser, read_lines},
+    },
     storage::ResourceStorage,
 };
 
@@ -57,20 +58,19 @@ fn parse_bitfield_row(input: &str) -> IResult<&str, (i32, Vec<u8>)> {
 }
 
 // TODO: Add test for parse line
-fn parse_line(line: &str) -> Result<(i32, BitField), Box<dyn Error>> {
-    let (_, (id, bits)) =
-        parse_bitfield_row(line).map_err(|e| format!("Failed to parse line '{}': {}", line, e))?;
+fn parse_line(line: &str) -> PResult<(i32, BitField)> {
+    let (_, (id, bits)) = parse_bitfield_row(line)?;
     Ok((id, BitField::new(id, bits)))
 }
 
-pub fn parse(path: &str) -> Result<ResourceStorage<BitField>, Box<dyn Error>> {
+pub fn parse(path: &str) -> PResult<ResourceStorage<BitField>> {
     log::info!("Parsing BITFELD...");
     let lines = read_lines(&format!("{path}/BITFELD"), 0)?;
     let bitfields = lines
         .into_iter()
         .filter(|line| !line.trim().is_empty())
         .map(|line| parse_line(&line))
-        .collect::<Result<FxHashMap<i32, BitField>, Box<dyn Error>>>()?;
+        .collect::<PResult<FxHashMap<i32, BitField>>>()?;
     Ok(ResourceStorage::new(bitfields))
 }
 
@@ -79,13 +79,13 @@ pub fn parse(path: &str) -> Result<ResourceStorage<BitField>, Box<dyn Error>> {
 // ------------------------------------------------------------------------------------------------
 
 /// Converts a hexadecimal number into a list of where each item represents a bit.
-fn convert_hex_number_to_bits(hex_number: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+fn convert_hex_number_to_bits(hex_number: &str) -> PResult<Vec<u8>> {
     let result = hex_number
         .chars()
         .map(|hex_digit| {
             hex_digit
                 .to_digit(16)
-                .ok_or("Invalid hexadecimal digit")
+                .ok_or_else(|| ParsingError::InvalidHexDigit(hex_digit))
                 .map(|val| (0..4).rev().map(move |i| ((val >> i) & 1) as u8))
         })
         .collect::<Result<Vec<_>, _>>()?
