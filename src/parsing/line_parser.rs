@@ -402,7 +402,12 @@ mod tests {
         let mut data = FxHashMap::default();
         let result = parse_line("0000001 N T ShortName", &mut data);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Type K row missing"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Type K row missing")
+        );
     }
 
     #[test]
@@ -442,7 +447,12 @@ mod tests {
 
         let result = parse_line("0000001 N T Test", &mut data);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("not corresponding"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("not corresponding")
+        );
     }
 
     #[test]

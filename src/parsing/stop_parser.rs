@@ -794,7 +794,10 @@ mod tests {
         let (_, stop_line) = result.unwrap();
         assert_eq!(stop_line.stop_id, 8501212);
         assert_eq!(stop_line.designation, "Chavannes-R., UNIL-Mouline");
-        assert_eq!(stop_line.long_name, Some("Chavannes-près-Renens, UNIL-Mouline".to_string()));
+        assert_eq!(
+            stop_line.long_name,
+            Some("Chavannes-près-Renens, UNIL-Mouline".to_string())
+        );
         assert_eq!(stop_line.abbreviation, Some("MOUI".to_string()));
     }
 
@@ -909,7 +912,10 @@ mod tests {
         assert!(result.is_ok());
         let (_, desc_line) = result.unwrap();
         match desc_line {
-            DescriptionLine::Restriction { stop_id, restrictions } => {
+            DescriptionLine::Restriction {
+                stop_id,
+                restrictions,
+            } => {
                 assert_eq!(stop_id, 132);
                 assert_eq!(restrictions, 3);
             }
@@ -960,9 +966,16 @@ mod tests {
     #[test]
     fn test_parse_coord_line_sets_coordinates() {
         let mut stops = FxHashMap::default();
-        stops.insert(8500010, Stop::new(8500010, "Basel SBB".to_string(), None, None, None));
+        stops.insert(
+            8500010,
+            Stop::new(8500010, "Basel SBB".to_string(), None, None, None),
+        );
 
-        let result = parse_coord_line("8500010    7.589563   47.547412 0", &mut stops, CoordinateSystem::WGS84);
+        let result = parse_coord_line(
+            "8500010    7.589563   47.547412 0",
+            &mut stops,
+            CoordinateSystem::WGS84,
+        );
         assert!(result.is_ok());
 
         let stop = stops.get(&8500010).unwrap();
@@ -972,7 +985,10 @@ mod tests {
     #[test]
     fn test_parse_prios_line_sets_priority() {
         let mut stops = FxHashMap::default();
-        stops.insert(8500010, Stop::new(8500010, "Basel SBB".to_string(), None, None, None));
+        stops.insert(
+            8500010,
+            Stop::new(8500010, "Basel SBB".to_string(), None, None, None),
+        );
 
         let result = parse_prios_line("8500010  4 Basel SBB", &mut stops);
         assert!(result.is_ok());
@@ -981,7 +997,10 @@ mod tests {
     #[test]
     fn test_parse_flags_line_sets_flag() {
         let mut stops = FxHashMap::default();
-        stops.insert(8500010, Stop::new(8500010, "Basel SBB".to_string(), None, None, None));
+        stops.insert(
+            8500010,
+            Stop::new(8500010, "Basel SBB".to_string(), None, None, None),
+        );
 
         let result = parse_flags_line("8500010  5000 Basel SBB", &mut stops);
         assert!(result.is_ok());
@@ -990,7 +1009,10 @@ mod tests {
     #[test]
     fn test_parse_times_line_sets_exchange_time() {
         let mut stops = FxHashMap::default();
-        stops.insert(8500010, Stop::new(8500010, "Basel SBB".to_string(), None, None, None));
+        stops.insert(
+            8500010,
+            Stop::new(8500010, "Basel SBB".to_string(), None, None, None),
+        );
 
         let result = parse_times_line("8500010 05 05 Basel SBB", &mut stops);
         assert!(result.is_ok());

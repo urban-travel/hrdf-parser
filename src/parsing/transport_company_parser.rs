@@ -391,12 +391,7 @@ mod tests {
         .unwrap();
 
         // Update with colon line
-        parse_transport_company_line(
-            "00379 : 000011",
-            &mut companies,
-            Language::German,
-        )
-        .unwrap();
+        parse_transport_company_line("00379 : 000011", &mut companies, Language::German).unwrap();
 
         assert_eq!(companies.len(), 1);
         let tc = companies.get(&379).unwrap();
@@ -430,12 +425,7 @@ mod tests {
     fn test_colon_line_creates_company_if_not_exists() {
         let mut companies = FxHashMap::default();
 
-        parse_transport_company_line(
-            "00379 : 000011",
-            &mut companies,
-            Language::German,
-        )
-        .unwrap();
+        parse_transport_company_line("00379 : 000011", &mut companies, Language::German).unwrap();
 
         assert_eq!(companies.len(), 1);
         assert!(companies.contains_key(&379));

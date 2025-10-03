@@ -357,5 +357,4 @@ mod tests {
         assert_eq!(ts.journey_1_stop_id(), 8530625);
         assert_eq!(ts.journey_2_stop_id(), 8530625);
     }
-
 }

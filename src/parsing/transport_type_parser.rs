@@ -445,7 +445,10 @@ mod tests {
                 product_class_name,
             } => {
                 assert_eq!(product_class_id, 1);
-                assert_eq!(product_class_name, "EuroCity/InterCity/ICN/InterCityNight/SuperCity");
+                assert_eq!(
+                    product_class_name,
+                    "EuroCity/InterCity/ICN/InterCityNight/SuperCity"
+                );
             }
             _ => panic!("Expected Class variant"),
         }
