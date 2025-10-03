@@ -1,4 +1,4 @@
-/// # Fitfield parsing
+/// # Bitfield parsing
 ///
 /// Day-specific definition of the validity of the timetable information.
 /// The validity is defined using a bit pattern. Each day is represented by a bit.
@@ -14,7 +14,7 @@
 /// - The Bitfield code
 /// - The Bitfield definition
 ///
-/// ## Example (excerpt) – Hex insetead of bits:
+/// ## Example (excerpt) – Hex instead of bits:
 ///
 /// ...
 /// 000017 FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE00 % Bitfield 17 representing the Number FF...00

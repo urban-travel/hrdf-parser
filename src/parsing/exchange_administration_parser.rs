@@ -1,14 +1,14 @@
 /// # Administration Exchange Time parsing
 ///
-/// Tranfer time betweem two transport companies (see
+/// Transfer time between two transport companies (see
 /// [https://opentransportdata.swiss/en/cookbook/hafas-rohdaten-format-hrdf/](the documentation)
 ///
 /// The columns contain the following:
 ///
 /// - The stop number or @
-/// - The adminitrative designation 1
+/// - The administrative designation 1
 /// - The administrative designation 2
-/// - The minimum trasnfer time between dadministrations
+/// - The minimum transfer time between administrations
 /// - The stop designations
 ///
 /// Typical rows look like:

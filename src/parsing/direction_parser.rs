@@ -1,6 +1,6 @@
 /// # Direction parsing
 ///
-/// This file contains direction informations: namely the Direction ID (that is also contained in
+/// This file contains direction information: namely the Direction ID (that is also contained in
 /// the FPLAN file) and the direction Text which gives the last stop of the traject. From
 /// [https://opentransportdata.swiss/en/cookbook/hafas-rohdaten-format-hrdf/#Technical_description_What_is_in_the_HRDF_files_contents](HRDF the docs) we have:
 ///

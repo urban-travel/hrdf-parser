@@ -738,7 +738,7 @@ pub fn parse(version: Version, path: &str) -> Result<StopStorageAndExchangeTimes
             (_, Some(w)) => Ok(Some(w)),
             (Ok(Some(v)), None) => Ok(Some(v)),
         })?
-        .ok_or("Error default exchante time not defined")?;
+        .ok_or("Error default exchange time not defined")?;
 
     let bhfart = match version {
         Version::V_5_40_41_2_0_4 | Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6 => {
@@ -756,4 +756,278 @@ pub fn parse(version: Version, path: &str) -> Result<StopStorageAndExchangeTimes
         })?;
 
     Ok((ResourceStorage::new(stops), default_exchange_time))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_station_combinator_basic() {
+        let input = "8500010     Basel SBB$<1>";
+        let result = station_combinator(input);
+        assert!(result.is_ok());
+        let (_, stop_line) = result.unwrap();
+        assert_eq!(stop_line.stop_id, 8500010);
+        assert_eq!(stop_line.designation, "Basel SBB");
+        assert!(stop_line.long_name.is_none());
+        assert!(stop_line.abbreviation.is_none());
+    }
+
+    #[test]
+    fn test_station_combinator_with_abbreviation() {
+        let input = "8500010     Basel SBB$<1>$BS$<3>";
+        let result = station_combinator(input);
+        assert!(result.is_ok());
+        let (_, stop_line) = result.unwrap();
+        assert_eq!(stop_line.stop_id, 8500010);
+        assert_eq!(stop_line.designation, "Basel SBB");
+        assert_eq!(stop_line.abbreviation, Some("BS".to_string()));
+    }
+
+    #[test]
+    fn test_station_combinator_with_all_fields() {
+        let input = "8501212     Chavannes-R., UNIL-Mouline$<1>$Chavannes-près-Renens, UNIL-Mouline$<2>$MOUI$<3>";
+        let result = station_combinator(input);
+        assert!(result.is_ok());
+        let (_, stop_line) = result.unwrap();
+        assert_eq!(stop_line.stop_id, 8501212);
+        assert_eq!(stop_line.designation, "Chavannes-R., UNIL-Mouline");
+        assert_eq!(
+            stop_line.long_name,
+            Some("Chavannes-près-Renens, UNIL-Mouline".to_string())
+        );
+        assert_eq!(stop_line.abbreviation, Some("MOUI".to_string()));
+    }
+
+    #[test]
+    fn test_station_combinator_auxiliary_stop() {
+        let input = "0000022     Basel$<1>";
+        let result = station_combinator(input);
+        assert!(result.is_ok());
+        let (_, stop_line) = result.unwrap();
+        assert_eq!(stop_line.stop_id, 22);
+        assert_eq!(stop_line.designation, "Basel");
+    }
+
+    #[test]
+    fn test_coordinates_combinator_basic() {
+        let input = "8500010    2611363    1266310   0";
+        let result = coordinates_combinator(input);
+        assert!(result.is_ok());
+        let (_, coord_line) = result.unwrap();
+        assert_eq!(coord_line.stop_id, 8500010);
+        assert_eq!(coord_line.x, 2611363.0);
+        assert_eq!(coord_line.y, 1266310.0);
+        assert_eq!(coord_line.altitude, 0.0);
+    }
+
+    #[test]
+    fn test_coordinates_combinator_with_decimals() {
+        let input = "8500010    7.589563   47.547412 0";
+        let result = coordinates_combinator(input);
+        assert!(result.is_ok());
+        let (_, coord_line) = result.unwrap();
+        assert_eq!(coord_line.stop_id, 8500010);
+        assert_eq!(coord_line.x, 7.589563);
+        assert_eq!(coord_line.y, 47.547412);
+    }
+
+    #[test]
+    fn test_prios_combinator() {
+        let input = "8500010  4 Basel SBB";
+        let result = prios_combinator(input);
+        assert!(result.is_ok());
+        let (_, prios_line) = result.unwrap();
+        assert_eq!(prios_line.stop_id, 8500010);
+        assert_eq!(prios_line.exchange_priority, 4);
+    }
+
+    #[test]
+    fn test_prios_combinator_high_priority() {
+        let input = "8500009 16 Pregassona, Scuola Media";
+        let result = prios_combinator(input);
+        assert!(result.is_ok());
+        let (_, prios_line) = result.unwrap();
+        assert_eq!(prios_line.stop_id, 8500009);
+        assert_eq!(prios_line.exchange_priority, 16);
+    }
+
+    #[test]
+    fn test_flags_combinator() {
+        let input = "8500009    30 Pregassona, Scuola Media";
+        let result = flags_combinator(input);
+        assert!(result.is_ok());
+        let (_, flags_line) = result.unwrap();
+        assert_eq!(flags_line.stop_id, 8500009);
+        assert_eq!(flags_line.exchange_flag, 30);
+    }
+
+    #[test]
+    fn test_flags_combinator_large_value() {
+        let input = "8500010  5000 Basel SBB";
+        let result = flags_combinator(input);
+        assert!(result.is_ok());
+        let (_, flags_line) = result.unwrap();
+        assert_eq!(flags_line.stop_id, 8500010);
+        assert_eq!(flags_line.exchange_flag, 5000);
+    }
+
+    #[test]
+    fn test_times_combinator_standard() {
+        let input = "9999999 02 02 STANDARD";
+        let result = times_combinator(input);
+        assert!(result.is_ok());
+        let (_, times_line) = result.unwrap();
+        assert_eq!(times_line.stop_id, 9999999);
+        assert_eq!(times_line.exchange_time_inter_city, 2);
+        assert_eq!(times_line.exchange_time_other, 2);
+    }
+
+    #[test]
+    fn test_times_combinator_specific_stop() {
+        let input = "8500010 05 05 Basel SBB";
+        let result = times_combinator(input);
+        assert!(result.is_ok());
+        let (_, times_line) = result.unwrap();
+        assert_eq!(times_line.stop_id, 8500010);
+        assert_eq!(times_line.exchange_time_inter_city, 5);
+        assert_eq!(times_line.exchange_time_other, 5);
+    }
+
+    #[test]
+    fn test_comment_combinator() {
+        let input = "% This is a comment";
+        let result = comment_combinator(input);
+        assert!(result.is_ok());
+        let (_, desc_line) = result.unwrap();
+        assert!(matches!(desc_line, DescriptionLine::Comment));
+    }
+
+    #[test]
+    fn test_restriction_combinator() {
+        let input = "0000132 B 3";
+        let result = restriction_combinator(input);
+        assert!(result.is_ok());
+        let (_, desc_line) = result.unwrap();
+        match desc_line {
+            DescriptionLine::Restriction {
+                stop_id,
+                restrictions,
+            } => {
+                assert_eq!(stop_id, 132);
+                assert_eq!(restrictions, 3);
+            }
+            _ => panic!("Expected Restriction variant"),
+        }
+    }
+
+    #[test]
+    fn test_sloid_combinator() {
+        let input = "8500010 G A ch:1:sloid:10";
+        let result = sloid_combinator(input);
+        assert!(result.is_ok());
+        let (_, desc_line) = result.unwrap();
+        match desc_line {
+            DescriptionLine::Sloid { stop_id, sloid } => {
+                assert_eq!(stop_id, 8500010);
+                assert_eq!(sloid, "ch:1:sloid:10");
+            }
+            _ => panic!("Expected Sloid variant"),
+        }
+    }
+
+    #[test]
+    fn test_boarding_combinator() {
+        let input = "8500010 G a ch:1:sloid:10:3:5";
+        let result = boarding_combinator(input);
+        assert!(result.is_ok());
+        let (_, desc_line) = result.unwrap();
+        match desc_line {
+            DescriptionLine::Boarding { stop_id, sloid } => {
+                assert_eq!(stop_id, 8500010);
+                assert_eq!(sloid, "ch:1:sloid:10:3:5");
+            }
+            _ => panic!("Expected Boarding variant"),
+        }
+    }
+
+    #[test]
+    fn test_parse_stop_line_creates_stop() {
+        let mut stops = FxHashMap::default();
+        let result = parse_stop_line("8500010     Basel SBB$<1>", &mut stops);
+        assert!(result.is_ok());
+        assert_eq!(stops.len(), 1);
+        let stop = stops.get(&8500010).unwrap();
+        assert_eq!(stop.name(), "Basel SBB");
+    }
+
+    #[test]
+    fn test_parse_coord_line_sets_coordinates() {
+        let mut stops = FxHashMap::default();
+        stops.insert(
+            8500010,
+            Stop::new(8500010, "Basel SBB".to_string(), None, None, None),
+        );
+
+        let result = parse_coord_line(
+            "8500010    7.589563   47.547412 0",
+            &mut stops,
+            CoordinateSystem::WGS84,
+        );
+        assert!(result.is_ok());
+
+        let stop = stops.get(&8500010).unwrap();
+        assert!(stop.wgs84_coordinates().is_some());
+    }
+
+    #[test]
+    fn test_parse_prios_line_sets_priority() {
+        let mut stops = FxHashMap::default();
+        stops.insert(
+            8500010,
+            Stop::new(8500010, "Basel SBB".to_string(), None, None, None),
+        );
+
+        let result = parse_prios_line("8500010  4 Basel SBB", &mut stops);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_flags_line_sets_flag() {
+        let mut stops = FxHashMap::default();
+        stops.insert(
+            8500010,
+            Stop::new(8500010, "Basel SBB".to_string(), None, None, None),
+        );
+
+        let result = parse_flags_line("8500010  5000 Basel SBB", &mut stops);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_times_line_sets_exchange_time() {
+        let mut stops = FxHashMap::default();
+        stops.insert(
+            8500010,
+            Stop::new(8500010, "Basel SBB".to_string(), None, None, None),
+        );
+
+        let result = parse_times_line("8500010 05 05 Basel SBB", &mut stops);
+        assert!(result.is_ok());
+
+        let stop = stops.get(&8500010).unwrap();
+        assert_eq!(stop.exchange_time(), Some((5, 5)));
+    }
+
+    #[test]
+    fn test_parse_times_line_default_sets_none() {
+        let mut stops = FxHashMap::default();
+
+        let result = parse_times_line("9999999 02 02 STANDARD", &mut stops);
+        assert!(result.is_ok());
+        // Default line doesn't create a stop entry
+        assert_eq!(stops.len(), 0);
+    }
 }

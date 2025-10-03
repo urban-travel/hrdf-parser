@@ -36,7 +36,7 @@ pub fn add_1_day(date: NaiveDate) -> NaiveDate {
 
 pub fn sub_1_day(date: NaiveDate) -> NaiveDate {
     date.checked_sub_days(Days::new(1))
-        .expect("Error substracting 1 day to the date.")
+        .expect("Error subtracting 1 day to the date.")
 }
 
 pub fn count_days_between_two_dates(date_1: NaiveDate, date_2: NaiveDate) -> usize {
@@ -61,7 +61,7 @@ pub fn timetable_start_date(
         .values()
         .find(|val| val.key() == "start_date")
         .ok_or("Key \"start_date\" missing.")?
-        .value_as_NaiveDate();
+        .value_as_naive_date();
     Ok(result)
 }
 
@@ -73,6 +73,6 @@ pub fn timetable_end_date(
         .values()
         .find(|val| val.key() == "end_date")
         .expect("Key \"end_date\" missing.")
-        .value_as_NaiveDate();
+        .value_as_naive_date();
     Ok(result)
 }

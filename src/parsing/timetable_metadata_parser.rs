@@ -105,3 +105,177 @@ pub fn parse(path: &str) -> Result<ResourceStorage<TimetableMetadataEntry>, Box<
 
     Ok(ResourceStorage::new(data))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Datelike;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_date_combinator_valid() {
+        let input = "11.12.2023";
+        let result = date_combinator(input);
+        assert!(result.is_ok());
+        let (_, info_line) = result.unwrap();
+        match info_line {
+            InfoLines::Date(date) => {
+                assert_eq!(date.day(), 11);
+                assert_eq!(date.month(), 12);
+                assert_eq!(date.year(), 2023);
+            }
+            _ => panic!("Expected Date variant"),
+        }
+    }
+
+    #[test]
+    fn test_date_combinator_start_of_year() {
+        let input = "1.1.2024";
+        let result = date_combinator(input);
+        assert!(result.is_ok());
+        let (_, info_line) = result.unwrap();
+        match info_line {
+            InfoLines::Date(date) => {
+                assert_eq!(date.day(), 1);
+                assert_eq!(date.month(), 1);
+                assert_eq!(date.year(), 2024);
+            }
+            _ => panic!("Expected Date variant"),
+        }
+    }
+
+    #[test]
+    fn test_date_combinator_end_of_year() {
+        let input = "31.12.2024";
+        let result = date_combinator(input);
+        assert!(result.is_ok());
+        let (_, info_line) = result.unwrap();
+        match info_line {
+            InfoLines::Date(date) => {
+                assert_eq!(date.day(), 31);
+                assert_eq!(date.month(), 12);
+                assert_eq!(date.year(), 2024);
+            }
+            _ => panic!("Expected Date variant"),
+        }
+    }
+
+    #[test]
+    fn test_info_combinator_single_value() {
+        let input = "Timetable 2024";
+        let result = info_combinator(input);
+        assert!(result.is_ok());
+        let (_, info_line) = result.unwrap();
+        match info_line {
+            InfoLines::MetaData(metadata) => {
+                assert_eq!(metadata.len(), 1);
+                assert_eq!(metadata[0], "Timetable 2024");
+            }
+            _ => panic!("Expected MetaData variant"),
+        }
+    }
+
+    #[test]
+    fn test_info_combinator_multiple_values() {
+        let input = "Value1$Value2$Value3";
+        let result = info_combinator(input);
+        assert!(result.is_ok());
+        let (_, info_line) = result.unwrap();
+        match info_line {
+            InfoLines::MetaData(metadata) => {
+                assert_eq!(metadata.len(), 3);
+                assert_eq!(metadata[0], "Value1");
+                assert_eq!(metadata[1], "Value2");
+                assert_eq!(metadata[2], "Value3");
+            }
+            _ => panic!("Expected MetaData variant"),
+        }
+    }
+
+    #[test]
+    fn test_info_combinator_with_spaces() {
+        let input = "SBB CFF FFS$OpenTransport";
+        let result = info_combinator(input);
+        assert!(result.is_ok());
+        let (_, info_line) = result.unwrap();
+        match info_line {
+            InfoLines::MetaData(metadata) => {
+                assert_eq!(metadata.len(), 2);
+                assert_eq!(metadata[0], "SBB CFF FFS");
+                assert_eq!(metadata[1], "OpenTransport");
+            }
+            _ => panic!("Expected MetaData variant"),
+        }
+    }
+
+    #[test]
+    fn test_info_combinator_consecutive_delimiters() {
+        let input = "Start$$End";
+        let result = info_combinator(input);
+        assert!(result.is_ok());
+        let (_, info_line) = result.unwrap();
+        match info_line {
+            InfoLines::MetaData(metadata) => {
+                // Parser behavior with consecutive delimiters
+                assert!(!metadata.is_empty());
+                assert_eq!(metadata[0], "Start");
+            }
+            _ => panic!("Expected MetaData variant"),
+        }
+    }
+
+    #[test]
+    fn test_date_combinator_single_digit_day() {
+        let input = "5.6.2024";
+        let result = date_combinator(input);
+        assert!(result.is_ok());
+        let (_, info_line) = result.unwrap();
+        match info_line {
+            InfoLines::Date(date) => {
+                assert_eq!(date.day(), 5);
+                assert_eq!(date.month(), 6);
+                assert_eq!(date.year(), 2024);
+            }
+            _ => panic!("Expected Date variant"),
+        }
+    }
+
+    #[test]
+    fn test_date_combinator_leap_year() {
+        let input = "29.2.2024";
+        let result = date_combinator(input);
+        assert!(result.is_ok());
+        let (_, info_line) = result.unwrap();
+        match info_line {
+            InfoLines::Date(date) => {
+                assert_eq!(date.day(), 29);
+                assert_eq!(date.month(), 2);
+                assert_eq!(date.year(), 2024);
+            }
+            _ => panic!("Expected Date variant"),
+        }
+    }
+
+    #[test]
+    fn test_date_combinator_invalid_date() {
+        let input = "32.13.2024"; // Invalid day and month
+        let result = date_combinator(input);
+        // Parser should fail for invalid dates
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_info_combinator_numeric_values() {
+        let input = "5.40.41";
+        let result = info_combinator(input);
+        assert!(result.is_ok());
+        let (_, info_line) = result.unwrap();
+        match info_line {
+            InfoLines::MetaData(metadata) => {
+                assert_eq!(metadata.len(), 1);
+                assert_eq!(metadata[0], "5.40.41");
+            }
+            _ => panic!("Expected MetaData variant"),
+        }
+    }
+}

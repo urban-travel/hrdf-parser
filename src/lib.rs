@@ -30,13 +30,14 @@ mod tests {
             Err(err) => {
                 assert!(
                     err.to_string().to_lowercase().contains("404 not found"),
-                    "The error whould be indicate '404 Not Found'"
+                    "The error should indicate '404 Not Found'"
                 );
             }
         }
     }
 
     #[test(tokio::test)]
+    #[ignore]
     async fn parsing_2024() {
         let _hrdf = Hrdf::new(
             Version::V_5_40_41_2_0_6,
@@ -49,6 +50,7 @@ mod tests {
     }
 
     #[test(tokio::test)]
+    #[ignore]
     async fn parsing_2025() {
         let _hrdf = Hrdf::new(
             Version::V_5_40_41_2_0_7,

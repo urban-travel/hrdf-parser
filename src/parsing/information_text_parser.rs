@@ -10,7 +10,7 @@
 ///
 /// ## Remark
 ///
-/// We start by parsing the INFOTEXT_DE file to get the ids of each ilne and then complement them
+/// We start by parsing the INFOTEXT_DE file to get the ids of each line and then complement them
 /// with the rest of the infotext from INFOTEXT_* for the semantic meaning part, since all
 /// files have the same content from this point of view. The rest is parsed by language
 ///

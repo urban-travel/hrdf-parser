@@ -1,6 +1,6 @@
 /// # Holiday parsing
 ///
-/// For more informations see
+/// For more information see
 /// [https://opentransportdata.swiss/en/cookbook/hafas-rohdaten-format-hrdf/#Technical_description_What_is_in_the_HRDF_files_contents](the HRDF documentation).
 ///
 /// List of public holidays that apply in Switzerland.

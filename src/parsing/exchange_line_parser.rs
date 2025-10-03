@@ -1,6 +1,6 @@
 /// # Line Exchange Time parser
 ///
-/// For more informations see
+/// For more information see
 /// [https://opentransportdata.swiss/en/cookbook/hafas-rohdaten-format-hrdf/#Technical_description_What_is_in_the_HRDF_files_contents](the HRDF documentation).
 ///
 /// Transfer time per category of service and/or line. The file contains:
@@ -63,7 +63,7 @@ type ExchangeTimeLineRow = (
 
 fn parse_exchange_line_row(input: &str) -> IResult<&str, ExchangeTimeLineRow> {
     // TODO: I haven't seen an is_guaranteed field in the doc. Check if this makes sense.
-    // It is present in UMSTEIGL. Mabe a copy/paste leftover
+    // It is present in UMSTEIGL. Maybe a copy/paste leftover
     //
     // TODO: There is still a String after all the parsing is done that remains (a name)
     let (
@@ -340,7 +340,7 @@ mod tests {
     }
 
     #[test]
-    fn mutiline_parser() {
+    fn multiline_parser() {
         let rows = vec![
             "8301113 000011 S   *        * 007000 B   *        * 003  Luino (I)".to_string(),
             "1111135 sbg034 B   7339     H sbg034 TX  7341     H 000! Waldshut, Busbahnhof"

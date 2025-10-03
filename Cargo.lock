@@ -112,16 +112,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "assert-json-diff"
-version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47e4f2b81832e72834d7518d8487a0396a28cc408186a2e8854c0f98011faf12"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -575,9 +565,8 @@ dependencies = [
 
 [[package]]
 name = "hrdf-parser"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
- "assert-json-diff",
  "bincode",
  "chrono",
  "flate2",
@@ -585,7 +574,6 @@ dependencies = [
  "native-tls",
  "nom",
  "pretty_assertions",
- "regex",
  "reqwest",
  "rustc-hash",
  "serde",
