@@ -10,8 +10,6 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// ECKDATEN
-use std::error::Error;
-
 use chrono::NaiveDate;
 use nom::{
     IResult, Parser,
@@ -26,7 +24,10 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     models::{Model, TimetableMetadataEntry},
-    parsing::helpers::read_lines,
+    parsing::{
+        error::{PResult, ParsingError},
+        helpers::read_lines,
+    },
     storage::ResourceStorage,
     utils::AutoIncrement,
 };
@@ -58,7 +59,7 @@ fn info_combinator(input: &str) -> IResult<&str, InfoLines> {
     .parse(input)
 }
 
-pub fn parse(path: &str) -> Result<ResourceStorage<TimetableMetadataEntry>, Box<dyn Error>> {
+pub fn parse(path: &str) -> PResult<ResourceStorage<TimetableMetadataEntry>> {
     log::info!("Parsing ECKDATEN...");
     let auto_increment = AutoIncrement::new();
     let keys = [
@@ -75,9 +76,7 @@ pub fn parse(path: &str) -> Result<ResourceStorage<TimetableMetadataEntry>, Box<
         .into_iter()
         .filter(|line| !line.trim().is_empty())
         .try_for_each(|line| {
-            let (_, res) = alt((date_combinator, info_combinator))
-                .parse(&line)
-                .map_err(|e| format!("Error: {e}, for line: {line}"))?;
+            let (_, res) = alt((date_combinator, info_combinator)).parse(&line)?;
             match res {
                 InfoLines::Date(d) => {
                     let tt = TimetableMetadataEntry::new(
@@ -100,7 +99,7 @@ pub fn parse(path: &str) -> Result<ResourceStorage<TimetableMetadataEntry>, Box<
                     }
                 }
             }
-            Ok::<(), Box<dyn Error>>(())
+            Ok::<(), ParsingError>(())
         })?;
 
     Ok(ResourceStorage::new(data))
@@ -257,11 +256,10 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
     fn test_date_combinator_invalid_date() {
         let input = "32.13.2024"; // Invalid day and month
-        let result = date_combinator(input);
-        // Parser should fail for invalid dates
-        assert!(result.is_err());
+        date_combinator(input).unwrap();
     }
 
     #[test]
