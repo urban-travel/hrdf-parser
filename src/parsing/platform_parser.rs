@@ -80,7 +80,6 @@
 /// ---
 /// Note: this parser collects both the Platform and JourneyPlatform resources.
 use nom::{
-    IResult, Parser,
     branch::alt,
     bytes::{complete::tag, streaming::take_until},
     character::{
@@ -90,11 +89,11 @@ use nom::{
     combinator::{map, opt},
     number::complete::double,
     sequence::{delimited, preceded},
+    IResult, Parser,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-    JourneyId, Version,
     models::{CoordinateSystem, Coordinates, JourneyPlatform, Model, Platform},
     parsing::{
         error::{PResult, ParsingError},
@@ -104,7 +103,8 @@ use crate::{
         },
     },
     storage::ResourceStorage,
-    utils::{AutoIncrement, create_time_from_value},
+    utils::{create_time_from_value, AutoIncrement},
+    JourneyId, Version,
 };
 
 enum PlatformLine {
@@ -872,8 +872,23 @@ mod tests {
 
         assert_eq!(platforms.len(), 1);
         let platform_id = *platforms_pk_type_converter.get(&(8574200, 3)).unwrap();
+        assert_eq!(platform_id, 1);
         let platform = platforms.get(&platform_id).unwrap();
         assert_eq!(platform.id(), platform_id);
+
+        println!("{}", serde_json::to_string(&platform).unwrap());
+        let reference = r#"
+            {
+                "id":1,
+                "name":"5",
+                "sectors":null,
+                "stop_id":8574200,
+                "sloid":"ch:1:sloid:74200:1:3",
+                "lv95_coordinates":{"coordinate_system":"LV95","x":2692827.0,"y":1247287.0},
+                "wgs84_coordinates":{"coordinate_system":"LV95","x":0.0,"y":0.0}
+            }"#;
+        let (platform, reference) = get_json_values(platform, reference).unwrap();
+        assert_eq!(platform, reference);
     }
 
     #[test]
