@@ -85,7 +85,7 @@ fn convert_hex_number_to_bits(hex_number: &str) -> PResult<Vec<u8>> {
         .map(|hex_digit| {
             hex_digit
                 .to_digit(16)
-                .ok_or_else(|| ParsingError::InvalidHexDigit(hex_digit))
+                .ok_or(ParsingError::InvalidHexDigit(hex_digit))
                 .map(|val| (0..4).rev().map(move |i| ((val >> i) & 1) as u8))
         })
         .collect::<Result<Vec<_>, _>>()?

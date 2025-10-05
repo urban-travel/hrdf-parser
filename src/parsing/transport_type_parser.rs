@@ -81,8 +81,6 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// ZUGART
-use std::error::Error;
-
 use nom::{
     IResult, Parser,
     branch::alt,
@@ -95,9 +93,12 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     models::{Language, Model, TransportType},
-    parsing::helpers::{
-        optional_i32_from_n_digits_parser, read_lines, string_from_n_chars_parser,
-        string_till_eol_parser,
+    parsing::{
+        error::{PResult, ParsingError},
+        helpers::{
+            optional_i32_from_n_digits_parser, read_lines, string_from_n_chars_parser,
+            string_till_eol_parser,
+        },
     },
     storage::ResourceStorage,
     utils::AutoIncrement,
@@ -240,7 +241,7 @@ fn parse_line(
     pk_type_converter: &mut FxHashMap<String, i32>,
     auto_increment: &AutoIncrement,
     current_language: &mut Language,
-) -> Result<(), Box<dyn Error>> {
+) -> PResult<()> {
     let (_, transport_row) = alt((
         offer_definition_combinator,
         language_combinator,
@@ -249,8 +250,7 @@ fn parse_line(
         option_combinator,
         iline_combinator,
     ))
-    .parse(line)
-    .map_err(|e| format!("Error {e} while parsing {line}"))?;
+    .parse(line)?;
 
     match transport_row {
         TransportTypeAndTypeLine::OfferDefinition {
@@ -319,7 +319,9 @@ fn parse_line(
             if let Some(transport_type) = data.get_mut(&id) {
                 transport_type.set_category_name(*current_language, &category_name);
             } else {
-                return Err(format!("Error: TransportType not found for id: {id}").into());
+                return Err(ParsingError::UnknownId(format!(
+                    "Error: TransportType: {id}"
+                )));
             }
         }
         TransportTypeAndTypeLine::Option {
@@ -335,7 +337,7 @@ fn parse_line(
     Ok(())
 }
 
-pub fn parse(path: &str) -> Result<TransportTypeAndTypeConverter, Box<dyn Error>> {
+pub fn parse(path: &str) -> PResult<TransportTypeAndTypeConverter> {
     log::info!("Parsing ZUGART...");
 
     let transport_types = read_lines(&format!("{path}/ZUGART"), 0)?;

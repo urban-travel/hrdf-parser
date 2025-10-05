@@ -36,8 +36,6 @@
 /// 4 file(s).
 /// File(s) read by the parser:
 /// BETRIEB_DE, BETRIEB_EN, BETRIEB_FR, BETRIEB_IT
-use std::error::Error;
-
 use nom::{
     IResult, Parser,
     branch::alt,
@@ -50,7 +48,10 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     models::{Language, TransportCompany},
-    parsing::helpers::{read_lines, string_till_eol_parser},
+    parsing::{
+        error::PResult,
+        helpers::{read_lines, string_till_eol_parser},
+    },
     storage::ResourceStorage,
 };
 
@@ -166,10 +167,8 @@ fn parse_transport_company_line(
     line: &str,
     transport_company: &mut FxHashMap<i32, TransportCompany>,
     language: Language,
-) -> Result<(), Box<dyn Error>> {
-    let (_, tcl) = alt((kline_combinator, nline_combinator, colon_combinator))
-        .parse(line)
-        .map_err(|e| format!("Error {e} while parsing {line}"))?;
+) -> PResult<()> {
+    let (_, tcl) = alt((kline_combinator, nline_combinator, colon_combinator)).parse(line)?;
 
     match tcl {
         TransportCompanyLine::Kline {
@@ -210,7 +209,7 @@ fn parse_transport_company_line(
     Ok(())
 }
 
-pub fn parse(path: &str) -> Result<ResourceStorage<TransportCompany>, Box<dyn Error>> {
+pub fn parse(path: &str) -> PResult<ResourceStorage<TransportCompany>> {
     let languages = [
         Language::German,
         Language::English,
@@ -232,7 +231,6 @@ pub fn parse(path: &str) -> Result<ResourceStorage<TransportCompany>, Box<dyn Er
             .filter(|line| !line.trim().is_empty())
             .try_for_each(|line| {
                 parse_transport_company_line(&line, &mut transport_company, language)
-                    .map_err(|e| format!("Error: {e}, for line: {line}"))
             })?;
     }
 
@@ -242,12 +240,12 @@ pub fn parse(path: &str) -> Result<ResourceStorage<TransportCompany>, Box<dyn Er
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::Model;
+    use crate::parsing::tests::get_json_values;
     use pretty_assertions::assert_eq;
 
     #[test]
     fn test_kline_combinator_basic() {
-        let input = "00379 K \"SBB\" L \"SBB\" V \"Schweizerische Bundesbahnen SBB\"";
+        let input = r#"00379 K "SBB" L "SBB" V "Schweizerische Bundesbahnen SBB""#;
         let result = kline_combinator(input);
         assert!(result.is_ok());
         let (_, tc_line) = result.unwrap();
@@ -269,7 +267,7 @@ mod tests {
 
     #[test]
     fn test_kline_combinator_sob() {
-        let input = "00380 K \"SOB\" L \"SOB-bt\" V \"Schweizerische Südostbahn (bt)\"";
+        let input = r#"00380 K "SOB" L "SOB-bt" V "Schweizerische Südostbahn (bt)""#;
         let result = kline_combinator(input);
         assert!(result.is_ok());
         let (_, tc_line) = result.unwrap();
@@ -291,7 +289,7 @@ mod tests {
 
     #[test]
     fn test_kline_combinator_with_spaces_in_names() {
-        let input = "00381 K \"SOB\" L \"SOB-sob\" V \"Schweizerische Südostbahn (sob)\"";
+        let input = r#"00381 K "SOB" L "SOB-sob" V "Schweizerische Südostbahn (sob)""#;
         let result = kline_combinator(input);
         assert!(result.is_ok());
         let (_, tc_line) = result.unwrap();
@@ -313,7 +311,7 @@ mod tests {
 
     #[test]
     fn test_nline_combinator() {
-        let input = "00379 N \"ch:1:sboid:379\"";
+        let input = r#"00379 N "ch:1:sboid:379""#;
         let result = nline_combinator(input);
         assert!(result.is_ok());
         let (_, tc_line) = result.unwrap();
@@ -368,14 +366,25 @@ mod tests {
     #[test]
     fn test_parse_transport_company_line_creates_new_company() {
         let mut companies = FxHashMap::default();
-        let result = parse_transport_company_line(
-            "00379 K \"SBB\" L \"SBB\" V \"Schweizerische Bundesbahnen SBB\"",
+        parse_transport_company_line(
+            r#"00379 K "SBB" L "SBB" V "Schweizerische Bundesbahnen SBB""#,
             &mut companies,
             Language::German,
-        );
-        assert!(result.is_ok());
+        )
+        .unwrap();
         assert_eq!(companies.len(), 1);
-        assert!(companies.contains_key(&379));
+        let company = companies.get(&379).unwrap();
+        let reference = r#"
+            {
+                "id":379,
+                "short_name":{"German":"SBB"},
+                "long_name":{"German":"SBB"},
+                "full_name":{"German":"Schweizerische Bundesbahnen SBB"},
+                "administrations":[]
+            }"#;
+
+        let (company, reference) = get_json_values(company, reference).unwrap();
+        assert_eq!(company, reference);
     }
 
     #[test]
@@ -384,7 +393,7 @@ mod tests {
 
         // Create company
         parse_transport_company_line(
-            "00379 K \"SBB\" L \"SBB\" V \"Schweizerische Bundesbahnen SBB\"",
+            r#"00379 K "SBB" L "SBB" V "Schweizerische Bundesbahnen SBB""#,
             &mut companies,
             Language::German,
         )
@@ -394,8 +403,18 @@ mod tests {
         parse_transport_company_line("00379 : 000011", &mut companies, Language::German).unwrap();
 
         assert_eq!(companies.len(), 1);
-        let tc = companies.get(&379).unwrap();
-        assert_eq!(tc.id(), 379);
+        let company = companies.get(&379).unwrap();
+        let reference = r#"
+            {
+                "id":379,
+                "short_name":{"German":"SBB"},
+                "long_name":{"German":"SBB"},
+                "full_name":{"German":"Schweizerische Bundesbahnen SBB"},
+                "administrations":["000011"]
+            }"#;
+
+        let (company, reference) = get_json_values(company, reference).unwrap();
+        assert_eq!(company, reference);
     }
 
     #[test]
@@ -403,22 +422,32 @@ mod tests {
         let mut companies = FxHashMap::default();
 
         parse_transport_company_line(
-            "00379 K \"SBB\" L \"SBB\" V \"Schweizerische Bundesbahnen SBB\"",
+            r#"00379 K "SBB" L "SBB" V "Schweizerische Bundesbahnen SBB""#,
             &mut companies,
             Language::German,
         )
         .unwrap();
 
         parse_transport_company_line(
-            "00379 K \"CFF\" L \"CFF\" V \"Chemins de fer fédéraux CFF\"",
+            r#"00379 K "CFF" L "CFF" V "Chemins de fer fédéraux CFF""#,
             &mut companies,
             Language::French,
         )
         .unwrap();
 
         assert_eq!(companies.len(), 1);
-        let tc = companies.get(&379).unwrap();
-        assert_eq!(tc.id(), 379);
+        let company = companies.get(&379).unwrap();
+        let reference = r#"
+            {
+                "id":379,
+                "short_name":{"German":"SBB", "French":"CFF"},
+                "long_name":{"German":"SBB", "French":"CFF"},
+                "full_name":{"German":"Schweizerische Bundesbahnen SBB", "French":"Chemins de fer fédéraux CFF"},
+                "administrations":[]
+            }"#;
+
+        let (company, reference) = get_json_values(company, reference).unwrap();
+        assert_eq!(company, reference);
     }
 
     #[test]
@@ -428,7 +457,18 @@ mod tests {
         parse_transport_company_line("00379 : 000011", &mut companies, Language::German).unwrap();
 
         assert_eq!(companies.len(), 1);
-        assert!(companies.contains_key(&379));
+        let company = companies.get(&379).unwrap();
+        let reference = r#"
+            {
+                "id":379,
+                "short_name":{},
+                "long_name":{},
+                "full_name":{},
+                "administrations":["000011"]
+            }"#;
+
+        let (company, reference) = get_json_values(company, reference).unwrap();
+        assert_eq!(company, reference);
     }
 
     #[test]
@@ -437,13 +477,24 @@ mod tests {
         companies.insert(379, TransportCompany::new(379));
 
         let result = parse_transport_company_line(
-            "00379 N \"ch:1:sboid:379\"",
+            r#"00379 N "ch:1:sboid:379""#,
             &mut companies,
             Language::German,
         );
 
         assert!(result.is_ok());
         // SBOID is currently not used (TODO in code)
-        assert_eq!(companies.len(), 1);
+        let company = companies.get(&379).unwrap();
+        let reference = r#"
+            {
+                "id":379,
+                "short_name":{},
+                "long_name":{},
+                "full_name":{},
+                "administrations":[]
+            }"#;
+
+        let (company, reference) = get_json_values(company, reference).unwrap();
+        assert_eq!(company, reference);
     }
 }
