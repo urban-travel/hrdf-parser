@@ -51,6 +51,7 @@ mod tests {
         for<'a> F: Serialize + Deserialize<'a>,
     {
         let serialized = serde_json::to_string(&lhs)?;
+        println!("{serialized:#?}");
         let reference = serde_json::to_string(&serde_json::from_str::<F>(rhs)?)?;
         Ok((
             serialized.parse::<serde_json::Value>()?,
