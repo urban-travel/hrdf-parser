@@ -39,8 +39,6 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// METABHF
-use std::error::Error;
-
 use nom::{
     IResult, Parser,
     branch::alt,
@@ -54,8 +52,11 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     models::{Model, StopConnection},
-    parsing::helpers::{
-        i16_from_n_digits_parser, i32_from_n_digits_parser, read_lines, string_till_eol_parser,
+    parsing::{
+        error::{PResult, ParsingError},
+        helpers::{
+            i16_from_n_digits_parser, i32_from_n_digits_parser, read_lines, string_till_eol_parser,
+        },
     },
     storage::ResourceStorage,
     utils::AutoIncrement,
@@ -118,24 +119,22 @@ fn parse_line(
     data: &mut FxHashMap<i32, StopConnection>,
     attributes_pk_type_converter: &FxHashMap<String, i32>,
     auto_increment: &AutoIncrement,
-) -> Result<(), Box<dyn Error>> {
+) -> PResult<()> {
     let (_, stop_connection_line) = alt((
         a_line_combinator,
         stop_groups_combinator,
         meta_stop_line_combinator,
     ))
-    .parse(line)
-    .map_err(|e| format!("Error {e} while parsing {line}"))?;
+    .parse(line)?;
 
     match stop_connection_line {
         StopConnectionLine::Aline(s) => {
             let attribute_id = *attributes_pk_type_converter
                 .get(&s)
-                .ok_or("Unknown legacy attribute ID: {s}")?;
-            let current_instance = data.get_mut(&auto_increment.get()).ok_or(format!(
-                "Connection instance {} not found.",
-                auto_increment.get()
-            ))?;
+                .ok_or_else(|| ParsingError::UnknownId(format!("Legacy attribute ID: {s}")))?;
+            let current_instance = data.get_mut(&auto_increment.get()).ok_or_else(|| {
+                ParsingError::UnknownId(format!("Connection Id {}.", auto_increment.get()))
+            })?;
 
             current_instance.set_attribute(attribute_id);
         }
@@ -162,7 +161,7 @@ fn parse_line(
 pub fn parse(
     path: &str,
     attributes_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<ResourceStorage<StopConnection>, Box<dyn Error>> {
+) -> PResult<ResourceStorage<StopConnection>> {
     log::info!("Parsing METABHF...");
 
     let auto_increment = AutoIncrement::new();
@@ -179,7 +178,6 @@ pub fn parse(
                 attributes_pk_type_converter,
                 &auto_increment,
             )
-            .map_err(|e| format!("Error: {e}, for line: {line}"))
         })?;
 
     Ok(ResourceStorage::new(stations))
@@ -187,6 +185,8 @@ pub fn parse(
 
 #[cfg(test)]
 mod tests {
+    use crate::parsing::tests::get_json_values;
+
     use super::*;
     use pretty_assertions::assert_eq;
 
@@ -356,14 +356,14 @@ mod tests {
         let attributes_pk_type_converter = FxHashMap::default();
         let auto_increment = AutoIncrement::new();
 
-        let result = parse_line(
+        parse_line(
             "8500010 8500146 009",
             &mut data,
             &attributes_pk_type_converter,
             &auto_increment,
-        );
+        )
+        .unwrap();
 
-        assert!(result.is_ok());
         assert_eq!(data.len(), 1);
         let connection = data.get(&1).unwrap();
         assert_eq!(connection.stop_id_1(), 8500010);
@@ -372,29 +372,24 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
     fn test_parse_line_a_line_requires_existing_connection() {
         let mut data = FxHashMap::default();
         let mut attributes_pk_type_converter = FxHashMap::default();
         attributes_pk_type_converter.insert("Y".to_string(), 42);
         let auto_increment = AutoIncrement::new();
 
-        let result = parse_line(
+        parse_line(
             "*A Y",
             &mut data,
             &attributes_pk_type_converter,
             &auto_increment,
-        );
-
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Connection instance")
-        );
+        )
+        .unwrap();
     }
 
     #[test]
+    #[should_panic]
     fn test_parse_line_a_line_requires_valid_attribute() {
         let mut data = FxHashMap::default();
         let attributes_pk_type_converter = FxHashMap::default(); // Empty
@@ -410,20 +405,13 @@ mod tests {
         .unwrap();
 
         // Now try to set attribute
-        let result = parse_line(
+        parse_line(
             "*A Y",
             &mut data,
             &attributes_pk_type_converter,
             &auto_increment,
-        );
-
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Unknown legacy attribute ID")
-        );
+        )
+        .unwrap();
     }
 
     #[test]
@@ -498,14 +486,14 @@ mod tests {
         .unwrap();
 
         assert_eq!(data.len(), 2);
-        assert!(data.contains_key(&1));
-        assert!(data.contains_key(&2));
 
         let conn1 = data.get(&1).unwrap();
+        assert_eq!(conn1.stop_id_1(), 8500010);
         assert_eq!(conn1.stop_id_2(), 8500146);
         assert_eq!(conn1.duration(), 9);
 
         let conn2 = data.get(&2).unwrap();
+        assert_eq!(conn2.stop_id_1(), 8500010);
         assert_eq!(conn2.stop_id_2(), 8578143);
         assert_eq!(conn2.duration(), 6);
     }
@@ -536,13 +524,15 @@ mod tests {
         let auto_increment = AutoIncrement::new();
 
         // Simulate the example from the documentation
-        parse_line(
-            "*A Y",
-            &mut data,
-            &attributes_pk_type_converter,
-            &auto_increment,
-        )
-        .ok(); // This will fail but that's expected
+        assert!(
+            parse_line(
+                "*A Y",
+                &mut data,
+                &attributes_pk_type_converter,
+                &auto_increment,
+            )
+            .is_err()
+        ); // This will fail but that's expected
 
         parse_line(
             "8500010 8500146 009",
@@ -578,5 +568,28 @@ mod tests {
 
         // Should have 2 connections (stop groups are ignored)
         assert_eq!(data.len(), 2);
+        let stop_connection = data.get(&1).unwrap();
+        let reference = r#"
+            {
+                "id":1,
+                "stop_id_1":8500010,
+                "stop_id_2":8500146,
+                "duration":9,
+                "attribute":50
+            }"#;
+        let (stop_connection, reference) = get_json_values(stop_connection, reference).unwrap();
+        assert_eq!(stop_connection, reference);
+
+        let stop_connection = data.get(&2).unwrap();
+        let reference = r#"
+            {
+                "id":2,
+                "stop_id_1":8500010,
+                "stop_id_2":8578143,
+                "duration":6,
+                "attribute":0
+            }"#;
+        let (stop_connection, reference) = get_json_values(stop_connection, reference).unwrap();
+        assert_eq!(stop_connection, reference);
     }
 }
