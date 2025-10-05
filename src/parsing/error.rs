@@ -16,6 +16,8 @@ pub enum ParsingError {
     InvalidHexDigit(char),
     #[error("Missing line type")]
     MissingLineType,
+    #[error("Error default exchange time not defined")]
+    MissingDefaultExchangeTime,
 }
 
 impl From<nom::Err<nom::error::Error<&str>>> for ParsingError {

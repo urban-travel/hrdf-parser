@@ -224,8 +224,6 @@
 /// ---
 /// Files not used by the parser:
 /// BHFART
-use std::error::Error;
-
 use nom::{
     IResult, Parser,
     branch::alt,
@@ -240,7 +238,10 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     models::{CoordinateSystem, Coordinates, Stop, Version},
-    parsing::helpers::{read_lines, string_from_n_chars_parser, string_till_eol_parser},
+    parsing::{
+        error::{PResult, ParsingError},
+        helpers::{read_lines, string_from_n_chars_parser, string_till_eol_parser},
+    },
     storage::ResourceStorage,
 };
 
@@ -382,10 +383,7 @@ fn canton_combinator(input: &str) -> IResult<&str, DescriptionLine> {
     .parse(input)
 }
 
-fn parse_description_line(
-    line: &str,
-    stops: &mut FxHashMap<i32, Stop>,
-) -> Result<(), Box<dyn Error>> {
+fn parse_description_line(line: &str, stops: &mut FxHashMap<i32, Stop>) -> PResult<()> {
     let (_, description_line) = alt((
         comment_combinator,
         restriction_combinator,
@@ -394,8 +392,7 @@ fn parse_description_line(
         country_combinator,
         canton_combinator,
     ))
-    .parse(line)
-    .map_err(|e| format!("Error {e} while parsing {line}"))?;
+    .parse(line)?;
 
     match description_line {
         DescriptionLine::Comment => {
@@ -554,7 +551,7 @@ fn times_combinator(input: &str) -> IResult<&str, TimesLines> {
     .parse(input)
 }
 
-fn parse_stop_line(line: &str, stops: &mut FxHashMap<i32, Stop>) -> Result<(), Box<dyn Error>> {
+fn parse_stop_line(line: &str, stops: &mut FxHashMap<i32, Stop>) -> PResult<()> {
     let (
         _,
         StopLine {
@@ -564,9 +561,7 @@ fn parse_stop_line(line: &str, stops: &mut FxHashMap<i32, Stop>) -> Result<(), B
             abbreviation,
             synonyms,
         },
-    ) = station_combinator
-        .parse(line)
-        .map_err(|e| format!("Error {e} while parsing {line}"))?;
+    ) = station_combinator.parse(line)?;
 
     stops.insert(
         stop_id,
@@ -579,7 +574,7 @@ fn parse_coord_line(
     line: &str,
     stops: &mut FxHashMap<i32, Stop>,
     coordinate_system: CoordinateSystem,
-) -> Result<(), Box<dyn Error>> {
+) -> PResult<()> {
     let (
         _,
         CoordLine {
@@ -588,13 +583,11 @@ fn parse_coord_line(
             y,
             altitude: _, // altitude is not stored at the moment
         },
-    ) = coordinates_combinator
-        .parse(line)
-        .map_err(|e| format!("Error {e} while parsing {line}"))?;
+    ) = coordinates_combinator.parse(line)?;
 
     let stop = stops
         .get_mut(&stop_id)
-        .ok_or(format!("Unknown stop ID {stop_id}"))?;
+        .ok_or_else(|| ParsingError::UnknownId(format!("Unknown stop ID {stop_id}")))?;
 
     match coordinate_system {
         CoordinateSystem::LV95 => {
@@ -610,7 +603,7 @@ fn parse_coord_line(
     Ok(())
 }
 
-fn parse_prios_line(line: &str, stops: &mut FxHashMap<i32, Stop>) -> Result<(), Box<dyn Error>> {
+fn parse_prios_line(line: &str, stops: &mut FxHashMap<i32, Stop>) -> PResult<()> {
     let (
         _,
         PriosLine {
@@ -618,41 +611,34 @@ fn parse_prios_line(line: &str, stops: &mut FxHashMap<i32, Stop>) -> Result<(), 
             exchange_priority,
             name: _,
         },
-    ) = prios_combinator
-        .parse(line)
-        .map_err(|e| format!("Error {e} while parsing {line}"))?;
+    ) = prios_combinator.parse(line)?;
 
     let stop = stops
         .get_mut(&stop_id)
-        .ok_or(format!("Unknown stop ID {stop_id}"))?;
+        .ok_or_else(|| ParsingError::UnknownId(format!("Unknown stop ID {stop_id}")))?;
     stop.set_exchange_priority(exchange_priority);
 
     Ok(())
 }
 
-fn parse_flags_line(line: &str, stops: &mut FxHashMap<i32, Stop>) -> Result<(), Box<dyn Error>> {
+fn parse_flags_line(line: &str, stops: &mut FxHashMap<i32, Stop>) -> PResult<()> {
     let (
         _,
         FlagsLine {
             stop_id,
             exchange_flag,
         },
-    ) = flags_combinator
-        .parse(line)
-        .map_err(|e| format!("Error {e} while parsing {line}"))?;
+    ) = flags_combinator.parse(line)?;
 
     let stop = stops
         .get_mut(&stop_id)
-        .ok_or(format!("Unknown stop ID {stop_id}"))?;
+        .ok_or_else(|| ParsingError::UnknownId(format!("Unknown stop ID {stop_id}")))?;
     stop.set_exchange_flag(exchange_flag);
 
     Ok(())
 }
 
-fn parse_times_line(
-    line: &str,
-    stops: &mut FxHashMap<i32, Stop>,
-) -> Result<Option<(i16, i16)>, Box<dyn Error>> {
+fn parse_times_line(line: &str, stops: &mut FxHashMap<i32, Stop>) -> PResult<Option<(i16, i16)>> {
     let (
         _,
         TimesLines {
@@ -660,9 +646,7 @@ fn parse_times_line(
             exchange_time_inter_city,
             exchange_time_other,
         },
-    ) = times_combinator
-        .parse(line)
-        .map_err(|e| format!("Error {e} while parsing {line}"))?;
+    ) = times_combinator.parse(line)?;
 
     let exchange_time = Some((exchange_time_inter_city, exchange_time_other));
 
@@ -673,13 +657,13 @@ fn parse_times_line(
     } else {
         let stop = stops
             .get_mut(&stop_id)
-            .ok_or(format!("Unknown Stop ID {stop_id}"))?;
+            .ok_or_else(|| ParsingError::UnknownId(format!("Unknown Stop ID {stop_id}")))?;
         stop.set_exchange_time(exchange_time);
         Ok(None)
     }
 }
 
-pub fn parse(version: Version, path: &str) -> Result<StopStorageAndExchangeTimes, Box<dyn Error>> {
+pub fn parse(version: Version, path: &str) -> PResult<StopStorageAndExchangeTimes> {
     log::info!("Parsing BAHNHOF...");
 
     let mut stops = FxHashMap::default();
@@ -687,58 +671,44 @@ pub fn parse(version: Version, path: &str) -> Result<StopStorageAndExchangeTimes
     read_lines(&format!("{path}/BAHNHOF"), 0)?
         .into_iter()
         .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| {
-            parse_stop_line(&line, &mut stops).map_err(|e| format!("Error: {e}, for line: {line}"))
-        })?;
+        .try_for_each(|line| parse_stop_line(&line, &mut stops))?;
 
     log::info!("Parsing BFKOORD_LV95...");
     read_lines(&format!("{path}/BFKOORD_LV95"), 0)?
         .into_iter()
         .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| {
-            parse_coord_line(&line, &mut stops, CoordinateSystem::LV95)
-                .map_err(|e| format!("Error: {e}, for line: {line}"))
-        })?;
+        .try_for_each(|line| parse_coord_line(&line, &mut stops, CoordinateSystem::LV95))?;
 
     log::info!("Parsing BFKOORD_WGS...");
     read_lines(&format!("{path}/BFKOORD_WGS"), 0)?
         .into_iter()
         .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| {
-            parse_coord_line(&line, &mut stops, CoordinateSystem::WGS84)
-                .map_err(|e| format!("Error: {e}, for line: {line}"))
-        })?;
+        .try_for_each(|line| parse_coord_line(&line, &mut stops, CoordinateSystem::WGS84))?;
 
     log::info!("Parsing BFPRIOS...");
     read_lines(&format!("{path}/BFPRIOS"), 0)?
         .into_iter()
         .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| {
-            parse_prios_line(&line, &mut stops).map_err(|e| format!("Error: {e}, for line: {line}"))
-        })?;
+        .try_for_each(|line| parse_prios_line(&line, &mut stops))?;
 
     log::info!("Parsing KMINFO...");
     read_lines(&format!("{path}/KMINFO"), 0)?
         .into_iter()
         .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| {
-            parse_flags_line(&line, &mut stops).map_err(|e| format!("Error: {e}, for line: {line}"))
-        })?;
+        .try_for_each(|line| parse_flags_line(&line, &mut stops))?;
 
     log::info!("Parsing UMSTEIGB...");
     let default_exchange_time = read_lines(&format!("{path}/UMSTEIGB"), 0)?
         .into_iter()
         .filter(|line| !line.trim().is_empty())
-        .map(|line| {
-            parse_times_line(&line, &mut stops).map_err(|e| format!("Error: {e}, for line: {line}"))
-        })
+        .map(|line| parse_times_line(&line, &mut stops))
         .try_fold(None, |acc, curr| match (curr, acc) {
             (Err(e), _) => Err(e),
             (Ok(None), None) => Ok(None),
             (_, Some(w)) => Ok(Some(w)),
             (Ok(Some(v)), None) => Ok(Some(v)),
         })?
-        .ok_or("Error default exchange time not defined")?;
+        .ok_or(ParsingError::MissingDefaultExchangeTime)?;
 
     let bhfart = match version {
         Version::V_5_40_41_2_0_4 | Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6 => {
@@ -750,10 +720,7 @@ pub fn parse(version: Version, path: &str) -> Result<StopStorageAndExchangeTimes
     read_lines(&format!("{path}/{bhfart}"), 0)?
         .into_iter()
         .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| {
-            parse_description_line(&line, &mut stops)
-                .map_err(|e| format!("Error: {e}, for line: {line}"))
-        })?;
+        .try_for_each(|line| parse_description_line(&line, &mut stops))?;
 
     Ok((ResourceStorage::new(stops), default_exchange_time))
 }
