@@ -14,6 +14,8 @@ pub enum ParsingError {
     Unknown(String),
     #[error("Invalid hex digit {0}")]
     InvalidHexDigit(char),
+    #[error("Missing line type")]
+    MissingLineType,
 }
 
 impl From<nom::Err<nom::error::Error<&str>>> for ParsingError {

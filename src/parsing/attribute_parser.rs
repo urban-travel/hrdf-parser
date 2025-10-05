@@ -183,10 +183,10 @@ fn parse_line(
         } => {
             let id = pk_type_converter
                 .get(&legacy_id)
-                .ok_or_else(|| ParsingError::UnknownId(legacy_id.to_string()))?;
+                .ok_or_else(|| ParsingError::UnknownId(format!("legacy_id : {legacy_id}")))?;
 
             data.get_mut(id)
-                .ok_or_else(|| ParsingError::UnknownId(id.to_string()))?
+                .ok_or_else(|| ParsingError::UnknownId(format!("id : {id}")))?
                 .set_description(*current_language, &description);
         }
         AttributeLine::Description(_s) => {

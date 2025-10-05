@@ -43,8 +43,6 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// LINIE
-use std::error::Error;
-
 use nom::{
     IResult, Parser, branch::alt, bytes::tag, character::char, combinator::map, sequence::preceded,
 };
@@ -52,8 +50,11 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     models::{Color, Line, Model},
-    parsing::helpers::{
-        i16_from_n_digits_parser, i32_from_n_digits_parser, read_lines, string_till_eol_parser,
+    parsing::{
+        error::{PResult, ParsingError},
+        helpers::{
+            i16_from_n_digits_parser, i32_from_n_digits_parser, read_lines, string_till_eol_parser,
+        },
     },
     storage::ResourceStorage,
 };
@@ -158,30 +159,34 @@ fn row_f_b_combinator(input: &str) -> IResult<&str, Option<LineType>> {
     .parse(input)
 }
 
-fn parse_line(line: &str, data: &mut FxHashMap<i32, Line>) -> Result<(), Box<dyn Error>> {
-    let (_, line_row) = alt((row_k_nt_lt_w_combinator, row_f_b_combinator))
-        .parse(line)
-        .map_err(|e| format!("Error {e} while parsing {line}"))?;
+fn parse_line(line: &str, data: &mut FxHashMap<i32, Line>) -> PResult<()> {
+    let (_, line_row) = alt((row_k_nt_lt_w_combinator, row_f_b_combinator)).parse(line)?;
 
-    match line_row.ok_or("Error missing line type")? {
+    match line_row.ok_or(ParsingError::MissingLineType)? {
         LineType::Kline { id, name } => {
             data.insert(id, Line::new(id, name));
         }
         LineType::NTline { id, short_name } => {
-            let line = data.get_mut(&id).ok_or("Type K row missing.")?;
+            let line = data.get_mut(&id).ok_or_else(|| {
+                ParsingError::UnknownId(format!("For id: {id}, type K row missing."))
+            })?;
             if id != line.id() {
-                return Err(
-                    format!("Error: Line id not corresponding, {id}, {}", line.id()).into(),
-                );
+                return Err(ParsingError::UnknownId(format!(
+                    "Line id not corresponding, {id}, {}",
+                    line.id()
+                )));
             }
             line.set_short_name(short_name);
         }
         LineType::LTline { id, long_name } => {
-            let line = data.get_mut(&id).ok_or("Type K row missing.")?;
+            let line = data.get_mut(&id).ok_or_else(|| {
+                ParsingError::UnknownId(format!("For id: {id}, type K row missing."))
+            })?;
             if id != line.id() {
-                return Err(
-                    format!("Error: Line id not corresponding, {id}, {}", line.id()).into(),
-                );
+                return Err(ParsingError::UnknownId(format!(
+                    "Line id not corresponding, {id}, {}",
+                    line.id()
+                )));
             }
             line.set_long_name(long_name);
         }
@@ -189,40 +194,51 @@ fn parse_line(line: &str, data: &mut FxHashMap<i32, Line>) -> Result<(), Box<dyn
             id,
             internal_designation,
         } => {
-            let line = data.get_mut(&id).ok_or("Type K row missing.")?;
+            let line = data.get_mut(&id).ok_or_else(|| {
+                ParsingError::UnknownId(format!("For id: {id}, type K row missing."))
+            })?;
             if id != line.id() {
-                return Err(
-                    format!("Error: Line id not corresponding, {id}, {}", line.id()).into(),
-                );
+                return Err(ParsingError::UnknownId(format!(
+                    "Line id not corresponding, {id}, {}",
+                    line.id()
+                )));
             }
             line.set_internal_designation(internal_designation);
         }
 
         LineType::Fline { id, r, g, b } => {
-            let line = data.get_mut(&id).ok_or("Type K row missing.")?;
+            let line = data.get_mut(&id).ok_or_else(|| {
+                ParsingError::UnknownId(format!("For id: {id}, type K row missing."))
+            })?;
             if id != line.id() {
-                return Err(
-                    format!("Error: Line id not corresponding, {id}, {}", line.id()).into(),
-                );
+                return Err(ParsingError::UnknownId(format!(
+                    "Line id not corresponding, {id}, {}",
+                    line.id()
+                )));
             }
             line.set_text_color(Color::new(r, g, b));
         }
         LineType::Bline { id, r, g, b } => {
-            let line = data.get_mut(&id).ok_or("Type K row missing.")?;
+            let line = data.get_mut(&id).ok_or_else(|| {
+                ParsingError::UnknownId(format!("For id: {id}, type K row missing."))
+            })?;
             if id != line.id() {
-                return Err(
-                    format!("Error: Line id not corresponding, {id}, {}", line.id()).into(),
-                );
+                return Err(ParsingError::UnknownId(format!(
+                    "Line id not corresponding, {id}, {}",
+                    line.id()
+                )));
             }
             line.set_background_color(Color::new(r, g, b));
         }
-        l => return Err(format!("Line not parsed {l:?}").into()),
+        l => {
+            return Err(ParsingError::Unknown(format!("Line not parsed {l:?}")));
+        }
     }
 
     Ok(())
 }
 
-pub fn parse(path: &str) -> Result<ResourceStorage<Line>, Box<dyn Error>> {
+pub fn parse(path: &str) -> PResult<ResourceStorage<Line>> {
     log::info!("Parsing LINIE...");
 
     let lines = read_lines(&format!("{path}/LINIE"), 0)?;
@@ -239,6 +255,8 @@ pub fn parse(path: &str) -> Result<ResourceStorage<Line>, Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
+    use crate::parsing::tests::get_json_values;
+
     use super::*;
     use pretty_assertions::assert_eq;
 
@@ -391,23 +409,28 @@ mod tests {
     #[test]
     fn test_parse_line_k_creates_new_line() {
         let mut data = FxHashMap::default();
-        let result = parse_line("0000001 K TestLine", &mut data);
-        assert!(result.is_ok());
+        parse_line("0000001 K TestLine", &mut data).unwrap();
         assert_eq!(data.len(), 1);
-        assert!(data.contains_key(&1));
+        let line = data.get(&1).unwrap();
+        let reference = r#"
+            {
+                "id":1,
+                "name": "TestLine",
+                "short_name": "",
+                "long_name": "",
+                "internal_designation": "",
+                "text_color": {"r":0,"g":0,"b":0},
+                "background_color": {"r":0,"g":0,"b":0}
+            }"#;
+        let (line, reference) = get_json_values(line, reference).unwrap();
+        assert_eq!(line, reference);
     }
 
     #[test]
+    #[should_panic]
     fn test_parse_line_nt_requires_existing_k() {
         let mut data = FxHashMap::default();
-        let result = parse_line("0000001 N T ShortName", &mut data);
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Type K row missing")
-        );
+        parse_line("0000001 N T ShortName", &mut data).unwrap();
     }
 
     #[test]
@@ -423,7 +446,18 @@ mod tests {
 
         assert_eq!(data.len(), 1);
         let line = data.get(&1).unwrap();
-        assert_eq!(line.id(), 1);
+        let reference = r#"
+            {
+                "id":1,
+                "name": "ch:1:SLNID:33:1",
+                "short_name": "Short",
+                "long_name": "Long Name",
+                "internal_designation": "internal",
+                "text_color": {"r":255,"g":128,"b":64},
+                "background_color": {"r":10,"g":20,"b":30}
+            }"#;
+        let (line, reference) = get_json_values(line, reference).unwrap();
+        assert_eq!(line, reference);
     }
 
     #[test]
@@ -436,34 +470,50 @@ mod tests {
         parse_line("0000002 N T L2", &mut data).unwrap();
 
         assert_eq!(data.len(), 2);
-        assert!(data.contains_key(&1));
-        assert!(data.contains_key(&2));
+        let line = data.get(&1).unwrap();
+        let reference = r#"
+            {
+                "id":1,
+                "name": "Line1",
+                "short_name": "L1",
+                "long_name": "",
+                "internal_designation": "",
+                "text_color": {"r":0,"g":0,"b":0},
+                "background_color": {"r":0,"g":0,"b":0}
+            }"#;
+        let (line, reference) = get_json_values(line, reference).unwrap();
+        assert_eq!(line, reference);
+        let line = data.get(&2).unwrap();
+        let reference = r#"
+            {
+                "id":2,
+                "name": "Line2",
+                "short_name": "L2",
+                "long_name": "",
+                "internal_designation": "",
+                "text_color": {"r":0,"g":0,"b":0},
+                "background_color": {"r":0,"g":0,"b":0}
+            }"#;
+        let (line, reference) = get_json_values(line, reference).unwrap();
+        assert_eq!(line, reference);
     }
 
     #[test]
+    #[should_panic]
     fn test_parse_line_id_mismatch_error() {
         let mut data = FxHashMap::default();
         data.insert(1, Line::new(999, "Wrong".to_string()));
 
-        let result = parse_line("0000001 N T Test", &mut data);
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("not corresponding")
-        );
+        parse_line("0000001 N T Test", &mut data).unwrap();
     }
 
     #[test]
+    #[should_panic]
     fn test_empty_lines_are_filtered() {
         let mut data = FxHashMap::default();
 
         // Empty line should not cause error
-        let result = parse_line("", &mut data);
-        // This will error because it can't parse, but in the actual parse() function
-        // empty lines are filtered out
-        assert!(result.is_err());
+        parse_line("", &mut data).unwrap();
     }
 
     #[test]
@@ -474,6 +524,17 @@ mod tests {
         parse_line("0000123 B 064 128 255", &mut data).unwrap();
 
         let line = data.get(&123).unwrap();
-        assert_eq!(line.id(), 123);
+        let reference = r#"
+            {
+                "id":123,
+                "name": "ColorTest",
+                "short_name": "",
+                "long_name": "",
+                "internal_designation": "",
+                "text_color": {"r":255,"g":0,"b":128},
+                "background_color": {"r":64,"g":128,"b":255}
+            }"#;
+        let (line, reference) = get_json_values(line, reference).unwrap();
+        assert_eq!(line, reference);
     }
 }

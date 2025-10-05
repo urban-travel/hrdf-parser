@@ -100,7 +100,6 @@ mod tests {
             .map(|line| parse_line(&line, &mut pk_type_converter))
             .collect::<PResult<FxHashMap<i32, Direction>>>()
             .unwrap();
-        println!("LET'S GO: {pk_type_converter:?}");
         assert_eq!(*pk_type_converter.get("R8").unwrap(), 8);
         assert_eq!(*pk_type_converter.get("R192").unwrap(), 192);
         assert_eq!(*pk_type_converter.get("R2609").unwrap(), 2609);
