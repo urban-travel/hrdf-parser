@@ -10,8 +10,6 @@ pub enum ParsingError {
     Language(#[from] strum::ParseError),
     #[error("Unkown id: {0}")]
     UnknownId(String),
-    #[error("Io error: {0}")]
-    Io(#[from] std::io::Error),
     #[error("Unkown error: {0}")]
     Unknown(String),
     #[error("Invalid hex digit {0}")]
@@ -37,18 +35,3 @@ impl From<&str> for ParsingError {
         ParsingError::Unknown(value.to_string())
     }
 }
-
-#[derive(Debug, Error)]
-pub enum HrdfError {
-    #[error("File {file}, at line {line_number}: {line}. Parsing error: {error}")]
-    Parsing {
-        error: ParsingError,
-        file: String,
-        line: String,
-        line_number: usize,
-    },
-    #[error("Io error: {0}")]
-    Io(#[from] std::io::Error),
-}
-
-pub type HResult<T> = Result<T, HrdfError>;

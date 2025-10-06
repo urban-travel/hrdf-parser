@@ -23,9 +23,10 @@ use nom::{IResult, Parser, character::char, sequence::separated_pair};
 use rustc_hash::FxHashMap;
 
 use crate::{
+    error::{HResult, HrdfError},
     models::{InformationText, Language},
     parsing::{
-        error::{HResult, HrdfError, PResult},
+        error::PResult,
         helpers::{i32_from_n_digits_parser, read_lines, string_till_eol_parser},
     },
     storage::ResourceStorage,

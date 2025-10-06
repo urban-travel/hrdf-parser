@@ -38,9 +38,10 @@ use nom::{IResult, Parser, character::char, combinator::map, sequence::preceded}
 use rustc_hash::FxHashMap;
 
 use crate::{
+    error::{HResult, HrdfError},
     models::{DirectionType, ExchangeTimeLine, LineInfo},
     parsing::{
-        error::{HResult, HrdfError, PResult},
+        error::PResult,
         helpers::{
             i16_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
             string_from_n_chars_parser,

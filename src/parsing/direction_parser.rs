@@ -15,9 +15,10 @@ use nom::{IResult, Parser, character::char};
 use rustc_hash::FxHashMap;
 
 use crate::{
+    error::{HResult, HrdfError},
     models::Direction,
     parsing::{
-        error::{HResult, HrdfError, PResult},
+        error::PResult,
         helpers::{direction_parser, read_lines, string_till_eol_parser},
     },
     storage::ResourceStorage,

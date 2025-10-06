@@ -19,9 +19,10 @@ use nom::{IResult, Parser, character::char, sequence::separated_pair};
 use rustc_hash::FxHashMap;
 
 use crate::{
+    error::{HResult, HrdfError},
     models::{Holiday, Language},
     parsing::{
-        error::{HResult, HrdfError, PResult, ParsingError},
+        error::{PResult, ParsingError},
         helpers::{read_lines, string_from_n_chars_parser, string_till_eol_parser},
     },
     storage::ResourceStorage,

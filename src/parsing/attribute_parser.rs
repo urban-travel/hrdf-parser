@@ -58,9 +58,10 @@ use nom::{
 use rustc_hash::FxHashMap;
 
 use crate::{
+    error::{HResult, HrdfError},
     models::{Attribute, Language, Model},
     parsing::{
-        error::{HResult, HrdfError, PResult, ParsingError},
+        error::{PResult, ParsingError},
         helpers::{
             i16_from_n_digits_parser, read_lines, string_from_n_chars_parser,
             string_till_eol_parser,

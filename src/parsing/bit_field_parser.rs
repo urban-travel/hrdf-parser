@@ -34,9 +34,10 @@ use nom::{
 use rustc_hash::FxHashMap;
 
 use crate::{
+    error::{HResult, HrdfError},
     models::BitField,
     parsing::{
-        error::{HResult, HrdfError, PResult, ParsingError},
+        error::{PResult, ParsingError},
         helpers::{i32_from_n_digits_parser, read_lines},
     },
     storage::ResourceStorage,

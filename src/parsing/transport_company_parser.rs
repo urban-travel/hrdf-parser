@@ -46,10 +46,11 @@ use nom::{
 };
 use rustc_hash::FxHashMap;
 
+use crate::error::{HResult, HrdfError};
 use crate::{
     models::{Language, TransportCompany},
     parsing::{
-        error::{HResult, HrdfError, PResult},
+        error::PResult,
         helpers::{read_lines, string_till_eol_parser},
     },
     storage::ResourceStorage,

@@ -20,9 +20,10 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     JourneyId,
+    error::{HResult, HrdfError},
     models::{Journey, JourneyMetadataEntry, JourneyMetadataType, JourneyRouteEntry},
     parsing::{
-        error::{HResult, HrdfError, PResult, ParsingError},
+        error::{PResult, ParsingError},
         helpers::{
             direction_parser, i32_from_n_digits_parser, optional_i32_from_n_digits_parser,
             read_lines, string_from_n_chars_parser,

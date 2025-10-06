@@ -23,11 +23,9 @@ use nom::{
 use rustc_hash::FxHashMap;
 
 use crate::{
+    error::{HResult, HrdfError},
     models::{Model, TimetableMetadataEntry},
-    parsing::{
-        error::{HResult, HrdfError, PResult},
-        helpers::read_lines,
-    },
+    parsing::{error::PResult, helpers::read_lines},
     storage::ResourceStorage,
     utils::AutoIncrement,
 };
