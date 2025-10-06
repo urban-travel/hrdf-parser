@@ -12,6 +12,10 @@ pub enum HrdfError {
     },
     #[error("Io error: {0}")]
     Io(#[from] std::io::Error),
+    #[error("Missing key \"start_date\"")]
+    MissingStartDate,
+    #[error("Missing key \"end_date\"")]
+    MissingEndDate,
 }
 
 pub type HResult<T> = Result<T, HrdfError>;
