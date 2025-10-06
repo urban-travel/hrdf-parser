@@ -94,7 +94,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     models::{Language, Model, TransportType},
     parsing::{
-        error::{PResult, ParsingError},
+        error::{HResult, HrdfError, PResult, ParsingError},
         helpers::{
             optional_i32_from_n_digits_parser, read_lines, string_from_n_chars_parser,
             string_till_eol_parser,
@@ -337,10 +337,11 @@ fn parse_line(
     Ok(())
 }
 
-pub fn parse(path: &str) -> PResult<TransportTypeAndTypeConverter> {
+pub fn parse(path: &str) -> HResult<TransportTypeAndTypeConverter> {
     log::info!("Parsing ZUGART...");
 
-    let transport_types = read_lines(&format!("{path}/ZUGART"), 0)?;
+    let file = format!("{path}/ZUGART");
+    let transport_types = read_lines(&file, 0)?;
 
     let auto_increment = AutoIncrement::new();
     let mut data = FxHashMap::default();
@@ -349,8 +350,9 @@ pub fn parse(path: &str) -> PResult<TransportTypeAndTypeConverter> {
 
     transport_types
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| {
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .try_for_each(|(line_number, line)| {
             parse_line(
                 &line,
                 &mut data,
@@ -358,6 +360,12 @@ pub fn parse(path: &str) -> PResult<TransportTypeAndTypeConverter> {
                 &auto_increment,
                 &mut current_language,
             )
+            .map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(&file),
+                line,
+                line_number,
+            })
         })?;
 
     Ok((ResourceStorage::new(data), pk_type_converter))

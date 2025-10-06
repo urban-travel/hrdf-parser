@@ -53,7 +53,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     models::{Model, StopConnection},
     parsing::{
-        error::{PResult, ParsingError},
+        error::{HResult, HrdfError, PResult, ParsingError},
         helpers::{
             i16_from_n_digits_parser, i32_from_n_digits_parser, read_lines, string_till_eol_parser,
         },
@@ -161,23 +161,31 @@ fn parse_line(
 pub fn parse(
     path: &str,
     attributes_pk_type_converter: &FxHashMap<String, i32>,
-) -> PResult<ResourceStorage<StopConnection>> {
+) -> HResult<ResourceStorage<StopConnection>> {
     log::info!("Parsing METABHF...");
 
     let auto_increment = AutoIncrement::new();
     let mut stations = FxHashMap::default();
 
-    let station_lines = read_lines(&format!("{path}/METABHF"), 0)?;
+    let file = format!("{path}/METABHF");
+    let station_lines = read_lines(&file, 0)?;
     station_lines
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| {
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .try_for_each(|(line_number, line)| {
             parse_line(
                 &line,
                 &mut stations,
                 attributes_pk_type_converter,
                 &auto_increment,
             )
+            .map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(&file),
+                line,
+                line_number,
+            })
         })?;
 
     Ok(ResourceStorage::new(stations))

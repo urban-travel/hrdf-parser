@@ -31,7 +31,7 @@ use crate::{
     JourneyId,
     models::ExchangeTimeJourney,
     parsing::{
-        error::{PResult, ParsingError},
+        error::{HResult, HrdfError, PResult, ParsingError},
         helpers::{
             i16_from_n_digits_parser, i32_from_n_digits_parser, optional_i32_from_n_digits_parser,
             read_lines, string_from_n_chars_parser,
@@ -131,16 +131,27 @@ fn parse_line(
 pub fn parse(
     path: &str,
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
-) -> PResult<ResourceStorage<ExchangeTimeJourney>> {
+) -> HResult<ResourceStorage<ExchangeTimeJourney>> {
     log::info!("Parsing UMSTEIGZ...");
 
-    let lines = read_lines(&format!("{path}/UMSTEIGZ"), 0)?;
+    let file = format!("{path}/UMSTEIGZ");
+    let lines = read_lines(&file, 0)?;
     let auto_increment = AutoIncrement::new();
     let exchanges = lines
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| parse_line(&line, &auto_increment, journeys_pk_type_converter))
-        .collect::<PResult<FxHashMap<i32, ExchangeTimeJourney>>>()?;
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .map(|(line_number, line)| {
+            parse_line(&line, &auto_increment, journeys_pk_type_converter).map_err(|e| {
+                HrdfError::Parsing {
+                    error: e,
+                    file: String::from(&file),
+                    line,
+                    line_number,
+                }
+            })
+        })
+        .collect::<HResult<FxHashMap<i32, ExchangeTimeJourney>>>()?;
 
     Ok(ResourceStorage::new(exchanges))
 }

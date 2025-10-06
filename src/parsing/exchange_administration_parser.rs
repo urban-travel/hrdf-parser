@@ -28,7 +28,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     models::ExchangeTimeAdministration,
     parsing::{
-        error::PResult,
+        error::{HResult, HrdfError, PResult},
         helpers::{
             i16_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
             string_from_n_chars_parser,
@@ -65,16 +65,25 @@ fn parse_line(
     ))
 }
 
-pub fn parse(path: &str) -> PResult<ResourceStorage<ExchangeTimeAdministration>> {
+pub fn parse(path: &str) -> HResult<ResourceStorage<ExchangeTimeAdministration>> {
     log::info!("Parsing UMSTEIGV...");
 
-    let lines = read_lines(&format!("{path}/UMSTEIGV"), 0)?;
+    let file = format!("{path}/UMSTEIGV");
+    let lines = read_lines(&file, 0)?;
     let auto_increment = AutoIncrement::new();
     let exchanges = lines
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| parse_line(&line, &auto_increment))
-        .collect::<PResult<FxHashMap<i32, ExchangeTimeAdministration>>>()?;
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .map(|(line_number, line)| {
+            parse_line(&line, &auto_increment).map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(&file),
+                line,
+                line_number,
+            })
+        })
+        .collect::<HResult<FxHashMap<i32, ExchangeTimeAdministration>>>()?;
 
     Ok(ResourceStorage::new(exchanges))
 }

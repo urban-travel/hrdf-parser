@@ -80,6 +80,7 @@
 /// ---
 /// Note: this parser collects both the Platform and JourneyPlatform resources.
 use nom::{
+    IResult, Parser,
     branch::alt,
     bytes::{complete::tag, streaming::take_until},
     character::{
@@ -89,22 +90,21 @@ use nom::{
     combinator::{map, opt},
     number::complete::double,
     sequence::{delimited, preceded},
-    IResult, Parser,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
+    JourneyId, Version,
     models::{CoordinateSystem, Coordinates, JourneyPlatform, Model, Platform},
     parsing::{
-        error::{PResult, ParsingError},
+        error::{HResult, HrdfError, PResult, ParsingError},
         helpers::{
             i32_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
             string_from_n_chars_parser, string_till_eol_parser,
         },
     },
     storage::ResourceStorage,
-    utils::{create_time_from_value, AutoIncrement},
-    JourneyId, Version,
+    utils::{AutoIncrement, create_time_from_value},
 };
 
 enum PlatformLine {
@@ -392,7 +392,7 @@ pub fn parse(
     version: Version,
     path: &str,
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
-) -> PResult<(ResourceStorage<JourneyPlatform>, ResourceStorage<Platform>)> {
+) -> HResult<(ResourceStorage<JourneyPlatform>, ResourceStorage<Platform>)> {
     let prefix = match version {
         Version::V_5_40_41_2_0_7 => "GLEISE",
         Version::V_5_40_41_2_0_4 | Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6 => "GLEIS",
@@ -404,11 +404,13 @@ pub fn parse(
     let mut journey_platform = FxHashMap::default();
 
     log::info!("Parsing {prefix}_LV95...");
-    let platforms_lv95 = read_lines(&format!("{path}/{prefix}_LV95"), 0)?;
+    let file = format!("{path}/{prefix}_LV95");
+    let platforms_lv95 = read_lines(&file, 0)?;
     platforms_lv95
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| {
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .try_for_each(|(line_number, line)| {
             parse_line(
                 &line,
                 &mut platforms,
@@ -418,14 +420,22 @@ pub fn parse(
                 &auto_increment,
                 CoordinateSystem::LV95,
             )
+            .map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(&file),
+                line,
+                line_number,
+            })
         })?;
 
     log::info!("Parsing {prefix}_WGS...");
-    let platforms_wgs84 = read_lines(&format!("{path}/{prefix}_WGS"), 0)?;
+    let file = format!("{path}/{prefix}_WGS");
+    let platforms_wgs84 = read_lines(&file, 0)?;
     platforms_wgs84
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| {
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .try_for_each(|(line_number, line)| {
             parse_line(
                 &line,
                 &mut platforms,
@@ -435,6 +445,12 @@ pub fn parse(
                 &auto_increment,
                 CoordinateSystem::WGS84,
             )
+            .map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(&file),
+                line,
+                line_number,
+            })
         })?;
 
     Ok((

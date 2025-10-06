@@ -51,7 +51,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     models::{Color, Line, Model},
     parsing::{
-        error::{PResult, ParsingError},
+        error::{HResult, HrdfError, PResult, ParsingError},
         helpers::{
             i16_from_n_digits_parser, i32_from_n_digits_parser, read_lines, string_till_eol_parser,
         },
@@ -238,17 +238,26 @@ fn parse_line(line: &str, data: &mut FxHashMap<i32, Line>) -> PResult<()> {
     Ok(())
 }
 
-pub fn parse(path: &str) -> PResult<ResourceStorage<Line>> {
+pub fn parse(path: &str) -> HResult<ResourceStorage<Line>> {
     log::info!("Parsing LINIE...");
 
-    let lines = read_lines(&format!("{path}/LINIE"), 0)?;
+    let file = format!("{path}/LINIE");
+    let lines = read_lines(&file, 0)?;
 
     let mut data = FxHashMap::default();
 
     lines
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| parse_line(&line, &mut data))?;
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .try_for_each(|(line_number, line)| {
+            parse_line(&line, &mut data).map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(&file),
+                line,
+                line_number,
+            })
+        })?;
 
     Ok(ResourceStorage::new(data))
 }

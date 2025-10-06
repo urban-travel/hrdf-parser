@@ -17,7 +17,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     models::Direction,
     parsing::{
-        error::PResult,
+        error::{HResult, HrdfError, PResult},
         helpers::{direction_parser, read_lines, string_till_eol_parser},
     },
     storage::ResourceStorage,
@@ -45,16 +45,25 @@ fn parse_line(
     Ok((id, Direction::new(id, name)))
 }
 
-pub fn parse(path: &str) -> PResult<DirectionAndTypeConverter> {
+pub fn parse(path: &str) -> HResult<DirectionAndTypeConverter> {
     log::info!("Parsing RICHTUNG...");
 
-    let lines = read_lines(&format!("{path}/RICHTUNG"), 0)?;
+    let file = format!("{path}/RICHTUNG");
+    let lines = read_lines(&file, 0)?;
     let mut pk_type_converter = FxHashMap::default();
     let directions = lines
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| parse_line(&line, &mut pk_type_converter))
-        .collect::<PResult<FxHashMap<i32, Direction>>>()?;
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .map(|(line_number, line)| {
+            parse_line(&line, &mut pk_type_converter).map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(&file),
+                line,
+                line_number,
+            })
+        })
+        .collect::<HResult<FxHashMap<i32, Direction>>>()?;
     Ok((ResourceStorage::new(directions), pk_type_converter))
 }
 

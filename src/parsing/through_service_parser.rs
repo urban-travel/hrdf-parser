@@ -37,7 +37,7 @@ use crate::{
     JourneyId,
     models::{Model, ThroughService},
     parsing::{
-        error::PResult,
+        error::{HResult, HrdfError, PResult},
         helpers::{i32_from_n_digits_parser, read_lines, string_from_n_chars_parser},
     },
     storage::ResourceStorage,
@@ -146,22 +146,30 @@ fn parse_line(
 pub fn parse(
     path: &str,
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
-) -> PResult<ResourceStorage<ThroughService>> {
+) -> HResult<ResourceStorage<ThroughService>> {
     log::info!("Parsing DURCHBI...");
     let auto_increment = AutoIncrement::new();
     let mut through_services = FxHashMap::default();
 
-    let through_service_lines = read_lines(&format!("{path}/DURCHBI"), 0)?;
+    let file = format!("{path}/DURCHBI");
+    let through_service_lines = read_lines(&file, 0)?;
     through_service_lines
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| {
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .try_for_each(|(line_number, line)| {
             parse_line(
                 &line,
                 &mut through_services,
                 journeys_pk_type_converter,
                 &auto_increment,
             )
+            .map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(&file),
+                line,
+                line_number,
+            })
         })?;
     Ok(ResourceStorage::new(through_services))
 }

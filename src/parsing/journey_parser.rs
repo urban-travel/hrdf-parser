@@ -7,8 +7,6 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// FPLAN
-use std::error::Error;
-
 use chrono::NaiveTime;
 use nom::{
     IResult, Parser,
@@ -23,9 +21,12 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{
     JourneyId,
     models::{Journey, JourneyMetadataEntry, JourneyMetadataType, JourneyRouteEntry},
-    parsing::helpers::{
-        direction_parser, i32_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
-        string_from_n_chars_parser,
+    parsing::{
+        error::{HResult, HrdfError, PResult, ParsingError},
+        helpers::{
+            direction_parser, i32_from_n_digits_parser, optional_i32_from_n_digits_parser,
+            read_lines, string_from_n_chars_parser,
+        },
     },
     storage::ResourceStorage,
     utils::{AutoIncrement, create_time_from_value},
@@ -553,7 +554,7 @@ fn parse_line(
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
     attributes_pk_type_converter: &FxHashMap<String, i32>,
     directions_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<(), Box<dyn Error>> {
+) -> PResult<()> {
     let (_res, journey_lines) = alt((
         row_z_combinator,
         row_g_combinator,
@@ -565,8 +566,7 @@ fn parse_line(
         row_ci_co_combinator,
         row_journey_description_combinator,
     ))
-    .parse(line)
-    .map_err(|e| format!("Failed to parse line '{}': {}", line, e))?;
+    .parse(line)?;
 
     match journey_lines {
         JourneyLines::Zline {
@@ -585,12 +585,18 @@ fn parse_line(
             stop_from_id,
             stop_to_id,
         } => {
-            let journey = data
-                .get_mut(&auto_increment.get())
-                .ok_or("Type A row missing.")?;
-            let transport_type_id = *transport_types_pk_type_converter
-                .get(&offer)
-                .ok_or("Unknown legacy ID")?;
+            let journey = data.get_mut(&auto_increment.get()).ok_or_else(|| {
+                ParsingError::UnknownId(format!(
+                    "Type A row missing for id {}.",
+                    auto_increment.get()
+                ))
+            })?;
+            let transport_type_id =
+                *transport_types_pk_type_converter
+                    .get(&offer)
+                    .ok_or_else(|| {
+                        ParsingError::UnknownId(format!("Unknown Offer legacy ID: {offer}"))
+                    })?;
 
             journey.add_metadata_entry(
                 JourneyMetadataType::TransportType,
@@ -611,9 +617,12 @@ fn parse_line(
             stop_to_id,
             bit_field_id,
         } => {
-            let journey = data
-                .get_mut(&auto_increment.get())
-                .ok_or("Type A row missing.")?;
+            let journey = data.get_mut(&auto_increment.get()).ok_or_else(|| {
+                ParsingError::UnknownId(format!(
+                    "Type A row missing for id {}.",
+                    auto_increment.get()
+                ))
+            })?;
             journey.add_metadata_entry(
                 JourneyMetadataType::BitField,
                 JourneyMetadataEntry::new(
@@ -634,12 +643,15 @@ fn parse_line(
             stop_to_id,
             reference: _,
         } => {
-            let journey = data
-                .get_mut(&auto_increment.get())
-                .ok_or("Type A row missing.")?;
-            let attribute_id = *attributes_pk_type_converter
-                .get(&offer)
-                .ok_or("Unknown legacy ID")?;
+            let journey = data.get_mut(&auto_increment.get()).ok_or_else(|| {
+                ParsingError::UnknownId(format!(
+                    "Type A row missing for id {}.",
+                    auto_increment.get()
+                ))
+            })?;
+            let attribute_id = *attributes_pk_type_converter.get(&offer).ok_or_else(|| {
+                ParsingError::UnknownId(format!("Unknown offer legacy Id: {offer}."))
+            })?;
 
             journey.add_metadata_entry(
                 JourneyMetadataType::Attribute,
@@ -664,9 +676,12 @@ fn parse_line(
             departure_time,
             arrival_time,
         } => {
-            let journey = data
-                .get_mut(&auto_increment.get())
-                .ok_or("Type A row missing.")?;
+            let journey = data.get_mut(&auto_increment.get()).ok_or_else(|| {
+                ParsingError::UnknownId(format!(
+                    "Type A row missing for id {}.",
+                    auto_increment.get()
+                ))
+            })?;
             let arrival_time = create_time(arrival_time);
             let departure_time = create_time(departure_time);
 
@@ -692,9 +707,12 @@ fn parse_line(
             departure_time,
             arrival_time,
         } => {
-            let journey = data
-                .get_mut(&auto_increment.get())
-                .ok_or("Type A row missing.")?;
+            let journey = data.get_mut(&auto_increment.get()).ok_or_else(|| {
+                ParsingError::UnknownId(format!(
+                    "Type A row missing for id {}.",
+                    auto_increment.get()
+                ))
+            })?;
             let arrival_time = create_time(arrival_time);
             let departure_time = create_time(departure_time);
 
@@ -703,7 +721,11 @@ fn parse_line(
             } else {
                 let id = *directions_pk_type_converter
                     .get(&ref_direction_code)
-                    .ok_or("Unknown legacy ID")?;
+                    .ok_or_else(|| {
+                        ParsingError::UnknownId(format!(
+                            "Type A row missing for id {ref_direction_code}."
+                        ))
+                    })?;
                 Some(id)
             };
 
@@ -728,9 +750,12 @@ fn parse_line(
             departure_time,
             arrival_time,
         } => {
-            let journey = data
-                .get_mut(&auto_increment.get())
-                .ok_or("Type A row missing.")?;
+            let journey = data.get_mut(&auto_increment.get()).ok_or_else(|| {
+                ParsingError::UnknownId(format!(
+                    "Type A row missing for id {}.",
+                    auto_increment.get()
+                ))
+            })?;
             let arrival_time = create_time(arrival_time);
             let departure_time = create_time(departure_time);
 
@@ -767,9 +792,12 @@ fn parse_line(
             departure_time,
             arrival_time,
         } => {
-            let journey = data
-                .get_mut(&auto_increment.get())
-                .ok_or("Type A row missing.")?;
+            let journey = data.get_mut(&auto_increment.get()).ok_or_else(|| {
+                ParsingError::UnknownId(format!(
+                    "Type A row missing for id {}.",
+                    auto_increment.get()
+                ))
+            })?;
             let arrival_time = create_time(arrival_time);
             let departure_time = create_time(departure_time);
 
@@ -794,9 +822,12 @@ fn parse_line(
             departure_time,
             arrival_time,
         } => {
-            let journey = data
-                .get_mut(&auto_increment.get())
-                .ok_or("Type A row missing.")?;
+            let journey = data.get_mut(&auto_increment.get()).ok_or_else(|| {
+                ParsingError::UnknownId(format!(
+                    "Type A row missing for id {}.",
+                    auto_increment.get()
+                ))
+            })?;
             let arrival_time = create_time(arrival_time);
             let departure_time = create_time(departure_time);
 
@@ -822,9 +853,12 @@ fn parse_line(
             journey_id: _,
             administration: _,
         } => {
-            let journey = data
-                .get_mut(&auto_increment.get())
-                .ok_or("Type A row missing.")?;
+            let journey = data.get_mut(&auto_increment.get()).ok_or_else(|| {
+                ParsingError::UnknownId(format!(
+                    "Type A row missing for id {}.",
+                    auto_increment.get()
+                ))
+            })?;
             let arrival_time = create_time(arrival_time);
             let departure_time = create_time(departure_time);
 
@@ -843,9 +877,10 @@ pub fn parse(
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
     attributes_pk_type_converter: &FxHashMap<String, i32>,
     directions_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<JourneyAndTypeConverter, Box<dyn Error>> {
+) -> HResult<JourneyAndTypeConverter> {
     log::info!("Parsing FPLAN...");
-    let lines = read_lines(&format!("{path}/FPLAN"), 0)?;
+    let file = format!("{path}/FPLAN");
+    let lines = read_lines(&file, 0)?;
 
     let auto_increment = AutoIncrement::new();
     let mut data = FxHashMap::default();
@@ -853,8 +888,9 @@ pub fn parse(
 
     lines
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| {
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .try_for_each(|(line_number, line)| {
             parse_line(
                 &line,
                 &mut data,
@@ -864,6 +900,12 @@ pub fn parse(
                 attributes_pk_type_converter,
                 directions_pk_type_converter,
             )
+            .map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(&file),
+                line,
+                line_number,
+            })
         })?;
 
     Ok((ResourceStorage::new(data), pk_type_converter))
@@ -1057,7 +1099,7 @@ mod tests {
 
         type ZlineRow = (i32, String, i32, Option<i32>, Option<i32>);
 
-        fn row_z_parser<'a>(input: &'a str) -> Result<(&'a str, ZlineRow), Box<dyn Error + 'a>> {
+        fn row_z_parser(input: &str) -> PResult<(&str, ZlineRow)> {
             let (res, row_z) = row_z_combinator(input)?;
             match row_z {
                 JourneyLines::Zline {
@@ -1076,7 +1118,7 @@ mod tests {
                         cycle_dura_min,
                     ),
                 )),
-                l => Err(format!("Zline expected but got {l:?}").into()),
+                l => Err(format!("Zline expected but got {l:?}").as_str().into()),
             }
         }
 
@@ -1123,7 +1165,7 @@ mod tests {
         use pretty_assertions::assert_eq;
 
         type GlineRow = (String, Option<i32>, Option<i32>);
-        fn row_g_parser<'a>(input: &'a str) -> Result<(&'a str, GlineRow), Box<dyn Error + 'a>> {
+        fn row_g_parser(input: &str) -> PResult<(&str, GlineRow)> {
             let (res, row_g) = row_g_combinator(input)?;
             match row_g {
                 JourneyLines::Gline {
@@ -1131,7 +1173,7 @@ mod tests {
                     stop_from_id,
                     stop_to_id,
                 } => Ok((res, (offer, stop_from_id, stop_to_id))),
-                l => Err(format!("Gline expected but got {l:?}").into()),
+                l => Err(format!("Gline expected but got {l:?}").as_str().into()),
             }
         }
 
@@ -1171,9 +1213,7 @@ mod tests {
 
         type AVElineRow = (Option<i32>, Option<i32>, Option<i32>);
 
-        fn row_a_ve_parser<'a>(
-            input: &'a str,
-        ) -> Result<(&'a str, AVElineRow), Box<dyn Error + 'a>> {
+        fn row_a_ve_parser(input: &str) -> PResult<(&str, AVElineRow)> {
             let (res, row_a_ve) = row_a_ve_combinator(input)?;
             match row_a_ve {
                 JourneyLines::AVEline {
@@ -1181,7 +1221,7 @@ mod tests {
                     stop_to_id,
                     bit_field_id: reference,
                 } => Ok((res, (stop_from_id, stop_to_id, reference))),
-                l => Err(format!("AVEline expected but got {l:?}").into()),
+                l => Err(format!("AVEline expected but got {l:?}").as_str().into()),
             }
         }
 
@@ -1221,7 +1261,7 @@ mod tests {
 
         type AlineRow = (String, Option<i32>, Option<i32>, Option<i32>);
 
-        fn row_a_parser<'a>(input: &'a str) -> Result<(&'a str, AlineRow), Box<dyn Error + 'a>> {
+        fn row_a_parser(input: &str) -> PResult<(&str, AlineRow)> {
             let (res, row_a) = row_a_combinator(input)?;
             match row_a {
                 JourneyLines::Aline {
@@ -1230,7 +1270,7 @@ mod tests {
                     stop_to_id,
                     reference,
                 } => Ok((res, (offer, stop_from_id, stop_to_id, reference))),
-                l => Err(format!("Aline expected but got {l:?}").into()),
+                l => Err(format!("Aline expected but got {l:?}").as_str().into()),
             }
         }
 
@@ -1295,7 +1335,7 @@ mod tests {
             Option<i32>,
         );
 
-        fn row_i_parser<'a>(input: &'a str) -> Result<(&'a str, IlineRow), Box<dyn Error + 'a>> {
+        fn row_i_parser(input: &str) -> PResult<(&str, IlineRow)> {
             let (res, row_i) = row_i_combinator(input)?;
             match row_i {
                 JourneyLines::Iline {
@@ -1318,7 +1358,7 @@ mod tests {
                         arrival_time,
                     ),
                 )),
-                l => Err(format!("Iline expected but got {l:?}").into()),
+                l => Err(format!("Iline expected but got {l:?}").as_str().into()),
             }
         }
 
@@ -1386,7 +1426,7 @@ mod tests {
 
         type LlineRow = (String, Option<i32>, Option<i32>, Option<i32>, Option<i32>);
 
-        fn row_l_parser<'a>(input: &'a str) -> Result<(&'a str, LlineRow), Box<dyn Error + 'a>> {
+        fn row_l_parser(input: &str) -> PResult<(&str, LlineRow)> {
             let (res, row_l) = row_l_combinator(input)?;
             match row_l {
                 JourneyLines::Lline {
@@ -1405,7 +1445,7 @@ mod tests {
                         arrival_time,
                     ),
                 )),
-                l => Err(format!("Lline expected but got {l:?}").into()),
+                l => Err(format!("Lline expected but got {l:?}").as_str().into()),
             }
         }
 
@@ -1469,7 +1509,7 @@ mod tests {
             Option<i32>,
         );
 
-        fn row_r_parser<'a>(input: &'a str) -> Result<(&'a str, RlineRow), Box<dyn Error + 'a>> {
+        fn row_r_parser(input: &str) -> PResult<(&str, RlineRow)> {
             let (res, row_r) = row_r_combinator(input)?;
             match row_r {
                 JourneyLines::Rline {
@@ -1492,7 +1532,7 @@ mod tests {
                         ),
                     ))
                 }
-                l => Err(format!("Rline expected but got {l:?}").into()),
+                l => Err(format!("Rline expected but got {l:?}").as_str().into()),
             }
         }
 
@@ -1562,9 +1602,7 @@ mod tests {
             Option<i32>,
         );
 
-        fn row_ci_co_parser<'a>(
-            input: &'a str,
-        ) -> Result<(&'a str, CiCoLine<'a>), Box<dyn Error + 'a>> {
+        fn row_ci_co_parser<'a>(input: &'a str) -> PResult<(&'a str, CiCoLine<'a>)> {
             let (res, row_ci_co) = row_ci_co_combinator(input)?;
             match row_ci_co {
                 JourneyLines::CiLine {
@@ -1601,7 +1639,7 @@ mod tests {
                         arrival_time,
                     ),
                 )),
-                l => Err(format!("Rline expected but got {l:?}").into()),
+                l => Err(format!("Rline expected but got {l:?}").as_str().into()),
             }
         }
 
@@ -1645,9 +1683,7 @@ mod tests {
     mod row_journey_description {
         type JourneyDescriptorRow = (i32, String, Option<i32>, Option<i32>, Option<i32>, String);
 
-        fn row_journey_description_parser<'a>(
-            input: &'a str,
-        ) -> Result<(&'a str, JourneyDescriptorRow), Box<dyn Error + 'a>> {
+        fn row_journey_description_parser(input: &str) -> PResult<(&str, JourneyDescriptorRow)> {
             let (res, row_j) = row_journey_description_combinator(input)?;
             match row_j {
                 JourneyLines::JourneyLine {
@@ -1668,7 +1704,7 @@ mod tests {
                         administration,
                     ),
                 )),
-                l => Err(format!("Rline expected but got {l:?}").into()),
+                l => Err(format!("Rline expected but got {l:?}").as_str().into()),
             }
         }
         // Note this useful idiom: importing names from outer (for mod tests) scope.

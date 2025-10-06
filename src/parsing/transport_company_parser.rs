@@ -49,7 +49,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     models::{Language, TransportCompany},
     parsing::{
-        error::PResult,
+        error::{HResult, HrdfError, PResult},
         helpers::{read_lines, string_till_eol_parser},
     },
     storage::ResourceStorage,
@@ -209,7 +209,7 @@ fn parse_transport_company_line(
     Ok(())
 }
 
-pub fn parse(path: &str) -> PResult<ResourceStorage<TransportCompany>> {
+pub fn parse(path: &str) -> HResult<ResourceStorage<TransportCompany>> {
     let languages = [
         Language::German,
         Language::English,
@@ -226,11 +226,20 @@ pub fn parse(path: &str) -> PResult<ResourceStorage<TransportCompany>> {
             Language::Italian => "IT",
         };
         log::info!("Parsing BETRIEB_{postfix}...");
-        read_lines(&format!("{path}/BETRIEB_{postfix}"), 0)?
+        let file = format!("{path}/BETRIEB_{postfix}");
+        read_lines(&file, 0)?
             .into_iter()
-            .filter(|line| !line.trim().is_empty())
-            .try_for_each(|line| {
-                parse_transport_company_line(&line, &mut transport_company, language)
+            .enumerate()
+            .filter(|(_, line)| !line.trim().is_empty())
+            .try_for_each(|(line_number, line)| {
+                parse_transport_company_line(&line, &mut transport_company, language).map_err(|e| {
+                    HrdfError::Parsing {
+                        error: e,
+                        file: String::from(&file),
+                        line,
+                        line_number,
+                    }
+                })
             })?;
     }
 

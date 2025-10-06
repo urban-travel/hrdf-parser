@@ -36,7 +36,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     models::BitField,
     parsing::{
-        error::{PResult, ParsingError},
+        error::{HResult, HrdfError, PResult, ParsingError},
         helpers::{i32_from_n_digits_parser, read_lines},
     },
     storage::ResourceStorage,
@@ -63,14 +63,23 @@ fn parse_line(line: &str) -> PResult<(i32, BitField)> {
     Ok((id, BitField::new(id, bits)))
 }
 
-pub fn parse(path: &str) -> PResult<ResourceStorage<BitField>> {
+pub fn parse(path: &str) -> HResult<ResourceStorage<BitField>> {
     log::info!("Parsing BITFELD...");
-    let lines = read_lines(&format!("{path}/BITFELD"), 0)?;
+    let file = format!("{path}/BITFELD");
+    let lines = read_lines(&file, 0)?;
     let bitfields = lines
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| parse_line(&line))
-        .collect::<PResult<FxHashMap<i32, BitField>>>()?;
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .map(|(line_number, line)| {
+            parse_line(&line).map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(&file),
+                line,
+                line_number,
+            })
+        })
+        .collect::<HResult<FxHashMap<i32, BitField>>>()?;
     Ok(ResourceStorage::new(bitfields))
 }
 

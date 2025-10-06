@@ -17,14 +17,17 @@
 /// 4 file(s).
 /// File(s) read by the parser:
 /// INFOTEXT_DE, INFOTEXT_EN, INFOTEXT_FR, INFOTEXT_IT
-use std::{error::Error, str::FromStr};
+use std::str::FromStr;
 
 use nom::{IResult, Parser, character::char, sequence::separated_pair};
 use rustc_hash::FxHashMap;
 
 use crate::{
     models::{InformationText, Language},
-    parsing::helpers::{i32_from_n_digits_parser, read_lines, string_till_eol_parser},
+    parsing::{
+        error::{HResult, HrdfError, PResult},
+        helpers::{i32_from_n_digits_parser, read_lines, string_till_eol_parser},
+    },
     storage::ResourceStorage,
 };
 
@@ -40,10 +43,10 @@ fn parse_infotext_row(input: &str) -> IResult<&str, (i32, String)> {
 fn parse_line(
     line: &str,
     infotextmap: &mut FxHashMap<i32, InformationText>,
-    current_language: Language,
-) -> Result<(), Box<dyn Error>> {
-    let (_, (id, infotext)) =
-        parse_infotext_row(line).map_err(|e| format!("Failed to parse line '{}': {}", line, e))?;
+    current_language: &str,
+) -> PResult<()> {
+    let current_language = Language::from_str(current_language)?;
+    let (_, (id, infotext)) = parse_infotext_row(line)?;
     if let Some(mut info) = infotextmap.remove(&id) {
         info.set_content(current_language, &infotext);
         infotextmap.insert(id, info);
@@ -52,21 +55,29 @@ fn parse_line(
         info.set_content(current_language, &infotext);
         infotextmap.insert(id, info);
     }
-    Ok::<(), Box<dyn Error>>(())
+    Ok(())
 }
 
-pub fn parse(path: &str) -> Result<ResourceStorage<InformationText>, Box<dyn Error>> {
+pub fn parse(path: &str) -> HResult<ResourceStorage<InformationText>> {
     let mut infotextmap: FxHashMap<i32, InformationText> = FxHashMap::default();
     let languages = ["DE", "EN", "FR", "IT"];
     for language in languages {
         log::info!("Parsing INFOTEXT_{language}...");
 
-        let lines = read_lines(&format!("{path}/INFOTEXT_{language}"), 0)?;
-        let current_language = Language::from_str(language)?;
+        let file = format!("{path}/INFOTEXT_{language}");
+        let lines = read_lines(&file, 0)?;
         lines
             .into_iter()
-            .filter(|line| !line.trim().is_empty())
-            .try_for_each(|line| parse_line(&line, &mut infotextmap, current_language))?;
+            .enumerate()
+            .filter(|(_, line)| !line.trim().is_empty())
+            .try_for_each(|(line_number, line)| {
+                parse_line(&line, &mut infotextmap, language).map_err(|e| HrdfError::Parsing {
+                    error: e,
+                    file: String::from(&file),
+                    line,
+                    line_number,
+                })
+            })?;
     }
     Ok(ResourceStorage::new(infotextmap))
 }
@@ -104,10 +115,10 @@ mod tests {
         let input = "000001921 ch:1:sjyid:100001:3995-001";
         // First row (id: 1)
         let mut infotext_map = FxHashMap::default();
-        parse_line(input, &mut infotext_map, Language::German).unwrap();
-        parse_line(input, &mut infotext_map, Language::French).unwrap();
-        parse_line(input, &mut infotext_map, Language::Italian).unwrap();
-        parse_line(input, &mut infotext_map, Language::English).unwrap();
+        parse_line(input, &mut infotext_map, "DE").unwrap();
+        parse_line(input, &mut infotext_map, "FR").unwrap();
+        parse_line(input, &mut infotext_map, "IT").unwrap();
+        parse_line(input, &mut infotext_map, "EN").unwrap();
         println!("{infotext_map:?}");
         let reference = r#"
             {

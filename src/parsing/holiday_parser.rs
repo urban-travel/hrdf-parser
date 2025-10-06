@@ -12,7 +12,7 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// FEIERTAG
-use std::{error::Error, str::FromStr};
+use std::str::FromStr;
 
 use chrono::NaiveDate;
 use nom::{IResult, Parser, character::char, sequence::separated_pair};
@@ -20,7 +20,10 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     models::{Holiday, Language},
-    parsing::helpers::{read_lines, string_from_n_chars_parser, string_till_eol_parser},
+    parsing::{
+        error::{HResult, HrdfError, PResult, ParsingError},
+        helpers::{read_lines, string_from_n_chars_parser, string_till_eol_parser},
+    },
     storage::ResourceStorage,
     utils::AutoIncrement,
 };
@@ -34,12 +37,8 @@ fn parse_holiday_row(input: &str) -> IResult<&str, (String, String)> {
     .parse(input)
 }
 
-fn parse_line(
-    line: &str,
-    auto_increment: &AutoIncrement,
-) -> Result<(i32, Holiday), Box<dyn Error>> {
-    let (_, (date, translations)) =
-        parse_holiday_row(line).map_err(|e| format!("Failed to parse line '{}': {}", line, e))?;
+fn parse_line(line: &str, auto_increment: &AutoIncrement) -> PResult<(i32, Holiday)> {
+    let (_, (date, translations)) = parse_holiday_row(line)?;
 
     let date = NaiveDate::parse_from_str(&date, "%d.%m.%Y")?;
     let name = parse_name_translations(translations)?;
@@ -48,15 +47,24 @@ fn parse_line(
     Ok((id, Holiday::new(id, date, name)))
 }
 
-pub fn parse(path: &str) -> Result<ResourceStorage<Holiday>, Box<dyn Error>> {
+pub fn parse(path: &str) -> HResult<ResourceStorage<Holiday>> {
     log::info!("Parsing FEIERTAG...");
-    let lines = read_lines(&format!("{path}/FEIERTAG"), 0)?;
+    let file = format!("{path}/FEIERTAG");
+    let lines = read_lines(&file, 0)?;
     let auto_increment = AutoIncrement::new();
     let holidays = lines
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| parse_line(&line, &auto_increment))
-        .collect::<Result<FxHashMap<_, _>, Box<dyn Error>>>()?;
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .map(|(line_number, line)| {
+            parse_line(&line, &auto_increment).map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(&file),
+                line,
+                line_number,
+            })
+        })
+        .collect::<HResult<FxHashMap<_, _>>>()?;
     Ok(ResourceStorage::new(holidays))
 }
 
@@ -64,17 +72,21 @@ pub fn parse(path: &str) -> Result<ResourceStorage<Holiday>, Box<dyn Error>> {
 // --- Helper Functions
 // ------------------------------------------------------------------------------------------------
 
-fn parse_name_translations(
-    name_translations: String,
-) -> Result<FxHashMap<Language, String>, Box<dyn Error>> {
+fn parse_name_translations(name_translations: String) -> PResult<FxHashMap<Language, String>> {
     name_translations
         .split('>')
         .filter(|&s| !s.is_empty())
-        .map(|s| -> Result<(Language, String), Box<dyn Error>> {
+        .map(|s| -> PResult<(Language, String)> {
             let mut parts = s.split('<');
 
-            let v = parts.next().ok_or("Missing value part")?.to_string();
-            let k = parts.next().ok_or("Missing value part")?.to_string();
+            let v = parts
+                .next()
+                .ok_or(ParsingError::Unknown("Missing value part".to_string()))?
+                .to_string();
+            let k = parts
+                .next()
+                .ok_or(ParsingError::Unknown("Missing value part".to_string()))?
+                .to_string();
             let k = Language::from_str(&k)?;
 
             Ok((k, v))

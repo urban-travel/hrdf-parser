@@ -239,7 +239,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     models::{CoordinateSystem, Coordinates, Stop, Version},
     parsing::{
-        error::{PResult, ParsingError},
+        error::{HResult, HrdfError, PResult, ParsingError},
         helpers::{read_lines, string_from_n_chars_parser, string_till_eol_parser},
     },
     storage::ResourceStorage,
@@ -663,42 +663,91 @@ fn parse_times_line(line: &str, stops: &mut FxHashMap<i32, Stop>) -> PResult<Opt
     }
 }
 
-pub fn parse(version: Version, path: &str) -> PResult<StopStorageAndExchangeTimes> {
+pub fn parse(version: Version, path: &str) -> HResult<StopStorageAndExchangeTimes> {
     log::info!("Parsing BAHNHOF...");
 
     let mut stops = FxHashMap::default();
-
-    read_lines(&format!("{path}/BAHNHOF"), 0)?
+    let file = format!("{path}/BAHNHOF");
+    read_lines(&file, 0)?
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| parse_stop_line(&line, &mut stops))?;
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .try_for_each(|(line_number, line)| {
+            parse_stop_line(&line, &mut stops).map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(&file),
+                line,
+                line_number,
+            })
+        })?;
 
     log::info!("Parsing BFKOORD_LV95...");
-    read_lines(&format!("{path}/BFKOORD_LV95"), 0)?
+    let file = format!("{path}/BFKOORD_LV95");
+    read_lines(&file, 0)?
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| parse_coord_line(&line, &mut stops, CoordinateSystem::LV95))?;
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .try_for_each(|(line_number, line)| {
+            parse_coord_line(&line, &mut stops, CoordinateSystem::LV95).map_err(|e| {
+                HrdfError::Parsing {
+                    error: e,
+                    file: String::from(&file),
+                    line,
+                    line_number,
+                }
+            })
+        })?;
 
+    let file = format!("{path}/BFKOORD_WGS");
     log::info!("Parsing BFKOORD_WGS...");
-    read_lines(&format!("{path}/BFKOORD_WGS"), 0)?
+    read_lines(&file, 0)?
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| parse_coord_line(&line, &mut stops, CoordinateSystem::WGS84))?;
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .try_for_each(|(line_number, line)| {
+            parse_coord_line(&line, &mut stops, CoordinateSystem::WGS84).map_err(|e| {
+                HrdfError::Parsing {
+                    error: e,
+                    file: String::from(&file),
+                    line,
+                    line_number,
+                }
+            })
+        })?;
 
     log::info!("Parsing BFPRIOS...");
-    read_lines(&format!("{path}/BFPRIOS"), 0)?
+    let file = format!("{path}/BFPRIOS");
+    read_lines(&file, 0)?
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| parse_prios_line(&line, &mut stops))?;
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .try_for_each(|(line_number, line)| {
+            parse_prios_line(&line, &mut stops).map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(&file),
+                line,
+                line_number,
+            })
+        })?;
 
     log::info!("Parsing KMINFO...");
-    read_lines(&format!("{path}/KMINFO"), 0)?
+    let file = format!("{path}/KMINFO");
+    read_lines(&file, 0)?
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| parse_flags_line(&line, &mut stops))?;
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .try_for_each(|(line_number, line)| {
+            parse_flags_line(&line, &mut stops).map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(&file),
+                line,
+                line_number,
+            })
+        })?;
 
     log::info!("Parsing UMSTEIGB...");
-    let default_exchange_time = read_lines(&format!("{path}/UMSTEIGB"), 0)?
+    let file = format!("{path}/UMSTEIGB");
+    let default_exchange_time = read_lines(&file, 0)?
         .into_iter()
         .filter(|line| !line.trim().is_empty())
         .map(|line| parse_times_line(&line, &mut stops))
@@ -707,8 +756,20 @@ pub fn parse(version: Version, path: &str) -> PResult<StopStorageAndExchangeTime
             (Ok(None), None) => Ok(None),
             (_, Some(w)) => Ok(Some(w)),
             (Ok(Some(v)), None) => Ok(Some(v)),
+        })
+        .map_err(|e| HrdfError::Parsing {
+            error: e,
+            file: String::from(&file),
+            line: String::default(),
+            line_number: 0,
         })?
-        .ok_or(ParsingError::MissingDefaultExchangeTime)?;
+        .ok_or(ParsingError::MissingDefaultExchangeTime)
+        .map_err(|e| HrdfError::Parsing {
+            error: e,
+            file: String::from(&file),
+            line: String::default(),
+            line_number: 0,
+        })?;
 
     let bhfart = match version {
         Version::V_5_40_41_2_0_4 | Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6 => {
@@ -717,10 +778,19 @@ pub fn parse(version: Version, path: &str) -> PResult<StopStorageAndExchangeTime
         Version::V_5_40_41_2_0_7 => "BHFART",
     };
     log::info!("Parsing {bhfart}...");
-    read_lines(&format!("{path}/{bhfart}"), 0)?
+    let file = format!("{path}/{bhfart}");
+    read_lines(&file, 0)?
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| parse_description_line(&line, &mut stops))?;
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .try_for_each(|(line_number, line)| {
+            parse_description_line(&line, &mut stops).map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(&file),
+                line,
+                line_number,
+            })
+        })?;
 
     Ok((ResourceStorage::new(stops), default_exchange_time))
 }

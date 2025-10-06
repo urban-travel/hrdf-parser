@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+pub type PResult<T> = Result<T, ParsingError>;
+
 #[derive(Debug, Error)]
 pub enum ParsingError {
     #[error("Nom parsing error: {0}")]
@@ -18,6 +20,10 @@ pub enum ParsingError {
     MissingLineType,
     #[error("Error default exchange time not defined")]
     MissingDefaultExchangeTime,
+    #[error("Failed to parse {0}")]
+    ParseInt(#[from] std::num::ParseIntError),
+    #[error("Failed to parse date {0}")]
+    ParseDate(#[from] chrono::ParseError),
 }
 
 impl From<nom::Err<nom::error::Error<&str>>> for ParsingError {
@@ -32,4 +38,17 @@ impl From<&str> for ParsingError {
     }
 }
 
-pub type PResult<T> = Result<T, ParsingError>;
+#[derive(Debug, Error)]
+pub enum HrdfError {
+    #[error("File {file}, at line {line_number}: {line}. Parsing error: {error}")]
+    Parsing {
+        error: ParsingError,
+        file: String,
+        line: String,
+        line_number: usize,
+    },
+    #[error("Io error: {0}")]
+    Io(#[from] std::io::Error),
+}
+
+pub type HResult<T> = Result<T, HrdfError>;

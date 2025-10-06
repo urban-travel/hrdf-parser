@@ -25,7 +25,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     models::{Model, TimetableMetadataEntry},
     parsing::{
-        error::{PResult, ParsingError},
+        error::{HResult, HrdfError, PResult},
         helpers::read_lines,
     },
     storage::ResourceStorage,
@@ -59,7 +59,37 @@ fn info_combinator(input: &str) -> IResult<&str, InfoLines> {
     .parse(input)
 }
 
-pub fn parse(path: &str) -> PResult<ResourceStorage<TimetableMetadataEntry>> {
+fn parse_line(
+    line: &str,
+    data: &mut FxHashMap<i32, TimetableMetadataEntry>,
+    keys: &[&str],
+    index: &mut usize,
+    auto_increment: &AutoIncrement,
+) -> PResult<()> {
+    let (_, res) = alt((date_combinator, info_combinator)).parse(line)?;
+    match res {
+        InfoLines::Date(d) => {
+            let tt = TimetableMetadataEntry::new(
+                auto_increment.next(),
+                keys[*index].to_owned(),
+                d.to_string(),
+            );
+            data.insert(tt.id(), tt);
+            *index += 1;
+        }
+        InfoLines::MetaData(mt) => {
+            for t in mt {
+                let tt =
+                    TimetableMetadataEntry::new(auto_increment.next(), keys[*index].to_owned(), t);
+                data.insert(tt.id(), tt);
+                *index += 1;
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn parse(path: &str) -> HResult<ResourceStorage<TimetableMetadataEntry>> {
     log::info!("Parsing ECKDATEN...");
     let auto_increment = AutoIncrement::new();
     let keys = [
@@ -72,34 +102,21 @@ pub fn parse(path: &str) -> PResult<ResourceStorage<TimetableMetadataEntry>> {
     ];
     let mut index = 0;
     let mut data = FxHashMap::default();
-    read_lines(&format!("{path}/ECKDATEN"), 0)?
+    let file = format!("{path}/ECKDATEN");
+    let time_table = read_lines(&file, 0)?;
+    time_table
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| {
-            let (_, res) = alt((date_combinator, info_combinator)).parse(&line)?;
-            match res {
-                InfoLines::Date(d) => {
-                    let tt = TimetableMetadataEntry::new(
-                        auto_increment.next(),
-                        keys[index].to_owned(),
-                        d.to_string(),
-                    );
-                    data.insert(tt.id(), tt);
-                    index += 1;
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .try_for_each(|(line_number, line)| {
+            parse_line(&line, &mut data, &keys, &mut index, &auto_increment).map_err(|e| {
+                HrdfError::Parsing {
+                    error: e,
+                    file: String::from(&file),
+                    line,
+                    line_number,
                 }
-                InfoLines::MetaData(mt) => {
-                    for t in mt {
-                        let tt = TimetableMetadataEntry::new(
-                            auto_increment.next(),
-                            keys[index].to_owned(),
-                            t,
-                        );
-                        data.insert(tt.id(), tt);
-                        index += 1;
-                    }
-                }
-            }
-            Ok::<(), ParsingError>(())
+            })
         })?;
 
     Ok(ResourceStorage::new(data))
