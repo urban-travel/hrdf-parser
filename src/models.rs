@@ -619,10 +619,10 @@ impl Journey {
     /// The date must correspond to the route's first entry.
     /// Do not call this function if the stop is not part of the route.
     /// Do not call this function if the stop has no departure time (only the last stop has no departure time).
-    pub fn departure_at_of(&self, stop_id: i32, date: NaiveDate) -> NaiveDateTime {
+    pub fn departure_at_of(&self, stop_id: i32, date: NaiveDate) -> HResult<NaiveDateTime> {
         match self.departure_time_of(stop_id) {
-            (departure_time, false) => NaiveDateTime::new(date, departure_time),
-            (departure_time, true) => NaiveDateTime::new(add_1_day(date), departure_time),
+            (departure_time, false) => Ok(NaiveDateTime::new(date, departure_time)),
+            (departure_time, true) => Ok(NaiveDateTime::new(add_1_day(date)?, departure_time)),
         }
     }
 
@@ -635,7 +635,7 @@ impl Journey {
         // If it's not a departure date, it's an arrival date.
         is_departure_date: bool,
         origin_stop_id: i32,
-    ) -> NaiveDateTime {
+    ) -> HResult<NaiveDateTime> {
         let (departure_time, is_next_day) = self.departure_time_of(stop_id);
         let (_, origin_is_next_day) = if is_departure_date {
             self.departure_time_of(origin_stop_id)
@@ -644,9 +644,9 @@ impl Journey {
         };
 
         match (is_next_day, origin_is_next_day) {
-            (true, false) => NaiveDateTime::new(add_1_day(date), departure_time),
-            (false, true) => NaiveDateTime::new(sub_1_day(date), departure_time),
-            _ => NaiveDateTime::new(date, departure_time),
+            (true, false) => Ok(NaiveDateTime::new(add_1_day(date)?, departure_time)),
+            (false, true) => Ok(NaiveDateTime::new(sub_1_day(date)?, departure_time)),
+            _ => Ok(NaiveDateTime::new(date, departure_time)),
         }
     }
 
@@ -678,7 +678,7 @@ impl Journey {
         // If it's not a departure date, it's an arrival date.
         is_departure_date: bool,
         origin_stop_id: i32,
-    ) -> NaiveDateTime {
+    ) -> HResult<NaiveDateTime> {
         let (arrival_time, is_next_day) = self.arrival_time_of(stop_id);
         let (_, origin_is_next_day) = if is_departure_date {
             self.departure_time_of(origin_stop_id)
@@ -687,9 +687,9 @@ impl Journey {
         };
 
         match (is_next_day, origin_is_next_day) {
-            (true, false) => NaiveDateTime::new(add_1_day(date), arrival_time),
-            (false, true) => NaiveDateTime::new(sub_1_day(date), arrival_time),
-            _ => NaiveDateTime::new(date, arrival_time),
+            (true, false) => Ok(NaiveDateTime::new(add_1_day(date)?, arrival_time)),
+            (false, true) => Ok(NaiveDateTime::new(sub_1_day(date)?, arrival_time)),
+            _ => Ok(NaiveDateTime::new(date, arrival_time)),
         }
     }
 

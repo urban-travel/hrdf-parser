@@ -683,8 +683,8 @@ fn parse_line(
                     auto_increment.get()
                 ))
             })?;
-            let arrival_time = create_time(arrival_time);
-            let departure_time = create_time(departure_time);
+            let arrival_time = create_time(arrival_time)?;
+            let departure_time = create_time(departure_time)?;
 
             journey.add_metadata_entry(
                 JourneyMetadataType::InformationText,
@@ -714,8 +714,8 @@ fn parse_line(
                     auto_increment.get()
                 ))
             })?;
-            let arrival_time = create_time(arrival_time);
-            let departure_time = create_time(departure_time);
+            let arrival_time = create_time(arrival_time)?;
+            let departure_time = create_time(departure_time)?;
 
             let direction_id = if ref_direction_code.is_empty() {
                 None
@@ -757,8 +757,8 @@ fn parse_line(
                     auto_increment.get()
                 ))
             })?;
-            let arrival_time = create_time(arrival_time);
-            let departure_time = create_time(departure_time);
+            let arrival_time = create_time(arrival_time)?;
+            let departure_time = create_time(departure_time)?;
 
             let line_info_first_char = line_info
                 .chars()
@@ -799,8 +799,8 @@ fn parse_line(
                     auto_increment.get()
                 ))
             })?;
-            let arrival_time = create_time(arrival_time);
-            let departure_time = create_time(departure_time);
+            let arrival_time = create_time(arrival_time)?;
+            let departure_time = create_time(departure_time)?;
 
             journey.add_metadata_entry(
                 JourneyMetadataType::ExchangeTimeBoarding,
@@ -829,8 +829,8 @@ fn parse_line(
                     auto_increment.get()
                 ))
             })?;
-            let arrival_time = create_time(arrival_time);
-            let departure_time = create_time(departure_time);
+            let arrival_time = create_time(arrival_time)?;
+            let departure_time = create_time(departure_time)?;
 
             journey.add_metadata_entry(
                 JourneyMetadataType::ExchangeTimeDisembarking,
@@ -860,8 +860,8 @@ fn parse_line(
                     auto_increment.get()
                 ))
             })?;
-            let arrival_time = create_time(arrival_time);
-            let departure_time = create_time(departure_time);
+            let arrival_time = create_time(arrival_time)?;
+            let departure_time = create_time(departure_time)?;
 
             journey.add_route_entry(JourneyRouteEntry::new(
                 stop_id,
@@ -916,13 +916,14 @@ pub fn parse(
 // --- Helper Functions
 // ------------------------------------------------------------------------------------------------
 
-fn create_time(time: Option<i32>) -> Option<NaiveTime> {
+fn create_time(time: Option<i32>) -> PResult<Option<NaiveTime>> {
     time.map(|value| {
         create_time_from_value(match value.abs() {
             val if val >= 2400 => val % 2400,
             val => val,
         } as u32)
     })
+    .transpose()
 }
 
 #[cfg(test)]

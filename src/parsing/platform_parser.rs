@@ -295,7 +295,7 @@ fn parse_line(
                         ))
                     })?;
 
-                let time = time.map(|x| create_time_from_value(x as u32));
+                let time = time.map(|x| create_time_from_value(x as u32)).transpose()?;
 
                 let jp_instance = JourneyPlatform::new(
                     journey_id,

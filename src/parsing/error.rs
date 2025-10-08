@@ -22,6 +22,8 @@ pub enum ParsingError {
     ParseInt(#[from] std::num::ParseIntError),
     #[error("Failed to parse date {0}")]
     ParseDate(#[from] chrono::ParseError),
+    #[error("Unable to build NaiveTime from {0} hours, {1} minutes, {2} seconds")]
+    UnableToBuildTime(u32, u32, u32),
 }
 
 impl From<nom::Err<nom::error::Error<&str>>> for ParsingError {

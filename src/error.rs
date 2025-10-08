@@ -1,10 +1,12 @@
 use crate::{JourneyError, parsing::error::ParsingError};
+use bincode::error::{DecodeError, EncodeError};
 use chrono::NaiveDate;
 use thiserror::Error;
+use zip::result::ZipError;
 
 #[derive(Debug, Error)]
 pub enum HrdfError {
-    #[error("File {file}, at line {line_number}: {line}. Parsing error: {error}")]
+    #[error("File {file}, at line {line_number}: {line}. Parsing error: {error:?}")]
     Parsing {
         error: ParsingError,
         file: String,
@@ -21,8 +23,18 @@ pub enum HrdfError {
     Journey(#[from] JourneyError),
     #[error("Failed to add {1} days to {0}")]
     FailedToAddDays(NaiveDate, u64),
+    #[error("Failed to subtract {1} days to {0}")]
+    FailedToSubDays(NaiveDate, u64),
     #[error("BitFieldId {0} not found")]
     BitFieldIdNotFound(i32),
+    #[error("Failed to read cache: {0}")]
+    ReadCache(#[from] DecodeError),
+    #[error("Failed to write cache: {0}")]
+    WriteCacher(#[from] EncodeError),
+    #[error("Failed decompress data: {0}")]
+    Decompress(#[from] ZipError),
+    #[error("Failed to download data: {0}")]
+    Download(#[from] reqwest::Error),
 }
 
 pub type HResult<T> = Result<T, HrdfError>;
