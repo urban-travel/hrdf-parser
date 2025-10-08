@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// # BETRIEB_* files
 ///
 /// List of transport companies. The term “transport company” is understood in different ways.
@@ -210,7 +212,7 @@ fn parse_transport_company_line(
     Ok(())
 }
 
-pub fn parse(path: &str) -> HResult<ResourceStorage<TransportCompany>> {
+pub fn parse(path: &Path) -> HResult<ResourceStorage<TransportCompany>> {
     let languages = [
         Language::German,
         Language::English,
@@ -227,7 +229,7 @@ pub fn parse(path: &str) -> HResult<ResourceStorage<TransportCompany>> {
             Language::Italian => "IT",
         };
         log::info!("Parsing BETRIEB_{postfix}...");
-        let file = format!("{path}/BETRIEB_{postfix}");
+        let file = path.join(format!("BETRIEB_{postfix}"));
         read_lines(&file, 0)?
             .into_iter()
             .enumerate()
@@ -236,7 +238,7 @@ pub fn parse(path: &str) -> HResult<ResourceStorage<TransportCompany>> {
                 parse_transport_company_line(&line, &mut transport_company, language).map_err(|e| {
                     HrdfError::Parsing {
                         error: e,
-                        file: String::from(&file),
+                        file: String::from(file.to_string_lossy()),
                         line,
                         line_number,
                     }

@@ -17,7 +17,7 @@
 /// 4 file(s).
 /// File(s) read by the parser:
 /// INFOTEXT_DE, INFOTEXT_EN, INFOTEXT_FR, INFOTEXT_IT
-use std::str::FromStr;
+use std::{path::Path, str::FromStr};
 
 use nom::{IResult, Parser, character::char, sequence::separated_pair};
 use rustc_hash::FxHashMap;
@@ -59,13 +59,13 @@ fn parse_line(
     Ok(())
 }
 
-pub fn parse(path: &str) -> HResult<ResourceStorage<InformationText>> {
+pub fn parse(path: &Path) -> HResult<ResourceStorage<InformationText>> {
     let mut infotextmap: FxHashMap<i32, InformationText> = FxHashMap::default();
     let languages = ["DE", "EN", "FR", "IT"];
     for language in languages {
         log::info!("Parsing INFOTEXT_{language}...");
 
-        let file = format!("{path}/INFOTEXT_{language}");
+        let file = path.join(format!("INFOTEXT_{language}"));
         let lines = read_lines(&file, 0)?;
         lines
             .into_iter()
@@ -74,7 +74,7 @@ pub fn parse(path: &str) -> HResult<ResourceStorage<InformationText>> {
             .try_for_each(|(line_number, line)| {
                 parse_line(&line, &mut infotextmap, language).map_err(|e| HrdfError::Parsing {
                     error: e,
-                    file: String::from(&file),
+                    file: String::from(file.to_string_lossy()),
                     line,
                     line_number,
                 })

@@ -12,7 +12,7 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// FEIERTAG
-use std::str::FromStr;
+use std::{path::Path, str::FromStr};
 
 use chrono::NaiveDate;
 use nom::{IResult, Parser, character::char, sequence::separated_pair};
@@ -48,9 +48,9 @@ fn parse_line(line: &str, auto_increment: &AutoIncrement) -> PResult<(i32, Holid
     Ok((id, Holiday::new(id, date, name)))
 }
 
-pub fn parse(path: &str) -> HResult<ResourceStorage<Holiday>> {
+pub fn parse(path: &Path) -> HResult<ResourceStorage<Holiday>> {
     log::info!("Parsing FEIERTAG...");
-    let file = format!("{path}/FEIERTAG");
+    let file = path.join("FEIERTAG");
     let lines = read_lines(&file, 0)?;
     let auto_increment = AutoIncrement::new();
     let holidays = lines
@@ -60,7 +60,7 @@ pub fn parse(path: &str) -> HResult<ResourceStorage<Holiday>> {
         .map(|(line_number, line)| {
             parse_line(&line, &auto_increment).map_err(|e| HrdfError::Parsing {
                 error: e,
-                file: String::from(&file),
+                file: String::from(file.to_string_lossy()),
                 line,
                 line_number,
             })

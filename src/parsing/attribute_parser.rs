@@ -46,7 +46,7 @@
 /// Files not used by the parser vor version < 2.0.7:
 /// ATTRIBUT_DE, ATTRIBUT_EN, ATTRIBUT_FR, ATTRIBUT_IT
 /// These files were suppressed in 2.0.7
-use std::str::FromStr;
+use std::{path::Path, str::FromStr};
 
 use nom::{
     IResult, Parser,
@@ -198,10 +198,10 @@ fn parse_line(
     Ok(())
 }
 
-pub fn parse(path: &str) -> HResult<AttributeAndTypeConverter> {
+pub fn parse(path: &Path) -> HResult<AttributeAndTypeConverter> {
     log::info!("Parsing ATTRIBUT...");
 
-    let file = format!("{path}/ATTRIBUT");
+    let file = path.join("ATTRIBUT");
     let lines = read_lines(&file, 0)?;
 
     let auto_increment = AutoIncrement::new();
@@ -223,7 +223,7 @@ pub fn parse(path: &str) -> HResult<AttributeAndTypeConverter> {
             )
             .map_err(|e| HrdfError::Parsing {
                 error: e,
-                file: String::from(&file),
+                file: String::from(file.to_string_lossy()),
                 line,
                 line_number,
             })

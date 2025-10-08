@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// # Journey parser
 ///
 /// List of journeys and by far the largest and most comprehensive file in the HRDF export.
@@ -874,13 +876,13 @@ fn parse_line(
 }
 
 pub fn parse(
-    path: &str,
+    path: &Path,
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
     attributes_pk_type_converter: &FxHashMap<String, i32>,
     directions_pk_type_converter: &FxHashMap<String, i32>,
 ) -> HResult<JourneyAndTypeConverter> {
     log::info!("Parsing FPLAN...");
-    let file = format!("{path}/FPLAN");
+    let file = path.join("FPLAN");
     let lines = read_lines(&file, 0)?;
 
     let auto_increment = AutoIncrement::new();
@@ -903,7 +905,7 @@ pub fn parse(
             )
             .map_err(|e| HrdfError::Parsing {
                 error: e,
-                file: String::from(&file),
+                file: String::from(file.to_string_lossy()),
                 line,
                 line_number,
             })

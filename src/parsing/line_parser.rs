@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// # Line parsing
 ///
 /// ## List of lines. The file contains:
@@ -239,10 +241,10 @@ fn parse_line(line: &str, data: &mut FxHashMap<i32, Line>) -> PResult<()> {
     Ok(())
 }
 
-pub fn parse(path: &str) -> HResult<ResourceStorage<Line>> {
+pub fn parse(path: &Path) -> HResult<ResourceStorage<Line>> {
     log::info!("Parsing LINIE...");
 
-    let file = format!("{path}/LINIE");
+    let file = path.join("LINIE");
     let lines = read_lines(&file, 0)?;
 
     let mut data = FxHashMap::default();
@@ -254,7 +256,7 @@ pub fn parse(path: &str) -> HResult<ResourceStorage<Line>> {
         .try_for_each(|(line_number, line)| {
             parse_line(&line, &mut data).map_err(|e| HrdfError::Parsing {
                 error: e,
-                file: String::from(&file),
+                file: String::from(file.to_string_lossy()),
                 line,
                 line_number,
             })

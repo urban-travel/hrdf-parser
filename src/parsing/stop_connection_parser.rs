@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// # METABHF file
 ///
 /// Grouping of stops for the search. By grouping the stops, the search for transport chains takes place at all stops in the group.
@@ -160,7 +162,7 @@ fn parse_line(
 }
 
 pub fn parse(
-    path: &str,
+    path: &Path,
     attributes_pk_type_converter: &FxHashMap<String, i32>,
 ) -> HResult<ResourceStorage<StopConnection>> {
     log::info!("Parsing METABHF...");
@@ -168,7 +170,7 @@ pub fn parse(
     let auto_increment = AutoIncrement::new();
     let mut stations = FxHashMap::default();
 
-    let file = format!("{path}/METABHF");
+    let file = path.join("METABHF");
     let station_lines = read_lines(&file, 0)?;
     station_lines
         .into_iter()
@@ -183,7 +185,7 @@ pub fn parse(
             )
             .map_err(|e| HrdfError::Parsing {
                 error: e,
-                file: String::from(&file),
+                file: String::from(file.to_string_lossy()),
                 line,
                 line_number,
             })

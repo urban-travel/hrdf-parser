@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// # List of track and bus platform information.
 ///
 /// ## File contains:
@@ -391,7 +393,7 @@ fn parse_line(
 
 pub fn parse(
     version: Version,
-    path: &str,
+    path: &Path,
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
 ) -> HResult<(ResourceStorage<JourneyPlatform>, ResourceStorage<Platform>)> {
     let prefix = match version {
@@ -405,7 +407,7 @@ pub fn parse(
     let mut journey_platform = FxHashMap::default();
 
     log::info!("Parsing {prefix}_LV95...");
-    let file = format!("{path}/{prefix}_LV95");
+    let file = path.join(format!("{prefix}_LV95"));
     let platforms_lv95 = read_lines(&file, 0)?;
     platforms_lv95
         .into_iter()
@@ -423,14 +425,14 @@ pub fn parse(
             )
             .map_err(|e| HrdfError::Parsing {
                 error: e,
-                file: String::from(&file),
+                file: String::from(file.to_string_lossy()),
                 line,
                 line_number,
             })
         })?;
 
     log::info!("Parsing {prefix}_WGS...");
-    let file = format!("{path}/{prefix}_WGS");
+    let file = path.join(format!("{prefix}_WGS"));
     let platforms_wgs84 = read_lines(&file, 0)?;
     platforms_wgs84
         .into_iter()
@@ -448,7 +450,7 @@ pub fn parse(
             )
             .map_err(|e| HrdfError::Parsing {
                 error: e,
-                file: String::from(&file),
+                file: String::from(file.to_string_lossy()),
                 line,
                 line_number,
             })

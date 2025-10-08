@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// # Journey exchange time parsing
 ///
 /// List of journey pairs that have a special transfer relationship. File contains:
@@ -130,12 +132,12 @@ fn parse_line(
 }
 
 pub fn parse(
-    path: &str,
+    path: &Path,
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
 ) -> HResult<ResourceStorage<ExchangeTimeJourney>> {
     log::info!("Parsing UMSTEIGZ...");
 
-    let file = format!("{path}/UMSTEIGZ");
+    let file = path.join("UMSTEIGZ");
     let lines = read_lines(&file, 0)?;
     let auto_increment = AutoIncrement::new();
     let exchanges = lines
@@ -146,7 +148,7 @@ pub fn parse(
             parse_line(&line, &auto_increment, journeys_pk_type_converter).map_err(|e| {
                 HrdfError::Parsing {
                     error: e,
-                    file: String::from(&file),
+                    file: String::from(file.to_string_lossy()),
                     line,
                     line_number,
                 }

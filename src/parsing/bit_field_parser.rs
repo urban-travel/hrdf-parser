@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// # Bitfield parsing
 ///
 /// Day-specific definition of the validity of the timetable information.
@@ -64,9 +66,9 @@ fn parse_line(line: &str) -> PResult<(i32, BitField)> {
     Ok((id, BitField::new(id, bits)))
 }
 
-pub fn parse(path: &str) -> HResult<ResourceStorage<BitField>> {
+pub fn parse(path: &Path) -> HResult<ResourceStorage<BitField>> {
     log::info!("Parsing BITFELD...");
-    let file = format!("{path}/BITFELD");
+    let file = path.join("BITFIELD");
     let lines = read_lines(&file, 0)?;
     let bitfields = lines
         .into_iter()
@@ -75,7 +77,7 @@ pub fn parse(path: &str) -> HResult<ResourceStorage<BitField>> {
         .map(|(line_number, line)| {
             parse_line(&line).map_err(|e| HrdfError::Parsing {
                 error: e,
-                file: String::from(&file),
+                file: String::from(file.to_string_lossy()),
                 line,
                 line_number,
             })

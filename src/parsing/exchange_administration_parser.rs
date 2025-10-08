@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// # Administration Exchange Time parsing
 ///
 /// Transfer time between two transport companies (see
@@ -66,10 +68,10 @@ fn parse_line(
     ))
 }
 
-pub fn parse(path: &str) -> HResult<ResourceStorage<ExchangeTimeAdministration>> {
+pub fn parse(path: &Path) -> HResult<ResourceStorage<ExchangeTimeAdministration>> {
     log::info!("Parsing UMSTEIGV...");
 
-    let file = format!("{path}/UMSTEIGV");
+    let file = path.join("UMSTEIGv");
     let lines = read_lines(&file, 0)?;
     let auto_increment = AutoIncrement::new();
     let exchanges = lines
@@ -79,7 +81,7 @@ pub fn parse(path: &str) -> HResult<ResourceStorage<ExchangeTimeAdministration>>
         .map(|(line_number, line)| {
             parse_line(&line, &auto_increment).map_err(|e| HrdfError::Parsing {
                 error: e,
-                file: String::from(&file),
+                file: String::from(file.to_string_lossy()),
                 line,
                 line_number,
             })

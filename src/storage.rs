@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{path::Path, time::Instant};
 
 use chrono::{Days, NaiveDate};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -67,7 +67,7 @@ pub struct DataStorage {
 }
 
 impl DataStorage {
-    pub fn new(version: Version, path: &str) -> HResult<Self> {
+    pub fn new(version: Version, path: &Path) -> HResult<Self> {
         // Time-relevant data
         let complete = Instant::now();
         let now = Instant::now();

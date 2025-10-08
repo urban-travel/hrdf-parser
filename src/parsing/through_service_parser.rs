@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// # Through Service parser
 ///
 /// - List of ride pairs that form a contiguous run. Travellers can remain seated.
@@ -145,14 +147,14 @@ fn parse_line(
 }
 
 pub fn parse(
-    path: &str,
+    path: &Path,
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
 ) -> HResult<ResourceStorage<ThroughService>> {
     log::info!("Parsing DURCHBI...");
     let auto_increment = AutoIncrement::new();
     let mut through_services = FxHashMap::default();
 
-    let file = format!("{path}/DURCHBI");
+    let file = path.join("DURCHBI");
     let through_service_lines = read_lines(&file, 0)?;
     through_service_lines
         .into_iter()
@@ -167,7 +169,7 @@ pub fn parse(
             )
             .map_err(|e| HrdfError::Parsing {
                 error: e,
-                file: String::from(&file),
+                file: String::from(file.to_string_lossy()),
                 line,
                 line_number,
             })

@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// # ECKDATEN file
 ///
 /// Life of the timetable
@@ -87,7 +89,7 @@ fn parse_line(
     Ok(())
 }
 
-pub fn parse(path: &str) -> HResult<ResourceStorage<TimetableMetadataEntry>> {
+pub fn parse(path: &Path) -> HResult<ResourceStorage<TimetableMetadataEntry>> {
     log::info!("Parsing ECKDATEN...");
     let auto_increment = AutoIncrement::new();
     let keys = [
@@ -100,7 +102,7 @@ pub fn parse(path: &str) -> HResult<ResourceStorage<TimetableMetadataEntry>> {
     ];
     let mut index = 0;
     let mut data = FxHashMap::default();
-    let file = format!("{path}/ECKDATEN");
+    let file = path.join("ECKDATEN");
     let time_table = read_lines(&file, 0)?;
     time_table
         .into_iter()
@@ -110,7 +112,7 @@ pub fn parse(path: &str) -> HResult<ResourceStorage<TimetableMetadataEntry>> {
             parse_line(&line, &mut data, &keys, &mut index, &auto_increment).map_err(|e| {
                 HrdfError::Parsing {
                     error: e,
-                    file: String::from(&file),
+                    file: String::from(file.to_string_lossy()),
                     line,
                     line_number,
                 }

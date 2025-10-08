@@ -32,7 +32,7 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// UMSTEIGL
-use std::str::FromStr;
+use std::{path::Path, str::FromStr};
 
 use nom::{IResult, Parser, character::char, combinator::map, sequence::preceded};
 use rustc_hash::FxHashMap;
@@ -193,11 +193,11 @@ fn parse_line(
 }
 
 pub fn parse(
-    path: &str,
+    path: &Path,
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
 ) -> HResult<ResourceStorage<ExchangeTimeLine>> {
     log::info!("Parsing UMSTEIGL...");
-    let file = format!("{path}/UMSTEIGL");
+    let file = path.join("UMSTEIGL");
     let lines = read_lines(&file, 0)?;
     let auto_increment = AutoIncrement::new();
     let exchanges = lines
@@ -208,7 +208,7 @@ pub fn parse(
             parse_line(&line, &auto_increment, transport_types_pk_type_converter).map_err(|e| {
                 HrdfError::Parsing {
                     error: e,
-                    file: String::from(&file),
+                    file: String::from(file.to_string_lossy()),
                     line,
                     line_number,
                 }

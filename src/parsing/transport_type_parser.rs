@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// # ZUGART file
 ///
 /// List of service categories. Per language the (Class:) grouping of offer
@@ -338,10 +340,10 @@ fn parse_line(
     Ok(())
 }
 
-pub fn parse(path: &str) -> HResult<TransportTypeAndTypeConverter> {
+pub fn parse(path: &Path) -> HResult<TransportTypeAndTypeConverter> {
     log::info!("Parsing ZUGART...");
 
-    let file = format!("{path}/ZUGART");
+    let file = path.join("ZUGART");
     let transport_types = read_lines(&file, 0)?;
 
     let auto_increment = AutoIncrement::new();
@@ -363,7 +365,7 @@ pub fn parse(path: &str) -> HResult<TransportTypeAndTypeConverter> {
             )
             .map_err(|e| HrdfError::Parsing {
                 error: e,
-                file: String::from(&file),
+                file: String::from(file.to_string_lossy()),
                 line,
                 line_number,
             })

@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// # Direction parsing
 ///
 /// This file contains direction information: namely the Direction ID (that is also contained in
@@ -46,10 +48,10 @@ fn parse_line(
     Ok((id, Direction::new(id, name)))
 }
 
-pub fn parse(path: &str) -> HResult<DirectionAndTypeConverter> {
+pub fn parse(path: &Path) -> HResult<DirectionAndTypeConverter> {
     log::info!("Parsing RICHTUNG...");
 
-    let file = format!("{path}/RICHTUNG");
+    let file = path.join("RICHTUNG");
     let lines = read_lines(&file, 0)?;
     let mut pk_type_converter = FxHashMap::default();
     let directions = lines
@@ -59,7 +61,7 @@ pub fn parse(path: &str) -> HResult<DirectionAndTypeConverter> {
         .map(|(line_number, line)| {
             parse_line(&line, &mut pk_type_converter).map_err(|e| HrdfError::Parsing {
                 error: e,
-                file: String::from(&file),
+                file: String::from(file.to_string_lossy()),
                 line,
                 line_number,
             })

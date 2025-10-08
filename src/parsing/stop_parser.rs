@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// # BAHNHOF file
 ///
 /// ## List of stops A detailed description of the stops (incl. Meta-stops (see METABHF file)) can be found here.
@@ -664,11 +666,11 @@ fn parse_times_line(line: &str, stops: &mut FxHashMap<i32, Stop>) -> PResult<Opt
     }
 }
 
-pub fn parse(version: Version, path: &str) -> HResult<StopStorageAndExchangeTimes> {
+pub fn parse(version: Version, path: &Path) -> HResult<StopStorageAndExchangeTimes> {
     log::info!("Parsing BAHNHOF...");
 
     let mut stops = FxHashMap::default();
-    let file = format!("{path}/BAHNHOF");
+    let file = path.join("BAHNHOF");
     read_lines(&file, 0)?
         .into_iter()
         .enumerate()
@@ -676,14 +678,14 @@ pub fn parse(version: Version, path: &str) -> HResult<StopStorageAndExchangeTime
         .try_for_each(|(line_number, line)| {
             parse_stop_line(&line, &mut stops).map_err(|e| HrdfError::Parsing {
                 error: e,
-                file: String::from(&file),
+                file: String::from(file.to_string_lossy()),
                 line,
                 line_number,
             })
         })?;
 
     log::info!("Parsing BFKOORD_LV95...");
-    let file = format!("{path}/BFKOORD_LV95");
+    let file = path.join("BFKOORD_LV95");
     read_lines(&file, 0)?
         .into_iter()
         .enumerate()
@@ -692,14 +694,14 @@ pub fn parse(version: Version, path: &str) -> HResult<StopStorageAndExchangeTime
             parse_coord_line(&line, &mut stops, CoordinateSystem::LV95).map_err(|e| {
                 HrdfError::Parsing {
                     error: e,
-                    file: String::from(&file),
+                    file: String::from(file.to_string_lossy()),
                     line,
                     line_number,
                 }
             })
         })?;
 
-    let file = format!("{path}/BFKOORD_WGS");
+    let file = path.join("BFKOORD_WGS");
     log::info!("Parsing BFKOORD_WGS...");
     read_lines(&file, 0)?
         .into_iter()
@@ -709,7 +711,7 @@ pub fn parse(version: Version, path: &str) -> HResult<StopStorageAndExchangeTime
             parse_coord_line(&line, &mut stops, CoordinateSystem::WGS84).map_err(|e| {
                 HrdfError::Parsing {
                     error: e,
-                    file: String::from(&file),
+                    file: String::from(file.to_string_lossy()),
                     line,
                     line_number,
                 }
@@ -717,7 +719,7 @@ pub fn parse(version: Version, path: &str) -> HResult<StopStorageAndExchangeTime
         })?;
 
     log::info!("Parsing BFPRIOS...");
-    let file = format!("{path}/BFPRIOS");
+    let file = path.join("BFPRIOS");
     read_lines(&file, 0)?
         .into_iter()
         .enumerate()
@@ -725,14 +727,14 @@ pub fn parse(version: Version, path: &str) -> HResult<StopStorageAndExchangeTime
         .try_for_each(|(line_number, line)| {
             parse_prios_line(&line, &mut stops).map_err(|e| HrdfError::Parsing {
                 error: e,
-                file: String::from(&file),
+                file: String::from(file.to_string_lossy()),
                 line,
                 line_number,
             })
         })?;
 
     log::info!("Parsing KMINFO...");
-    let file = format!("{path}/KMINFO");
+    let file = path.join("KMINFO");
     read_lines(&file, 0)?
         .into_iter()
         .enumerate()
@@ -740,14 +742,14 @@ pub fn parse(version: Version, path: &str) -> HResult<StopStorageAndExchangeTime
         .try_for_each(|(line_number, line)| {
             parse_flags_line(&line, &mut stops).map_err(|e| HrdfError::Parsing {
                 error: e,
-                file: String::from(&file),
+                file: String::from(file.to_string_lossy()),
                 line,
                 line_number,
             })
         })?;
 
     log::info!("Parsing UMSTEIGB...");
-    let file = format!("{path}/UMSTEIGB");
+    let file = path.join("UMSTEIGB");
     let default_exchange_time = read_lines(&file, 0)?
         .into_iter()
         .filter(|line| !line.trim().is_empty())
@@ -760,14 +762,14 @@ pub fn parse(version: Version, path: &str) -> HResult<StopStorageAndExchangeTime
         })
         .map_err(|e| HrdfError::Parsing {
             error: e,
-            file: String::from(&file),
+            file: String::from(file.to_string_lossy()),
             line: String::default(),
             line_number: 0,
         })?
         .ok_or(ParsingError::MissingDefaultExchangeTime)
         .map_err(|e| HrdfError::Parsing {
             error: e,
-            file: String::from(&file),
+            file: String::from(file.to_string_lossy()),
             line: String::default(),
             line_number: 0,
         })?;
@@ -779,7 +781,7 @@ pub fn parse(version: Version, path: &str) -> HResult<StopStorageAndExchangeTime
         Version::V_5_40_41_2_0_7 => "BHFART",
     };
     log::info!("Parsing {bhfart}...");
-    let file = format!("{path}/{bhfart}");
+    let file = path.join(bhfart);
     read_lines(&file, 0)?
         .into_iter()
         .enumerate()
@@ -787,7 +789,7 @@ pub fn parse(version: Version, path: &str) -> HResult<StopStorageAndExchangeTime
         .try_for_each(|(line_number, line)| {
             parse_description_line(&line, &mut stops).map_err(|e| HrdfError::Parsing {
                 error: e,
-                file: String::from(&file),
+                file: String::from(file.to_string_lossy()),
                 line,
                 line_number,
             })
