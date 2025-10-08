@@ -68,7 +68,7 @@ fn parse_line(line: &str) -> PResult<(i32, BitField)> {
 
 pub fn parse(path: &Path) -> HResult<ResourceStorage<BitField>> {
     log::info!("Parsing BITFELD...");
-    let file = path.join("BITFIELD");
+    let file = path.join("BITFELD");
     let lines = read_lines(&file, 0)?;
     let bitfields = lines
         .into_iter()

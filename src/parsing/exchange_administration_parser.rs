@@ -71,7 +71,7 @@ fn parse_line(
 pub fn parse(path: &Path) -> HResult<ResourceStorage<ExchangeTimeAdministration>> {
     log::info!("Parsing UMSTEIGV...");
 
-    let file = path.join("UMSTEIGv");
+    let file = path.join("UMSTEIGV");
     let lines = read_lines(&file, 0)?;
     let auto_increment = AutoIncrement::new();
     let exchanges = lines
