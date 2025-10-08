@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// # List of track and bus platform information.
 ///
 /// ## File contains:
@@ -79,8 +81,6 @@
 /// GLEIS, GLEIS_LV95, GLEIS_WGS
 /// ---
 /// Note: this parser collects both the Platform and JourneyPlatform resources.
-use std::error::Error;
-
 use nom::{
     IResult, Parser,
     branch::alt,
@@ -97,10 +97,14 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     JourneyId, Version,
+    error::{HResult, HrdfError},
     models::{CoordinateSystem, Coordinates, JourneyPlatform, Model, Platform},
-    parsing::helpers::{
-        i32_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
-        string_from_n_chars_parser, string_till_eol_parser,
+    parsing::{
+        error::{PResult, ParsingError},
+        helpers::{
+            i32_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
+            string_from_n_chars_parser, string_till_eol_parser,
+        },
     },
     storage::ResourceStorage,
     utils::{AutoIncrement, create_time_from_value},
@@ -258,7 +262,7 @@ fn parse_line(
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
     auto_increment: &AutoIncrement,
     coordinate_system: CoordinateSystem,
-) -> Result<(), Box<dyn Error>> {
+) -> PResult<()> {
     let (_, platform_row) = alt((
         journey_platform_combinator,
         platform_combinator,
@@ -266,8 +270,7 @@ fn parse_line(
         sloid_combinator,
         coord_combinator,
     ))
-    .parse(line)
-    .map_err(|e| format!("Error {e} while parsing {line}"))?;
+    .parse(line)?;
 
     match platform_row {
         PlatformLine::JourneyPlatform {
@@ -279,16 +282,22 @@ fn parse_line(
             bit_field_id,
         } => {
             let key = (journey_id, administration.clone());
-            let _journey_id = journeys_pk_type_converter.get(&key).ok_or(format!(
-                "Unknown legacy journey ID: {journey_id}, {administration}"
-            ))?;
+            let _journey_id = journeys_pk_type_converter.get(&key).ok_or_else(|| {
+                ParsingError::UnknownId(format!(
+                    "Journey Legacy Id (journey_id, administration): ({journey_id}, {administration})"
+                ))
+            })?;
 
             if !platforms_pk_type_converter.is_empty() {
                 let platform_id = *platforms_pk_type_converter
                     .get(&(stop_id, index))
-                    .ok_or(format!("Unknown legacy platform ID: ({stop_id}, {index})"))?;
+                    .ok_or_else(|| {
+                        ParsingError::UnknownId(format!(
+                            "Legacy Platform Id (stop_id, index): ({stop_id}, {index})"
+                        ))
+                    })?;
 
-                let time = time.map(|x| create_time_from_value(x as u32));
+                let time = time.map(|x| create_time_from_value(x as u32)).transpose()?;
 
                 let jp_instance = JourneyPlatform::new(
                     journey_id,
@@ -335,11 +344,15 @@ fn parse_line(
         } => {
             let id = platforms_pk_type_converter
                 .get(&(stop_id, index))
-                .ok_or(format!("Unknown legacy ID: ({stop_id}, {index})"))?;
+                .ok_or_else(|| {
+                    ParsingError::UnknownId(format!(
+                        "Legacy Platform Id (stop_id, index): ({stop_id}, {index})"
+                    ))
+                })?;
 
             platforms
                 .get_mut(id)
-                .ok_or(format!("Unknown ID for platforms: {id}"))?
+                .ok_or_else(|| ParsingError::UnknownId(format!("Unknown platforms Id: {id}")))?
                 .set_sloid(sloid);
             // TODO: We should maybe check for consistency between LV95 and GWS sloids
         }
@@ -352,11 +365,15 @@ fn parse_line(
         } => {
             let id = platforms_pk_type_converter
                 .get(&(stop_id, index))
-                .ok_or(format!("Unknown legacy ID: ({stop_id}, {index})"))?;
+                .ok_or_else(|| {
+                    ParsingError::UnknownId(format!(
+                        "Legacy Platform Id (stop_id, index): ({stop_id}, {index})"
+                    ))
+                })?;
 
             let platform = platforms
                 .get_mut(id)
-                .ok_or(format!("Unknown ID for platforms: {id}"))?;
+                .ok_or_else(|| ParsingError::UnknownId(format!("Unknown platforms Id: {id}")))?;
 
             match coordinate_system {
                 c @ CoordinateSystem::LV95 => {
@@ -376,9 +393,9 @@ fn parse_line(
 
 pub fn parse(
     version: Version,
-    path: &str,
+    path: &Path,
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
-) -> Result<(ResourceStorage<JourneyPlatform>, ResourceStorage<Platform>), Box<dyn Error>> {
+) -> HResult<(ResourceStorage<JourneyPlatform>, ResourceStorage<Platform>)> {
     let prefix = match version {
         Version::V_5_40_41_2_0_7 => "GLEISE",
         Version::V_5_40_41_2_0_4 | Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6 => "GLEIS",
@@ -390,11 +407,13 @@ pub fn parse(
     let mut journey_platform = FxHashMap::default();
 
     log::info!("Parsing {prefix}_LV95...");
-    let platforms_lv95 = read_lines(&format!("{path}/{prefix}_LV95"), 0)?;
+    let file = path.join(format!("{prefix}_LV95"));
+    let platforms_lv95 = read_lines(&file, 0)?;
     platforms_lv95
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| {
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .try_for_each(|(line_number, line)| {
             parse_line(
                 &line,
                 &mut platforms,
@@ -404,15 +423,22 @@ pub fn parse(
                 &auto_increment,
                 CoordinateSystem::LV95,
             )
-            .map_err(|e| format!("Error: {e}, for line: {line}"))
+            .map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(file.to_string_lossy()),
+                line,
+                line_number,
+            })
         })?;
 
     log::info!("Parsing {prefix}_WGS...");
-    let platforms_wgs84 = read_lines(&format!("{path}/{prefix}_WGS"), 0)?;
+    let file = path.join(format!("{prefix}_WGS"));
+    let platforms_wgs84 = read_lines(&file, 0)?;
     platforms_wgs84
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| {
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .try_for_each(|(line_number, line)| {
             parse_line(
                 &line,
                 &mut platforms,
@@ -422,7 +448,12 @@ pub fn parse(
                 &auto_increment,
                 CoordinateSystem::WGS84,
             )
-            .map_err(|e| format!("Error: {e}, for line: {line}"))
+            .map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(file.to_string_lossy()),
+                line,
+                line_number,
+            })
         })?;
 
     Ok((
@@ -432,6 +463,8 @@ pub fn parse(
 }
 #[cfg(test)]
 mod tests {
+    use crate::parsing::tests::get_json_values;
+
     use super::*;
     use pretty_assertions::assert_eq;
 
@@ -742,7 +775,7 @@ mod tests {
         let journeys_pk_type_converter = FxHashSet::default();
         let auto_increment = AutoIncrement::new();
 
-        let result = parse_line(
+        parse_line(
             "8500010 #0000001 G '11'",
             &mut platforms,
             &mut journey_platform,
@@ -750,15 +783,28 @@ mod tests {
             &journeys_pk_type_converter,
             &auto_increment,
             CoordinateSystem::LV95,
-        );
-
-        assert!(result.is_ok());
+        )
+        .unwrap();
         assert_eq!(platforms.len(), 1);
         assert_eq!(platforms_pk_type_converter.len(), 1);
-        assert!(platforms_pk_type_converter.contains_key(&(8500010, 1)));
+        let platform = platforms.get(&1).unwrap();
+        println!("{}", serde_json::to_string(&platform).unwrap());
+        let reference = r#"
+            {
+                "id":1,
+                "name":"11",
+                "sectors":null,
+                "stop_id":8500010,
+                "sloid":"",
+                "lv95_coordinates":{"coordinate_system":"LV95","x":0.0,"y":0.0},
+                "wgs84_coordinates":{"coordinate_system":"LV95","x":0.0,"y":0.0}
+            }"#;
+        let (platform, reference) = get_json_values(platform, reference).unwrap();
+        assert_eq!(platform, reference);
     }
 
     #[test]
+    #[should_panic]
     fn test_parse_line_sloid_requires_existing_platform() {
         let mut platforms = FxHashMap::default();
         let mut journey_platform = FxHashMap::default();
@@ -766,7 +812,7 @@ mod tests {
         let journeys_pk_type_converter = FxHashSet::default();
         let auto_increment = AutoIncrement::new();
 
-        let result = parse_line(
+        parse_line(
             "8574200 #0000003 g A ch:1:sloid:74200:1:3",
             &mut platforms,
             &mut journey_platform,
@@ -774,18 +820,12 @@ mod tests {
             &journeys_pk_type_converter,
             &auto_increment,
             CoordinateSystem::LV95,
-        );
-
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Unknown legacy ID")
-        );
+        )
+        .unwrap();
     }
 
     #[test]
+    #[should_panic]
     fn test_parse_line_coord_requires_existing_platform() {
         let mut platforms = FxHashMap::default();
         let mut journey_platform = FxHashMap::default();
@@ -793,7 +833,7 @@ mod tests {
         let journeys_pk_type_converter = FxHashSet::default();
         let auto_increment = AutoIncrement::new();
 
-        let result = parse_line(
+        parse_line(
             "8574200 #0000003 k 2692827 1247287 680",
             &mut platforms,
             &mut journey_platform,
@@ -801,15 +841,8 @@ mod tests {
             &journeys_pk_type_converter,
             &auto_increment,
             CoordinateSystem::LV95,
-        );
-
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Unknown legacy ID")
-        );
+        )
+        .unwrap();
     }
 
     #[test]
@@ -858,8 +891,23 @@ mod tests {
 
         assert_eq!(platforms.len(), 1);
         let platform_id = *platforms_pk_type_converter.get(&(8574200, 3)).unwrap();
+        assert_eq!(platform_id, 1);
         let platform = platforms.get(&platform_id).unwrap();
         assert_eq!(platform.id(), platform_id);
+
+        println!("{}", serde_json::to_string(&platform).unwrap());
+        let reference = r#"
+            {
+                "id":1,
+                "name":"5",
+                "sectors":null,
+                "stop_id":8574200,
+                "sloid":"ch:1:sloid:74200:1:3",
+                "lv95_coordinates":{"coordinate_system":"LV95","x":2692827.0,"y":1247287.0},
+                "wgs84_coordinates":{"coordinate_system":"LV95","x":0.0,"y":0.0}
+            }"#;
+        let (platform, reference) = get_json_values(platform, reference).unwrap();
+        assert_eq!(platform, reference);
     }
 
     #[test]
@@ -883,23 +931,24 @@ mod tests {
         .unwrap();
 
         // Add WGS84 coordinates (should be reversed)
-        let result = parse_line(
+        parse_line(
             "8500010 #0000001 k 47.123 8.456",
             &mut platforms,
             &mut journey_platform,
             &mut platforms_pk_type_converter,
             &journeys_pk_type_converter,
-            &auto_increment,
+            &AutoIncrement::new(),
             CoordinateSystem::WGS84,
-        );
+        )
+        .unwrap();
 
-        assert!(result.is_ok());
         // The test verifies that WGS84 coordinates are parsed and stored correctly
         // Note: WGS84 coordinates are reversed (y, x instead of x, y) in the implementation
         // at line 368 in platform_parser.rs
     }
 
     #[test]
+    #[should_panic]
     fn test_journey_platform_requires_valid_journey() {
         let mut platforms = FxHashMap::default();
         let mut journey_platform = FxHashMap::default();
@@ -907,7 +956,7 @@ mod tests {
         let journeys_pk_type_converter = FxHashSet::default(); // Empty set
         let auto_increment = AutoIncrement::new();
 
-        let result = parse_line(
+        parse_line(
             "8500010 000003 000011 #0000001      053751",
             &mut platforms,
             &mut journey_platform,
@@ -915,14 +964,7 @@ mod tests {
             &journeys_pk_type_converter,
             &auto_increment,
             CoordinateSystem::LV95,
-        );
-
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Unknown legacy journey ID")
-        );
+        )
+        .unwrap();
     }
 }

@@ -8,7 +8,10 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use strum_macros::{self, Display, EnumString};
 
+use thiserror::Error;
+
 use crate::{
+    error::{HResult, HrdfError},
     storage::DataStorage,
     utils::{add_1_day, sub_1_day},
 };
@@ -516,44 +519,58 @@ impl Journey {
         self.route.push(entry);
     }
 
-    pub fn bit_field_id(&self) -> Option<i32> {
-        // unwrap: There will always be a BitField entry.
-        let entry = &self.metadata().get(&JourneyMetadataType::BitField).unwrap()[0];
-        entry.bit_field_id
+    pub(crate) fn bit_field_id(&self) -> JResult<Option<i32>> {
+        let entry = self
+            .metadata()
+            .get(&JourneyMetadataType::BitField)
+            .ok_or(JourneyError::MissingBitFieldMetadata)?;
+
+        Ok(entry
+            .first()
+            .ok_or(JourneyError::EmptyJourneyMetadata)?
+            .bit_field_id)
     }
 
-    pub fn transport_type_id(&self) -> i32 {
-        // unwrap: There will always be a TransportType entry.
-        let entry = &self
+    pub fn transport_type_id(&self) -> HResult<i32> {
+        let entry = self
             .metadata()
             .get(&JourneyMetadataType::TransportType)
-            .unwrap()[0];
-        // unwrap: It's guaranteed to have value here.
-        entry.resource_id.unwrap()
+            .ok_or(JourneyError::MissingTransportType)?;
+        entry
+            .first()
+            .ok_or::<HrdfError>((JourneyError::EmptyJourneyMetadata).into())?
+            .resource_id
+            .ok_or(JourneyError::MissingRessourceId.into())
     }
 
-    pub fn transport_type<'a>(&'a self, data_storage: &'a DataStorage) -> &'a TransportType {
+    pub fn transport_type<'a>(
+        &'a self,
+        data_storage: &'a DataStorage,
+    ) -> HResult<&'a TransportType> {
+        let transport_id = self.transport_type_id()?;
         data_storage
             .transport_types()
-            .find(self.transport_type_id())
-            .unwrap_or_else(|| panic!("Transport type {:?} not found.", self.transport_type_id()))
+            .find(transport_id)
+            .ok_or(JourneyError::TransportIdNotFound(transport_id).into())
     }
 
-    pub fn first_stop_id(&self) -> i32 {
-        // unwrap: The route always contains at least 2 entries.
-        self.route.first().unwrap().stop_id()
+    pub fn first_stop_id(&self) -> HResult<i32> {
+        Ok(self
+            .route
+            .first()
+            .ok_or(JourneyError::EmptyRoute)?
+            .stop_id())
     }
 
-    pub fn last_stop_id(&self) -> i32 {
-        // unwrap: The route always contains at least 2 entries.
-        self.route.last().unwrap().stop_id()
+    pub fn last_stop_id(&self) -> HResult<i32> {
+        Ok(self.route.last().ok_or(JourneyError::EmptyRoute)?.stop_id())
     }
 
-    pub fn is_last_stop(&self, stop_id: i32, ignore_loop: bool) -> bool {
-        if ignore_loop && self.first_stop_id() == self.last_stop_id() {
-            false
+    pub fn is_last_stop(&self, stop_id: i32, ignore_loop: bool) -> HResult<bool> {
+        if ignore_loop && self.first_stop_id()? == self.last_stop_id()? {
+            Ok(false)
         } else {
-            stop_id == self.last_stop_id()
+            Ok(stop_id == self.last_stop_id()?)
         }
     }
 
@@ -602,10 +619,10 @@ impl Journey {
     /// The date must correspond to the route's first entry.
     /// Do not call this function if the stop is not part of the route.
     /// Do not call this function if the stop has no departure time (only the last stop has no departure time).
-    pub fn departure_at_of(&self, stop_id: i32, date: NaiveDate) -> NaiveDateTime {
+    pub fn departure_at_of(&self, stop_id: i32, date: NaiveDate) -> HResult<NaiveDateTime> {
         match self.departure_time_of(stop_id) {
-            (departure_time, false) => NaiveDateTime::new(date, departure_time),
-            (departure_time, true) => NaiveDateTime::new(add_1_day(date), departure_time),
+            (departure_time, false) => Ok(NaiveDateTime::new(date, departure_time)),
+            (departure_time, true) => Ok(NaiveDateTime::new(add_1_day(date)?, departure_time)),
         }
     }
 
@@ -618,7 +635,7 @@ impl Journey {
         // If it's not a departure date, it's an arrival date.
         is_departure_date: bool,
         origin_stop_id: i32,
-    ) -> NaiveDateTime {
+    ) -> HResult<NaiveDateTime> {
         let (departure_time, is_next_day) = self.departure_time_of(stop_id);
         let (_, origin_is_next_day) = if is_departure_date {
             self.departure_time_of(origin_stop_id)
@@ -627,9 +644,9 @@ impl Journey {
         };
 
         match (is_next_day, origin_is_next_day) {
-            (true, false) => NaiveDateTime::new(add_1_day(date), departure_time),
-            (false, true) => NaiveDateTime::new(sub_1_day(date), departure_time),
-            _ => NaiveDateTime::new(date, departure_time),
+            (true, false) => Ok(NaiveDateTime::new(add_1_day(date)?, departure_time)),
+            (false, true) => Ok(NaiveDateTime::new(sub_1_day(date)?, departure_time)),
+            _ => Ok(NaiveDateTime::new(date, departure_time)),
         }
     }
 
@@ -661,7 +678,7 @@ impl Journey {
         // If it's not a departure date, it's an arrival date.
         is_departure_date: bool,
         origin_stop_id: i32,
-    ) -> NaiveDateTime {
+    ) -> HResult<NaiveDateTime> {
         let (arrival_time, is_next_day) = self.arrival_time_of(stop_id);
         let (_, origin_is_next_day) = if is_departure_date {
             self.departure_time_of(origin_stop_id)
@@ -670,9 +687,9 @@ impl Journey {
         };
 
         match (is_next_day, origin_is_next_day) {
-            (true, false) => NaiveDateTime::new(add_1_day(date), arrival_time),
-            (false, true) => NaiveDateTime::new(sub_1_day(date), arrival_time),
-            _ => NaiveDateTime::new(date, arrival_time),
+            (true, false) => Ok(NaiveDateTime::new(add_1_day(date)?, arrival_time)),
+            (false, true) => Ok(NaiveDateTime::new(sub_1_day(date)?, arrival_time)),
+            _ => Ok(NaiveDateTime::new(date, arrival_time)),
         }
     }
 
@@ -702,6 +719,26 @@ impl Journey {
 
         result
     }
+}
+
+type JResult<T> = Result<T, JourneyError>;
+
+#[derive(Debug, Error)]
+pub enum JourneyError {
+    #[error("Missing MitField Metadata")]
+    MissingBitFieldMetadata,
+    #[error("JourneyMetaData is empty")]
+    EmptyJourneyMetadata,
+    #[error("Missing Transport Type Metadata")]
+    MissingTransportType,
+    #[error("Missing Reoussirce Id")]
+    MissingRessourceId,
+    #[error("Transport Id: {0} not found")]
+    TransportIdNotFound(i32),
+    #[error("Empty Route")]
+    EmptyRoute,
+    #[error("Stop Id: {0} not found")]
+    StopIdNotFound(i32),
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -802,11 +839,12 @@ impl JourneyRouteEntry {
 
     // Functions
 
-    pub fn stop<'a>(&'a self, data_storage: &'a DataStorage) -> &'a Stop {
+    pub fn stop<'a>(&'a self, data_storage: &'a DataStorage) -> HResult<&'a Stop> {
+        let stop_id = self.stop_id();
         data_storage
             .stops()
-            .find(self.stop_id())
-            .unwrap_or_else(|| panic!("Stop {:?} not found.", self.stop_id()))
+            .find(stop_id)
+            .ok_or(JourneyError::StopIdNotFound(stop_id).into())
     }
 }
 

@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// # Administration Exchange Time parsing
 ///
 /// Transfer time between two transport companies (see
@@ -22,22 +24,24 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// UMSTEIGV
-use std::error::Error;
-
 use nom::{IResult, Parser, character::char, sequence::preceded};
 use rustc_hash::FxHashMap;
 
 use crate::{
+    error::{HResult, HrdfError},
     models::ExchangeTimeAdministration,
-    parsing::helpers::{
-        i16_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
-        string_from_n_chars_parser,
+    parsing::{
+        error::PResult,
+        helpers::{
+            i16_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
+            string_from_n_chars_parser,
+        },
     },
     storage::ResourceStorage,
     utils::AutoIncrement,
 };
 
-pub fn parse_exchange_administration_row(
+fn parse_exchange_administration_row(
     input: &str,
 ) -> IResult<&str, (Option<i32>, String, String, i16)> {
     let (res, (stop_id, administration_1, administration_2, duration)) = (
@@ -53,10 +57,9 @@ pub fn parse_exchange_administration_row(
 fn parse_line(
     line: &str,
     auto_increment: &AutoIncrement,
-) -> Result<(i32, ExchangeTimeAdministration), Box<dyn Error>> {
+) -> PResult<(i32, ExchangeTimeAdministration)> {
     let (_, (stop_id, administration_1, administration_2, duration)) =
-        parse_exchange_administration_row(line)
-            .map_err(|e| format!("Error {e} while parsing {line}"))?;
+        parse_exchange_administration_row(line)?;
     let id = auto_increment.next();
 
     Ok((
@@ -65,16 +68,25 @@ fn parse_line(
     ))
 }
 
-pub fn parse(path: &str) -> Result<ResourceStorage<ExchangeTimeAdministration>, Box<dyn Error>> {
+pub fn parse(path: &Path) -> HResult<ResourceStorage<ExchangeTimeAdministration>> {
     log::info!("Parsing UMSTEIGV...");
 
-    let lines = read_lines(&format!("{path}/UMSTEIGV"), 0)?;
+    let file = path.join("UMSTEIGV");
+    let lines = read_lines(&file, 0)?;
     let auto_increment = AutoIncrement::new();
     let exchanges = lines
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| parse_line(&line, &auto_increment))
-        .collect::<Result<FxHashMap<i32, ExchangeTimeAdministration>, Box<dyn Error>>>()?;
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .map(|(line_number, line)| {
+            parse_line(&line, &auto_increment).map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(file.to_string_lossy()),
+                line,
+                line_number,
+            })
+        })
+        .collect::<HResult<FxHashMap<i32, ExchangeTimeAdministration>>>()?;
 
     Ok(ResourceStorage::new(exchanges))
 }
@@ -131,7 +143,7 @@ mod tests {
             .into_iter()
             .filter(|line| !line.trim().is_empty())
             .map(|line| parse_line(&line, &auto_increment))
-            .collect::<Result<FxHashMap<i32, ExchangeTimeAdministration>, Box<dyn Error>>>()
+            .collect::<PResult<FxHashMap<i32, ExchangeTimeAdministration>>>()
             .unwrap();
         // First row
         let attribute = exchanges.get(&1).unwrap();

@@ -46,7 +46,7 @@
 /// Files not used by the parser vor version < 2.0.7:
 /// ATTRIBUT_DE, ATTRIBUT_EN, ATTRIBUT_FR, ATTRIBUT_IT
 /// These files were suppressed in 2.0.7
-use std::{error::Error, str::FromStr};
+use std::{path::Path, str::FromStr};
 
 use nom::{
     IResult, Parser,
@@ -58,9 +58,14 @@ use nom::{
 use rustc_hash::FxHashMap;
 
 use crate::{
+    error::{HResult, HrdfError},
     models::{Attribute, Language, Model},
-    parsing::helpers::{
-        i16_from_n_digits_parser, read_lines, string_from_n_chars_parser, string_till_eol_parser,
+    parsing::{
+        error::{PResult, ParsingError},
+        helpers::{
+            i16_from_n_digits_parser, read_lines, string_from_n_chars_parser,
+            string_till_eol_parser,
+        },
     },
     storage::ResourceStorage,
     utils::AutoIncrement,
@@ -136,15 +141,14 @@ fn parse_line(
     pk_type_converter: &mut FxHashMap<String, i32>,
     auto_increment: &AutoIncrement,
     current_language: &mut Language,
-) -> Result<(), Box<dyn Error>> {
+) -> PResult<()> {
     let (_, attribute_row) = alt((
         row_offer_combinator,
         row_language_combinator,
         row_language_description_combinator,
         row_description_combinator,
     ))
-    .parse(line)
-    .map_err(|e| format!("Error {e} while parsing {line}"))?;
+    .parse(line)?;
 
     match attribute_row {
         AttributeLine::Offer {
@@ -180,10 +184,10 @@ fn parse_line(
         } => {
             let id = pk_type_converter
                 .get(&legacy_id)
-                .ok_or(format!("Unknown legacy ID: {legacy_id}"))?;
+                .ok_or_else(|| ParsingError::UnknownId(format!("legacy_id : {legacy_id}")))?;
 
             data.get_mut(id)
-                .ok_or(format!("Unknown ID: {id}"))?
+                .ok_or_else(|| ParsingError::UnknownId(format!("id : {id}")))?
                 .set_description(*current_language, &description);
         }
         AttributeLine::Description(_s) => {
@@ -194,10 +198,11 @@ fn parse_line(
     Ok(())
 }
 
-pub fn parse(path: &str) -> Result<AttributeAndTypeConverter, Box<dyn Error>> {
+pub fn parse(path: &Path) -> HResult<AttributeAndTypeConverter> {
     log::info!("Parsing ATTRIBUT...");
 
-    let lines = read_lines(&format!("{path}/ATTRIBUT"), 0)?;
+    let file = path.join("ATTRIBUT");
+    let lines = read_lines(&file, 0)?;
 
     let auto_increment = AutoIncrement::new();
     let mut data = FxHashMap::default();
@@ -206,8 +211,9 @@ pub fn parse(path: &str) -> Result<AttributeAndTypeConverter, Box<dyn Error>> {
 
     lines
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| {
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .try_for_each(|(line_number, line)| {
             parse_line(
                 &line,
                 &mut data,
@@ -215,6 +221,12 @@ pub fn parse(path: &str) -> Result<AttributeAndTypeConverter, Box<dyn Error>> {
                 &auto_increment,
                 &mut current_language,
             )
+            .map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(file.to_string_lossy()),
+                line,
+                line_number,
+            })
         })?;
 
     Ok((ResourceStorage::new(data), pk_type_converter))
@@ -227,9 +239,8 @@ mod tests {
     use crate::parsing::tests::get_json_values;
     use pretty_assertions::assert_eq;
 
-    fn row_language_description_parser(input: &str) -> Result<(String, String), Box<dyn Error>> {
-        let (_, ld) = row_language_description_combinator(input)
-            .map_err(|e| format!("Error {e}: Unable to parse {input}"))?;
+    fn row_language_description_parser(input: &str) -> PResult<(String, String)> {
+        let (_, ld) = row_language_description_combinator(input)?;
 
         match ld {
             AttributeLine::LanguageDescription {
@@ -266,9 +277,8 @@ mod tests {
         assert_eq!("2nd class only", description);
     }
 
-    fn row_description_parser(input: &str) -> Result<String, Box<dyn Error>> {
-        let (_, lang) = row_description_combinator(input)
-            .map_err(|e| format!("Error {e}: Unable to parse {input}"))?;
+    fn row_description_parser(input: &str) -> PResult<String> {
+        let (_, lang) = row_description_combinator(input)?;
 
         match lang {
             AttributeLine::Description(s) => Ok(s),
@@ -283,9 +293,8 @@ mod tests {
         assert_eq!("WR WR WR", description);
     }
 
-    fn row_offer_parser(input: &str) -> Result<(String, i16, i16, i16), Box<dyn Error>> {
-        let (_, line) = row_offer_combinator(input)
-            .map_err(|e| format!("Error {e}: Unable to parse {input}"))?;
+    fn row_offer_parser(input: &str) -> PResult<(String, i16, i16, i16)> {
+        let (_, line) = row_offer_combinator(input)?;
         match line {
             AttributeLine::Offer {
                 designation_id,
@@ -312,9 +321,8 @@ mod tests {
         assert_eq!(5, sorting);
     }
 
-    fn row_language_parser(input: &str) -> Result<String, Box<dyn Error>> {
-        let (_, line) = row_language_combinator(input)
-            .map_err(|e| format!("Error {e}: Unable to parse {input}"))?;
+    fn row_language_parser(input: &str) -> PResult<String> {
+        let (_, line) = row_language_combinator(input)?;
 
         match line {
             AttributeLine::Language(language) => Ok(language),

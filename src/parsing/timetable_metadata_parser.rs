@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// # ECKDATEN file
 ///
 /// Life of the timetable
@@ -10,8 +12,6 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// ECKDATEN
-use std::error::Error;
-
 use chrono::NaiveDate;
 use nom::{
     IResult, Parser,
@@ -25,8 +25,9 @@ use nom::{
 use rustc_hash::FxHashMap;
 
 use crate::{
+    error::{HResult, HrdfError},
     models::{Model, TimetableMetadataEntry},
-    parsing::helpers::read_lines,
+    parsing::{error::PResult, helpers::read_lines},
     storage::ResourceStorage,
     utils::AutoIncrement,
 };
@@ -58,7 +59,37 @@ fn info_combinator(input: &str) -> IResult<&str, InfoLines> {
     .parse(input)
 }
 
-pub fn parse(path: &str) -> Result<ResourceStorage<TimetableMetadataEntry>, Box<dyn Error>> {
+fn parse_line(
+    line: &str,
+    data: &mut FxHashMap<i32, TimetableMetadataEntry>,
+    keys: &[&str],
+    index: &mut usize,
+    auto_increment: &AutoIncrement,
+) -> PResult<()> {
+    let (_, res) = alt((date_combinator, info_combinator)).parse(line)?;
+    match res {
+        InfoLines::Date(d) => {
+            let tt = TimetableMetadataEntry::new(
+                auto_increment.next(),
+                keys[*index].to_owned(),
+                d.to_string(),
+            );
+            data.insert(tt.id(), tt);
+            *index += 1;
+        }
+        InfoLines::MetaData(mt) => {
+            for t in mt {
+                let tt =
+                    TimetableMetadataEntry::new(auto_increment.next(), keys[*index].to_owned(), t);
+                data.insert(tt.id(), tt);
+                *index += 1;
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn parse(path: &Path) -> HResult<ResourceStorage<TimetableMetadataEntry>> {
     log::info!("Parsing ECKDATEN...");
     let auto_increment = AutoIncrement::new();
     let keys = [
@@ -71,36 +102,21 @@ pub fn parse(path: &str) -> Result<ResourceStorage<TimetableMetadataEntry>, Box<
     ];
     let mut index = 0;
     let mut data = FxHashMap::default();
-    read_lines(&format!("{path}/ECKDATEN"), 0)?
+    let file = path.join("ECKDATEN");
+    let time_table = read_lines(&file, 0)?;
+    time_table
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| {
-            let (_, res) = alt((date_combinator, info_combinator))
-                .parse(&line)
-                .map_err(|e| format!("Error: {e}, for line: {line}"))?;
-            match res {
-                InfoLines::Date(d) => {
-                    let tt = TimetableMetadataEntry::new(
-                        auto_increment.next(),
-                        keys[index].to_owned(),
-                        d.to_string(),
-                    );
-                    data.insert(tt.id(), tt);
-                    index += 1;
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .try_for_each(|(line_number, line)| {
+            parse_line(&line, &mut data, &keys, &mut index, &auto_increment).map_err(|e| {
+                HrdfError::Parsing {
+                    error: e,
+                    file: String::from(file.to_string_lossy()),
+                    line,
+                    line_number,
                 }
-                InfoLines::MetaData(mt) => {
-                    for t in mt {
-                        let tt = TimetableMetadataEntry::new(
-                            auto_increment.next(),
-                            keys[index].to_owned(),
-                            t,
-                        );
-                        data.insert(tt.id(), tt);
-                        index += 1;
-                    }
-                }
-            }
-            Ok::<(), Box<dyn Error>>(())
+            })
         })?;
 
     Ok(ResourceStorage::new(data))
@@ -257,11 +273,10 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
     fn test_date_combinator_invalid_date() {
         let input = "32.13.2024"; // Invalid day and month
-        let result = date_combinator(input);
-        // Parser should fail for invalid dates
-        assert!(result.is_err());
+        date_combinator(input).unwrap();
     }
 
     #[test]

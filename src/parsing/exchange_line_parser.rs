@@ -32,16 +32,20 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// UMSTEIGL
-use std::{error::Error, str::FromStr};
+use std::{path::Path, str::FromStr};
 
 use nom::{IResult, Parser, character::char, combinator::map, sequence::preceded};
 use rustc_hash::FxHashMap;
 
 use crate::{
+    error::{HResult, HrdfError},
     models::{DirectionType, ExchangeTimeLine, LineInfo},
-    parsing::helpers::{
-        i16_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
-        string_from_n_chars_parser,
+    parsing::{
+        error::PResult,
+        helpers::{
+            i16_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
+            string_from_n_chars_parser,
+        },
     },
     storage::ResourceStorage,
     utils::AutoIncrement,
@@ -117,7 +121,7 @@ fn parse_line(
     line: &str,
     auto_increment: &AutoIncrement,
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<(i32, ExchangeTimeLine), Box<dyn Error>> {
+) -> PResult<(i32, ExchangeTimeLine)> {
     let (
         _res,
         (
@@ -133,7 +137,7 @@ fn parse_line(
             duration,
             is_guaranteed,
         ),
-    ) = parse_exchange_line_row(line).map_err(|e| format!("Error {e} while parsing {line}"))?;
+    ) = parse_exchange_line_row(line)?;
 
     let transport_type_id_1 = *transport_types_pk_type_converter
         .get(&transport_type_id_1)
@@ -189,17 +193,28 @@ fn parse_line(
 }
 
 pub fn parse(
-    path: &str,
+    path: &Path,
     transport_types_pk_type_converter: &FxHashMap<String, i32>,
-) -> Result<ResourceStorage<ExchangeTimeLine>, Box<dyn Error>> {
+) -> HResult<ResourceStorage<ExchangeTimeLine>> {
     log::info!("Parsing UMSTEIGL...");
-    let lines = read_lines(&format!("{path}/UMSTEIGL"), 0)?;
+    let file = path.join("UMSTEIGL");
+    let lines = read_lines(&file, 0)?;
     let auto_increment = AutoIncrement::new();
     let exchanges = lines
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| parse_line(&line, &auto_increment, transport_types_pk_type_converter))
-        .collect::<Result<FxHashMap<_, _>, Box<dyn Error>>>()?;
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .map(|(line_number, line)| {
+            parse_line(&line, &auto_increment, transport_types_pk_type_converter).map_err(|e| {
+                HrdfError::Parsing {
+                    error: e,
+                    file: String::from(file.to_string_lossy()),
+                    line,
+                    line_number,
+                }
+            })
+        })
+        .collect::<HResult<FxHashMap<_, _>>>()?;
 
     Ok(ResourceStorage::new(exchanges))
 }
@@ -360,9 +375,19 @@ mod tests {
         let auto_increment = AutoIncrement::new();
         let exchanges = rows
             .into_iter()
-            .filter(|line| !line.trim().is_empty())
-            .map(|line| parse_line(&line, &auto_increment, &transport_types_pk_type_converter))
-            .collect::<Result<FxHashMap<_, _>, Box<dyn Error>>>()
+            .enumerate()
+            .filter(|(_, line)| !line.trim().is_empty())
+            .map(|(line_number, line)| {
+                parse_line(&line, &auto_increment, &transport_types_pk_type_converter).map_err(
+                    |e| HrdfError::Parsing {
+                        error: e,
+                        file: String::default(),
+                        line,
+                        line_number,
+                    },
+                )
+            })
+            .collect::<HResult<FxHashMap<_, _>>>()
             .unwrap();
 
         // Id 1

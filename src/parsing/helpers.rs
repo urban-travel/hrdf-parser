@@ -1,6 +1,7 @@
 use std::{
     fs::File,
     io::{self, Read, Seek},
+    path::Path,
 };
 
 /// Here we will define all the parsing Helper functions
@@ -87,7 +88,7 @@ pub(crate) fn direction_parser(input: &str) -> IResult<&str, (String, i32)> {
     (map(tag("R"), String::from), i32_from_n_digits_parser(6)).parse(input)
 }
 
-pub(crate) fn read_lines(path: &str, bytes_offset: u64) -> io::Result<Vec<String>> {
+pub(crate) fn read_lines(path: &Path, bytes_offset: u64) -> io::Result<Vec<String>> {
     let mut file = File::open(path)?;
     file.seek(io::SeekFrom::Start(bytes_offset))?;
     let mut reader = io::BufReader::new(file);

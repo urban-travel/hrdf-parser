@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// # ZUGART file
 ///
 /// List of service categories. Per language the (Class:) grouping of offer
@@ -81,8 +83,6 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// ZUGART
-use std::error::Error;
-
 use nom::{
     IResult, Parser,
     branch::alt,
@@ -94,10 +94,14 @@ use nom::{
 use rustc_hash::FxHashMap;
 
 use crate::{
+    error::{HResult, HrdfError},
     models::{Language, Model, TransportType},
-    parsing::helpers::{
-        optional_i32_from_n_digits_parser, read_lines, string_from_n_chars_parser,
-        string_till_eol_parser,
+    parsing::{
+        error::{PResult, ParsingError},
+        helpers::{
+            optional_i32_from_n_digits_parser, read_lines, string_from_n_chars_parser,
+            string_till_eol_parser,
+        },
     },
     storage::ResourceStorage,
     utils::AutoIncrement,
@@ -240,7 +244,7 @@ fn parse_line(
     pk_type_converter: &mut FxHashMap<String, i32>,
     auto_increment: &AutoIncrement,
     current_language: &mut Language,
-) -> Result<(), Box<dyn Error>> {
+) -> PResult<()> {
     let (_, transport_row) = alt((
         offer_definition_combinator,
         language_combinator,
@@ -249,8 +253,7 @@ fn parse_line(
         option_combinator,
         iline_combinator,
     ))
-    .parse(line)
-    .map_err(|e| format!("Error {e} while parsing {line}"))?;
+    .parse(line)?;
 
     match transport_row {
         TransportTypeAndTypeLine::OfferDefinition {
@@ -319,7 +322,9 @@ fn parse_line(
             if let Some(transport_type) = data.get_mut(&id) {
                 transport_type.set_category_name(*current_language, &category_name);
             } else {
-                return Err(format!("Error: TransportType not found for id: {id}").into());
+                return Err(ParsingError::UnknownId(format!(
+                    "Error: TransportType: {id}"
+                )));
             }
         }
         TransportTypeAndTypeLine::Option {
@@ -335,10 +340,11 @@ fn parse_line(
     Ok(())
 }
 
-pub fn parse(path: &str) -> Result<TransportTypeAndTypeConverter, Box<dyn Error>> {
+pub fn parse(path: &Path) -> HResult<TransportTypeAndTypeConverter> {
     log::info!("Parsing ZUGART...");
 
-    let transport_types = read_lines(&format!("{path}/ZUGART"), 0)?;
+    let file = path.join("ZUGART");
+    let transport_types = read_lines(&file, 0)?;
 
     let auto_increment = AutoIncrement::new();
     let mut data = FxHashMap::default();
@@ -347,8 +353,9 @@ pub fn parse(path: &str) -> Result<TransportTypeAndTypeConverter, Box<dyn Error>
 
     transport_types
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| {
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .try_for_each(|(line_number, line)| {
             parse_line(
                 &line,
                 &mut data,
@@ -356,6 +363,12 @@ pub fn parse(path: &str) -> Result<TransportTypeAndTypeConverter, Box<dyn Error>
                 &auto_increment,
                 &mut current_language,
             )
+            .map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(file.to_string_lossy()),
+                line,
+                line_number,
+            })
         })?;
 
     Ok((ResourceStorage::new(data), pk_type_converter))

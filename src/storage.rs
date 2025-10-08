@@ -1,11 +1,12 @@
-use std::{error::Error, time::Instant};
+use std::{path::Path, time::Instant};
 
 use chrono::{Days, NaiveDate};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    JourneyId,
+    JourneyError, JourneyId,
+    error::{HResult, HrdfError},
     models::{
         Attribute, BitField, Direction, ExchangeTimeAdministration, ExchangeTimeJourney,
         ExchangeTimeLine, Holiday, InformationText, Journey, JourneyPlatform, Line, Model,
@@ -66,7 +67,7 @@ pub struct DataStorage {
 }
 
 impl DataStorage {
-    pub fn new(version: Version, path: &str) -> Result<Self, Box<dyn Error>> {
+    pub fn new(version: Version, path: &Path) -> HResult<Self> {
         // Time-relevant data
         let complete = Instant::now();
         let now = Instant::now();
@@ -172,10 +173,10 @@ impl DataStorage {
         log::info!("Building bit_fields_by_day...");
         let bit_fields_by_day = create_bit_fields_by_day(&bit_fields, &timetable_metadata)?;
         log::info!("Building bit_fields_by_stop_id...");
-        let bit_fields_by_stop_id = create_bit_fields_by_stop_id(&journeys);
+        let bit_fields_by_stop_id = create_bit_fields_by_stop_id(&journeys)?;
         log::info!("Building journeys by stop id and bit field_id...");
         let journeys_by_stop_id_and_bit_field_id =
-            create_journeys_by_stop_id_and_bit_field_id(&journeys);
+            create_journeys_by_stop_id_and_bit_field_id(&journeys)?;
         log::info!("Building stop connections by stop id...");
         let bit_field_id_for_through_service_by_journey_id_stop_id =
             create_bit_field_id_through_service_by_journey_id_stop_id(&through_service);
@@ -355,81 +356,85 @@ impl<M: Model<M>> ResourceStorage<M> {
 fn create_bit_fields_by_day(
     bit_fields: &ResourceStorage<BitField>,
     timetable_metadata: &ResourceStorage<TimetableMetadataEntry>,
-) -> Result<FxHashMap<NaiveDate, FxHashSet<i32>>, Box<dyn Error>> {
+) -> HResult<FxHashMap<NaiveDate, FxHashSet<i32>>> {
     let start_date = timetable_start_date(timetable_metadata)?;
     let num_days =
         count_days_between_two_dates(start_date, timetable_end_date(timetable_metadata)?);
 
-    let dates: Vec<NaiveDate> = (0..num_days)
+    let dates = (0..num_days)
         .map(|i| {
+            let i = i.try_into().unwrap();
             start_date
                 // unwrap: Converting i from usize to u64 will never fail.
-                .checked_add_days(Days::new(i.try_into().unwrap()))
-                // unwrap: Adding days will never fail.
-                .unwrap()
+                .checked_add_days(Days::new(i))
+                .ok_or(HrdfError::FailedToAddDays(start_date, i))
         })
-        .collect();
+        .collect::<HResult<Vec<NaiveDate>>>()?;
 
     let mut map = FxHashMap::default();
     dates.iter().for_each(|date| {
         map.entry(*date).or_insert(FxHashSet::default()).insert(0);
     });
 
-    let result = bit_fields.data().keys().fold(map, |mut acc, bit_field_id| {
-        let bit_field = bit_fields
-            .find(*bit_field_id)
-            .unwrap_or_else(|| panic!("Bitfield id {bit_field_id:?} not found."));
-        let indexes: Vec<usize> = bit_field
-            .bits()
-            .iter()
-            // The first two bits must be ignored.
-            .skip(2)
-            .enumerate()
-            .filter(|&(ref i, &x)| *i < num_days && x == 1)
-            .map(|(i, _)| i)
-            .collect();
+    bit_fields
+        .data()
+        .keys()
+        .try_fold(map, |mut acc, bit_field_id| {
+            let bit_field = bit_fields
+                .find(*bit_field_id)
+                .ok_or(HrdfError::BitFieldIdNotFound(*bit_field_id))?;
+            let indexes: Vec<usize> = bit_field
+                .bits()
+                .iter()
+                // The first two bits must be ignored.
+                .skip(2)
+                .enumerate()
+                .filter(|&(ref i, &x)| *i < num_days && x == 1)
+                .map(|(i, _)| i)
+                .collect();
 
-        indexes.iter().for_each(|&i| {
-            acc.entry(dates[i]).or_default().insert(bit_field.id());
-        });
+            indexes.iter().for_each(|&i| {
+                acc.entry(dates[i]).or_default().insert(bit_field.id());
+            });
 
-        acc
-    });
-    Ok(result)
+            Ok(acc)
+        })
 }
 
 fn create_bit_fields_by_stop_id(
     journeys: &ResourceStorage<Journey>,
-) -> FxHashMap<i32, FxHashSet<i32>> {
-    journeys
-        .entries()
-        .into_iter()
-        .fold(FxHashMap::default(), |mut acc, journey| {
-            journey.route().iter().for_each(|route_entry| {
+) -> HResult<FxHashMap<i32, FxHashSet<i32>>> {
+    journeys.entries().into_iter().try_fold(
+        FxHashMap::default(),
+        |mut acc: FxHashMap<i32, FxHashSet<i32>>, journey| {
+            journey.route().iter().try_for_each(|route_entry| {
                 acc.entry(route_entry.stop_id())
                     .or_default()
                     // If the journey has no bit_field_id, the default value is 0. A value of 0 means that the journey operates every day.
-                    .insert(journey.bit_field_id().unwrap_or(0));
-            });
-            acc
-        })
+                    .insert(journey.bit_field_id()?.unwrap_or(0));
+                Ok::<(), JourneyError>(())
+            })?;
+            Ok(acc)
+        },
+    )
 }
 
 fn create_journeys_by_stop_id_and_bit_field_id(
     journeys: &ResourceStorage<Journey>,
-) -> FxHashMap<(i32, i32), Vec<i32>> {
-    journeys
-        .entries()
-        .into_iter()
-        .fold(FxHashMap::default(), |mut acc, journey| {
-            journey.route().iter().for_each(|route_entry| {
+) -> HResult<FxHashMap<(i32, i32), Vec<i32>>> {
+    journeys.entries().into_iter().try_fold(
+        FxHashMap::default(),
+        |mut acc: FxHashMap<(i32, i32), Vec<i32>>, journey| {
+            journey.route().iter().try_for_each(|route_entry| {
                 // If the journey has no bit_field_id, the default value is 0. A value of 0 means that the journey operates every day.
-                acc.entry((route_entry.stop_id(), journey.bit_field_id().unwrap_or(0)))
+                acc.entry((route_entry.stop_id(), journey.bit_field_id()?.unwrap_or(0)))
                     .or_default()
                     .push(journey.id());
-            });
-            acc
-        })
+                Ok::<(), JourneyError>(())
+            })?;
+            Ok(acc)
+        },
+    )
 }
 
 /// Given journey_stop_id, and journey_id_1, journey_id_2, we obtain the bit_field_id of the ThroughService

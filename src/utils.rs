@@ -6,7 +6,12 @@ use std::cell::RefCell;
 
 use chrono::{Days, NaiveDate, NaiveTime};
 
-use crate::{models::TimetableMetadataEntry, storage::ResourceStorage};
+use crate::{
+    error::{HResult, HrdfError},
+    models::TimetableMetadataEntry,
+    parsing::error::{PResult, ParsingError},
+    storage::ResourceStorage,
+};
 
 pub struct AutoIncrement {
     value: RefCell<i32>,
@@ -29,14 +34,14 @@ impl AutoIncrement {
     }
 }
 
-pub fn add_1_day(date: NaiveDate) -> NaiveDate {
+pub fn add_1_day(date: NaiveDate) -> HResult<NaiveDate> {
     date.checked_add_days(Days::new(1))
-        .expect("Error adding 1 day to the date.")
+        .ok_or(HrdfError::FailedToAddDays(date, 1))
 }
 
-pub fn sub_1_day(date: NaiveDate) -> NaiveDate {
+pub fn sub_1_day(date: NaiveDate) -> HResult<NaiveDate> {
     date.checked_sub_days(Days::new(1))
-        .expect("Error subtracting 1 day to the date.")
+        .ok_or(HrdfError::FailedToSubDays(date, 1))
 }
 
 pub fn count_days_between_two_dates(date_1: NaiveDate, date_2: NaiveDate) -> usize {
@@ -44,35 +49,34 @@ pub fn count_days_between_two_dates(date_1: NaiveDate, date_2: NaiveDate) -> usi
         + 1
 }
 
-pub fn create_time(hour: u32, minute: u32) -> NaiveTime {
-    NaiveTime::from_hms_opt(hour, minute, 0)
-        .expect("Impossible to create a NaiveTime from hour and minute.")
+pub fn create_time(hour: u32, minute: u32) -> PResult<NaiveTime> {
+    NaiveTime::from_hms_opt(hour, minute, 0).ok_or(ParsingError::UnableToBuildTime(hour, minute, 0))
 }
 
-pub fn create_time_from_value(value: u32) -> NaiveTime {
+pub fn create_time_from_value(value: u32) -> PResult<NaiveTime> {
     create_time(value / 100, value % 100)
 }
 
 pub fn timetable_start_date(
     timetable_metadata: &ResourceStorage<TimetableMetadataEntry>,
-) -> Result<NaiveDate, &str> {
+) -> HResult<NaiveDate> {
     let result = timetable_metadata
         .data()
         .values()
         .find(|val| val.key() == "start_date")
-        .ok_or("Key \"start_date\" missing.")?
+        .ok_or(HrdfError::MissingStartDate)?
         .value_as_naive_date();
     Ok(result)
 }
 
 pub fn timetable_end_date(
     timetable_metadata: &ResourceStorage<TimetableMetadataEntry>,
-) -> Result<NaiveDate, &str> {
+) -> HResult<NaiveDate> {
     let result = timetable_metadata
         .data()
         .values()
         .find(|val| val.key() == "end_date")
-        .expect("Key \"end_date\" missing.")
+        .ok_or(HrdfError::MissingEndDate)?
         .value_as_naive_date();
     Ok(result)
 }

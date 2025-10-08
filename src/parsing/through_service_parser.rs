@@ -1,3 +1,5 @@
+use std::path::Path;
+
 /// # Through Service parser
 ///
 /// - List of ride pairs that form a contiguous run. Travellers can remain seated.
@@ -30,15 +32,17 @@
 /// 1 file(s).
 /// File(s) read by the parser:
 /// DURCHBI
-use std::error::Error;
-
 use nom::{IResult, Parser, character::char, combinator::map, sequence::preceded};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     JourneyId,
+    error::{HResult, HrdfError},
     models::{Model, ThroughService},
-    parsing::helpers::{i32_from_n_digits_parser, read_lines, string_from_n_chars_parser},
+    parsing::{
+        error::PResult,
+        helpers::{i32_from_n_digits_parser, read_lines, string_from_n_chars_parser},
+    },
     storage::ResourceStorage,
     utils::AutoIncrement,
 };
@@ -93,9 +97,8 @@ fn parse_line(
     data: &mut FxHashMap<i32, ThroughService>,
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
     auto_increment: &AutoIncrement,
-) -> Result<(), Box<dyn Error>> {
-    let (_, through_service_line) =
-        through_service_combinator(line).map_err(|e| format!("Error {e} while parsing {line}"))?;
+) -> PResult<()> {
+    let (_, through_service_line) = through_service_combinator(line)?;
 
     match through_service_line {
         ThroughServiceLine::ThroughService {
@@ -124,7 +127,7 @@ fn parse_line(
             }
 
             if journey_1_stop_id != journey_2_stop_id {
-                log::info!(
+                log::warn!(
                     "Journey 1 last stop does not match journey 2 first stop: {journey_1_stop_id}, {journey_2_stop_id}"
                 );
             }
@@ -144,31 +147,40 @@ fn parse_line(
 }
 
 pub fn parse(
-    path: &str,
+    path: &Path,
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
-) -> Result<ResourceStorage<ThroughService>, Box<dyn Error>> {
+) -> HResult<ResourceStorage<ThroughService>> {
     log::info!("Parsing DURCHBI...");
     let auto_increment = AutoIncrement::new();
     let mut through_services = FxHashMap::default();
 
-    let through_service_lines = read_lines(&format!("{path}/DURCHBI"), 0)?;
+    let file = path.join("DURCHBI");
+    let through_service_lines = read_lines(&file, 0)?;
     through_service_lines
         .into_iter()
-        .filter(|line| !line.trim().is_empty())
-        .try_for_each(|line| {
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .try_for_each(|(line_number, line)| {
             parse_line(
                 &line,
                 &mut through_services,
                 journeys_pk_type_converter,
                 &auto_increment,
             )
-            .map_err(|e| format!("Error: {e}, for line: {line}"))
+            .map_err(|e| HrdfError::Parsing {
+                error: e,
+                file: String::from(file.to_string_lossy()),
+                line,
+                line_number,
+            })
         })?;
     Ok(ResourceStorage::new(through_services))
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::parsing::tests::get_json_values;
+
     use super::*;
     use pretty_assertions::assert_eq;
 
@@ -274,17 +286,27 @@ mod tests {
         journeys.insert((24064, "000871".to_string()));
         let auto_increment = AutoIncrement::new();
 
-        let result = parse_line(
+        parse_line(
             "000001 000871 8576671 024064 000871 000010 8576671",
             &mut data,
             &journeys,
             &auto_increment,
-        );
+        )
+        .unwrap();
 
-        assert!(result.is_ok());
         assert_eq!(data.len(), 1);
         let ts = data.get(&1).unwrap();
-        assert_eq!(ts.id(), 1);
+
+        let reference = r#"{
+            "id":1,
+            "journey_1_id":[1,"000871"],
+            "journey_1_stop_id":8576671,
+            "journey_2_id":[24064,"000871"],
+            "journey_2_stop_id":8576671,
+            "bit_field_id":10
+        }"#;
+        let (ts, reference) = get_json_values(ts, reference).unwrap();
+        assert_eq!(ts, reference);
     }
 
     #[test]
@@ -294,16 +316,27 @@ mod tests {
         let auto_increment = AutoIncrement::new();
 
         // Should still succeed but log warnings
-        let result = parse_line(
+        parse_line(
             "000001 000871 8576671 024064 000871 000010 8576671",
             &mut data,
             &journeys,
             &auto_increment,
-        );
+        )
+        .unwrap();
 
-        assert!(result.is_ok());
         // Still creates the through service despite missing journeys
         assert_eq!(data.len(), 1);
+        let ts = data.get(&1).unwrap();
+        let reference = r#"{
+            "id":1,
+            "journey_1_id":[1,"000871"],
+            "journey_1_stop_id":8576671,
+            "journey_2_id":[24064,"000871"],
+            "journey_2_stop_id":8576671,
+            "bit_field_id":10
+        }"#;
+        let (ts, reference) = get_json_values(ts, reference).unwrap();
+        assert_eq!(ts, reference);
     }
 
     #[test]
@@ -333,8 +366,28 @@ mod tests {
         .unwrap();
 
         assert_eq!(data.len(), 2);
-        assert!(data.contains_key(&1));
-        assert!(data.contains_key(&2));
+        let ts = data.get(&1).unwrap();
+        let reference = r#"{
+            "id":1,
+            "journey_1_id":[1,"000871"],
+            "journey_1_stop_id":8576671,
+            "journey_2_id":[24064,"000871"],
+            "journey_2_stop_id":8576671,
+            "bit_field_id":10
+        }"#;
+        let (ts, reference) = get_json_values(ts, reference).unwrap();
+        assert_eq!(ts, reference);
+        let ts = data.get(&2).unwrap();
+        let reference = r#"{
+            "id":2,
+            "journey_1_id":[2,"000181"],
+            "journey_1_stop_id":8530625,
+            "journey_2_id":[3,"000181"],
+            "journey_2_stop_id":8530625,
+            "bit_field_id":0
+        }"#;
+        let (ts, reference) = get_json_values(ts, reference).unwrap();
+        assert_eq!(ts, reference);
     }
 
     #[test]
@@ -344,17 +397,28 @@ mod tests {
         let auto_increment = AutoIncrement::new();
 
         // Same stop ID for journey 1 last stop and journey 2 first stop
-        let result = parse_line(
+        parse_line(
             "000002 000181 8530625 000003 000181 000000 8530625",
             &mut data,
             &journeys,
             &auto_increment,
-        );
+        )
+        .unwrap();
 
-        assert!(result.is_ok());
+        let reference = r#"{
+            "id":1,
+            "journey_1_id":[2,"000181"],
+            "journey_1_stop_id":8530625,
+            "journey_2_id":[3,"000181"],
+            "journey_2_stop_id":8530625,
+            "bit_field_id":0
+        }"#;
         let ts = data.get(&1).unwrap();
         // Both stops should be the same
         assert_eq!(ts.journey_1_stop_id(), 8530625);
         assert_eq!(ts.journey_2_stop_id(), 8530625);
+        // Check the rest as well
+        let (ts, reference) = get_json_values(ts, reference).unwrap();
+        assert_eq!(ts, reference);
     }
 }
