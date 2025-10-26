@@ -601,26 +601,33 @@ impl Journey {
 
     /// unwrap: Do not call this function if the stop is not part of the route.
     /// unwrap: Do not call this function if the stop has no departure time (only the last stop has no departure time).
-    pub fn departure_time_of(&self, stop_id: i32) -> (NaiveTime, bool) {
+    pub fn departure_time_of(&self, stop_id: i32) -> HResult<(NaiveTime, bool)> {
         let route = self.route();
         let index = route
             .iter()
             .position(|route_entry| route_entry.stop_id() == stop_id)
-            .unwrap();
-        let departure_time = route[index].departure_time().unwrap();
+            .ok_or_else(|| HrdfError::MissingStopId(stop_id))?;
+        let departure_time = route[index]
+            .departure_time()
+            .ok_or_else(|| HrdfError::MissingDepartureTime(index))?;
 
-        (
+        Ok((
             departure_time,
             // The departure time is on the next day if this evaluates to true.
-            departure_time < route.first().unwrap().departure_time().unwrap(),
-        )
+            departure_time
+                < route
+                    .first()
+                    .ok_or(HrdfError::MissingRoute)?
+                    .departure_time()
+                    .ok_or(HrdfError::MissingDepartureTime(0))?,
+        ))
     }
 
     /// The date must correspond to the route's first entry.
     /// Do not call this function if the stop is not part of the route.
     /// Do not call this function if the stop has no departure time (only the last stop has no departure time).
     pub fn departure_at_of(&self, stop_id: i32, date: NaiveDate) -> HResult<NaiveDateTime> {
-        match self.departure_time_of(stop_id) {
+        match self.departure_time_of(stop_id)? {
             (departure_time, false) => Ok(NaiveDateTime::new(date, departure_time)),
             (departure_time, true) => Ok(NaiveDateTime::new(add_1_day(date)?, departure_time)),
         }
@@ -636,11 +643,11 @@ impl Journey {
         is_departure_date: bool,
         origin_stop_id: i32,
     ) -> HResult<NaiveDateTime> {
-        let (departure_time, is_next_day) = self.departure_time_of(stop_id);
+        let (departure_time, is_next_day) = self.departure_time_of(stop_id)?;
         let (_, origin_is_next_day) = if is_departure_date {
-            self.departure_time_of(origin_stop_id)
+            self.departure_time_of(origin_stop_id)?
         } else {
-            self.arrival_time_of(origin_stop_id)
+            self.arrival_time_of(origin_stop_id)?
         };
 
         match (is_next_day, origin_is_next_day) {
@@ -650,9 +657,7 @@ impl Journey {
         }
     }
 
-    /// unwrap: Do not call this function if the stop is not part of the route.
-    /// unwrap: Do not call this function if the stop has no arrival time (only the first stop has no arrival time).
-    pub fn arrival_time_of(&self, stop_id: i32) -> (NaiveTime, bool) {
+    pub fn arrival_time_of(&self, stop_id: i32) -> HResult<(NaiveTime, bool)> {
         let route = self.route();
         let index = route
             .iter()
@@ -660,14 +665,21 @@ impl Journey {
             .skip(1)
             .position(|route_entry| route_entry.stop_id() == stop_id)
             .map(|i| i + 1)
-            .unwrap();
-        let arrival_time = route[index].arrival_time().unwrap();
+            .ok_or_else(|| HrdfError::MissingStopId(stop_id))?;
+        let arrival_time = route[index]
+            .arrival_time()
+            .ok_or_else(|| HrdfError::MissingArrivalTime(index))?;
 
-        (
+        Ok((
             arrival_time,
             // The arrival time is on the next day if this evaluates to true.
-            arrival_time < route.first().unwrap().departure_time().unwrap(),
-        )
+            arrival_time
+                < route
+                    .first()
+                    .ok_or(HrdfError::MissingRoute)?
+                    .departure_time()
+                    .ok_or(HrdfError::MissingDepartureTime(0))?,
+        ))
     }
 
     /// The date must be associated with the origin_stop_id.
@@ -679,11 +691,11 @@ impl Journey {
         is_departure_date: bool,
         origin_stop_id: i32,
     ) -> HResult<NaiveDateTime> {
-        let (arrival_time, is_next_day) = self.arrival_time_of(stop_id);
+        let (arrival_time, is_next_day) = self.arrival_time_of(stop_id)?;
         let (_, origin_is_next_day) = if is_departure_date {
-            self.departure_time_of(origin_stop_id)
+            self.departure_time_of(origin_stop_id)?
         } else {
-            self.arrival_time_of(origin_stop_id)
+            self.arrival_time_of(origin_stop_id)?
         };
 
         match (is_next_day, origin_is_next_day) {

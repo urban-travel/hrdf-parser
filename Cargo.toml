@@ -1,6 +1,6 @@
 [package]
 name = "hrdf-parser"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Florian Burgener"]
 edition = "2024"
 description = "This library is dedicated to the parsing of the HRDF format. For the moment, it can only parse the Swiss version of the HRDF format."
