@@ -35,6 +35,14 @@ pub enum HrdfError {
     Decompress(#[from] ZipError),
     #[error("Failed to download data: {0}")]
     Download(#[from] reqwest::Error),
+    #[error("Missing stop id: {0}")]
+    MissingStopId(i32),
+    #[error("Missing departure time at index: {0}")]
+    MissingDepartureTime(usize),
+    #[error("Missing arrival time at index: {0}")]
+    MissingArrivalTime(usize),
+    #[error("Missing route")]
+    MissingRoute,
 }
 
 pub type HResult<T> = Result<T, HrdfError>;
