@@ -10,12 +10,13 @@ coverage:
       default:
         # Avoid false negatives
         threshold: 1%
-
 # Test files aren't important for coverage
 ignore:
   - "tests"
-
 # Make comments less noisy
 comment:
   layout: "files"
   require_changes: true
+# token
+codecov:
+  token: ad5119bb-78b2-4092-8268-2118edcf9dcf
