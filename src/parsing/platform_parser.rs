@@ -397,9 +397,12 @@ pub fn parse(
     journeys_pk_type_converter: &FxHashSet<JourneyId>,
 ) -> HResult<(ResourceStorage<JourneyPlatform>, ResourceStorage<Platform>)> {
     let prefix = match version {
-        Version::V_5_40_41_2_0_7 => "GLEISE",
-        Version::V_5_40_41_2_0_4 | Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6 => "GLEIS",
-    };
+        Version::V_5_40_41_2_0_7 => Ok("GLEISE"),
+        Version::V_5_40_41_2_0_4 | Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6 => {
+            Ok("GLEIS")
+        }
+        _ => Err(HrdfError::SupportedVersion(version)),
+    }?;
     let auto_increment = AutoIncrement::new();
     let mut platforms = FxHashMap::default();
     let mut platforms_pk_type_converter = FxHashMap::default();

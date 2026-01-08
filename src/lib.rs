@@ -15,6 +15,7 @@ pub use utils::timetable_start_date;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::NaiveDate;
     use test_log::test;
 
     #[test(tokio::test)]
@@ -40,7 +41,7 @@ mod tests {
     #[test(tokio::test)]
     #[ignore]
     async fn parsing_2020() {
-        let _hrdf = Hrdf::new(Version::V_5_40_41_2_0_4, "https://archive.opentransportdata.swiss/timetable_hrdf/timetable-2020-hrdf-54/OeV_Sammlung_CH_HRDF_5_40_41_2020_20201207_074253.zip", true, None)
+        let _hrdf = Hrdf::try_from_date(NaiveDate::from_ymd_opt(2020, 1, 1).unwrap(), true, None)
             .await
             .unwrap();
     }
@@ -48,55 +49,48 @@ mod tests {
     #[test(tokio::test)]
     #[ignore]
     async fn parsing_2021() {
-        let _hrdf = Hrdf::new(Version::V_5_40_41_2_0_5, "https://archive.opentransportdata.swiss/timetable_hrdf/timetable-2021-hrdf-54/OeV_Sammlung_CH_HRDF_5_40_41_2021_20211204_201926.zip", true, None)
+        let _hrdf = Hrdf::try_from_date(NaiveDate::from_ymd_opt(2021, 1, 1).unwrap(), true, None)
             .await
             .unwrap();
     }
 
-    // #[test(tokio::test)]
-    // #[ignore]
-    // async fn parsing_2022() {
-    //     let _hrdf = Hrdf::new(Version::V_5_40_41_2_0_6, "https://archive.opentransportdata.swiss/timetable_hrdf/timetable-2022-hrdf-54/OeV_Sammlung_CH_HRDF_5_40_41_2022_20221207_205110.zip", true, None)
-    //         .await
-    //         .unwrap();
-    // }
+    #[test(tokio::test)]
+    #[ignore]
+    async fn parsing_2022() {
+        let _hrdf = Hrdf::try_from_date(NaiveDate::from_ymd_opt(2022, 1, 1).unwrap(), true, None)
+            .await
+            .unwrap();
+    }
 
-    // #[test(tokio::test)]
-    // #[ignore]
-    // async fn parsing_2023() {
-    //     let _hrdf = Hrdf::new(
-    //         Version::V_5_40_41_2_0_6,
-    //         "https://archive.opentransportdata.swiss/timetable_hrdf/timetable-2023-hrdf-54/OeV_Sammlung_CH_HRDF_5_40_41_2023_20231206_204217.zip",
-    //         true,
-    //         None,
-    //     )
-    //     .await
-    //     .unwrap();
-    // }
-    //
-    // #[test(tokio::test)]
-    // #[ignore]
-    // async fn parsing_2024() {
-    //     let _hrdf = Hrdf::new(
-    //         Version::V_5_40_41_2_0_6,
-    //         "https://archive.opentransportdata.swiss/timetable_hrdf/timetable-2024-hrdf-54/OeV_Sammlung_CH_HRDF_5_40_41_2024_20241213_205621.zip",
-    //         true,
-    //         None,
-    //     )
-    //     .await
-    //     .unwrap();
-    // }
-    //
-    // #[test(tokio::test)]
-    // #[ignore]
-    // async fn parsing_2025() {
-    //     let _hrdf = Hrdf::new(
-    //         Version::V_5_40_41_2_0_7,
-    //         "https://archive.opentransportdata.swiss/timetable_hrdf/timetable-2025-hrdf-54/OeV_Sammlung_CH_HRDF_5_40_41_2025_20251209_205941.zip",
-    //         true,
-    //         None,
-    //     )
-    //     .await
-    //     .unwrap();
-    // }
+    #[test(tokio::test)]
+    #[ignore]
+    async fn parsing_2023() {
+        let _hrdf = Hrdf::try_from_date(NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(), true, None)
+            .await
+            .unwrap();
+    }
+
+    #[test(tokio::test)]
+    #[ignore]
+    async fn parsing_2024() {
+        let _hrdf = Hrdf::try_from_date(NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(), true, None)
+            .await
+            .unwrap();
+    }
+
+    #[test(tokio::test)]
+    #[ignore]
+    async fn parsing_2025() {
+        let _hrdf = Hrdf::try_from_date(NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(), true, None)
+            .await
+            .unwrap();
+    }
+
+    #[test(tokio::test)]
+    #[ignore]
+    async fn parsing_2026() {
+        let _hrdf = Hrdf::try_from_date(NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(), true, None)
+            .await
+            .unwrap();
+    }
 }

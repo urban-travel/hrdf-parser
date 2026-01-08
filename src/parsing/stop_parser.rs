@@ -776,10 +776,11 @@ pub fn parse(version: Version, path: &Path) -> HResult<StopStorageAndExchangeTim
 
     let bhfart = match version {
         Version::V_5_40_41_2_0_4 | Version::V_5_40_41_2_0_5 | Version::V_5_40_41_2_0_6 => {
-            "BHFART_60"
+            Ok("BHFART_60")
         }
-        Version::V_5_40_41_2_0_7 => "BHFART",
-    };
+        Version::V_5_40_41_2_0_7 => Ok("BHFART"),
+        _ => Err(HrdfError::SupportedVersion(version)),
+    }?;
     log::info!("Parsing {bhfart}...");
     let file = path.join(bhfart);
     read_lines(&file, 0)?

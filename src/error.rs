@@ -1,4 +1,4 @@
-use crate::{JourneyError, parsing::error::ParsingError};
+use crate::{JourneyError, Version, parsing::error::ParsingError};
 use bincode::error::{DecodeError, EncodeError};
 use chrono::NaiveDate;
 use thiserror::Error;
@@ -43,6 +43,10 @@ pub enum HrdfError {
     MissingArrivalTime(usize),
     #[error("Missing route")]
     MissingRoute,
+    #[error("Out of rage date: {0}")]
+    OutOfRangeDate(NaiveDate),
+    #[error("Version not supported: {0}")]
+    SupportedVersion(Version),
 }
 
 pub type HResult<T> = Result<T, HrdfError>;

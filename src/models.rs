@@ -1377,11 +1377,128 @@ impl TransportType {
 // --- Version
 // ------------------------------------------------------------------------------------------------
 
+struct NaiveDateRange(NaiveDate, NaiveDate);
+
+impl NaiveDateRange {
+    fn new(date_from: NaiveDate, date_until: NaiveDate) -> Self {
+        NaiveDateRange(date_from, date_until)
+    }
+    fn contains(&self, date: &NaiveDate) -> bool {
+        self.0 <= *date && self.1 >= *date
+    }
+}
+
 #[derive(Clone, Copy, Debug, Display, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[allow(non_camel_case_types)]
 pub enum Version {
+    V_5_20_1_0,
+    V_5_40_41_2_0_2,
+    V_5_40_41_2_0_3,
     V_5_40_41_2_0_4,
     V_5_40_41_2_0_5,
     V_5_40_41_2_0_6,
     V_5_40_41_2_0_7,
+}
+
+impl Version {
+    fn timetable_2026() -> NaiveDateRange {
+        NaiveDateRange::new(
+            NaiveDate::from_ymd_opt(2025, 12, 14).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 12, 12).unwrap(),
+        )
+    }
+    fn timetable_2025() -> NaiveDateRange {
+        NaiveDateRange::new(
+            NaiveDate::from_ymd_opt(2024, 12, 15).unwrap(),
+            NaiveDate::from_ymd_opt(2025, 12, 13).unwrap(),
+        )
+    }
+    fn timetable_2024() -> NaiveDateRange {
+        NaiveDateRange::new(
+            NaiveDate::from_ymd_opt(2023, 12, 10).unwrap(),
+            NaiveDate::from_ymd_opt(2024, 12, 14).unwrap(),
+        )
+    }
+    fn timetable_2023() -> NaiveDateRange {
+        NaiveDateRange::new(
+            NaiveDate::from_ymd_opt(2022, 12, 11).unwrap(),
+            NaiveDate::from_ymd_opt(2023, 12, 13).unwrap(),
+        )
+    }
+    fn timetable_2022() -> NaiveDateRange {
+        NaiveDateRange::new(
+            NaiveDate::from_ymd_opt(2021, 12, 12).unwrap(),
+            NaiveDate::from_ymd_opt(2022, 12, 10).unwrap(),
+        )
+    }
+    fn timetable_2021() -> NaiveDateRange {
+        NaiveDateRange::new(
+            NaiveDate::from_ymd_opt(2020, 12, 13).unwrap(),
+            NaiveDate::from_ymd_opt(2021, 12, 11).unwrap(),
+        )
+    }
+    fn timetable_2020() -> NaiveDateRange {
+        NaiveDateRange::new(
+            NaiveDate::from_ymd_opt(2019, 12, 15).unwrap(),
+            NaiveDate::from_ymd_opt(2021, 12, 12).unwrap(),
+        )
+    }
+    pub(crate) fn try_url(date: NaiveDate) -> HResult<String> {
+        if Self::timetable_2026().contains(&date) {
+            Ok(String::from(
+                "https://data.opentransportdata.swiss/en/dataset/timetable-54-2026-hrdf/permalink",
+            ))
+        } else if Self::timetable_2025().contains(&date) {
+            Ok(String::from(
+                "https://archive.opentransportdata.swiss/timetable_hrdf/timetable-2025-hrdf-54/OeV_Sammlung_CH_HRDF_5_40_41_2025_20251205_205244.zip",
+            ))
+        } else if Self::timetable_2024().contains(&date) {
+            Ok(String::from(
+                "https://archive.opentransportdata.swiss/timetable_hrdf/timetable-2024-hrdf-54/OeV_Sammlung_CH_HRDF_5_40_41_2024_20241213_205621.zip",
+            ))
+        } else if Self::timetable_2023().contains(&date) {
+            Ok(String::from(
+                "https://archive.opentransportdata.swiss/timetable_hrdf/timetable-2023-hrdf-54/OeV_Sammlung_CH_HRDF_5_40_41_2023_20231206_204217.zip",
+            ))
+        } else if Self::timetable_2022().contains(&date) {
+            Ok(String::from(
+                "https://archive.opentransportdata.swiss/timetable_hrdf/timetable-2022-hrdf-54/OeV_Sammlung_CH_HRDF_5_40_41_2022_20221207_205110.zip",
+            ))
+        } else if Self::timetable_2021().contains(&date) {
+            Ok(String::from(
+                "https://archive.opentransportdata.swiss/timetable_hrdf/timetable-2021-hrdf-54/OeV_Sammlung_CH_HRDF_5_40_41_2021_20211208_204836.zip",
+            ))
+        } else if Self::timetable_2020().contains(&date) {
+            Ok(String::from(
+                "https://archive.opentransportdata.swiss/timetable_hrdf/timetable-2020-hrdf-54/OeV_Sammlung_CH_HRDF_5_40_41_2020_20201207_074253.zip",
+            ))
+        } else {
+            Err(HrdfError::OutOfRangeDate(date))
+        }
+    }
+}
+
+impl TryFrom<NaiveDate> for Version {
+    type Error = HrdfError;
+
+    // Required method
+    fn try_from(date: NaiveDate) -> Result<Self, Self::Error> {
+        if Self::timetable_2026().contains(&date) {
+            Ok(Version::V_5_40_41_2_0_7)
+        } else if Self::timetable_2025().contains(&date) {
+            Ok(Version::V_5_40_41_2_0_7)
+        } else if Self::timetable_2024().contains(&date) {
+            Ok(Version::V_5_40_41_2_0_7)
+        } else if Self::timetable_2023().contains(&date) {
+            Ok(Version::V_5_40_41_2_0_7)
+        } else if Self::timetable_2022().contains(&date) {
+            Ok(Version::V_5_40_41_2_0_7)
+        } else if Self::timetable_2021().contains(&date) {
+            Ok(Version::V_5_40_41_2_0_7)
+        } else if Self::timetable_2020().contains(&date) {
+            Ok(Version::V_5_40_41_2_0_7)
+        } else {
+            Err(HrdfError::OutOfRangeDate(date))
+        }
+    }
 }
