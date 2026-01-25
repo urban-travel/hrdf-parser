@@ -932,6 +932,7 @@ pub struct Line {
     short_name: String,
     long_name: String,
     internal_designation: String,
+    description: String,
     text_color: Color,
     background_color: Color,
 }
@@ -946,6 +947,7 @@ impl Line {
             short_name: String::default(),
             long_name: String::default(),
             internal_designation: String::default(),
+            description: String::default(),
             text_color: Color::default(),
             background_color: Color::default(),
         }
@@ -963,6 +965,10 @@ impl Line {
 
     pub fn set_internal_designation(&mut self, value: String) {
         self.internal_designation = value;
+    }
+
+    pub fn set_description(&mut self, value: String) {
+        self.description = value;
     }
 
     pub fn set_text_color(&mut self, value: Color) {
@@ -1431,18 +1437,18 @@ impl Version {
             NaiveDate::from_ymd_opt(2022, 12, 10).unwrap(),
         )
     }
-    fn timetable_2021() -> NaiveDateRange {
-        NaiveDateRange::new(
-            NaiveDate::from_ymd_opt(2020, 12, 13).unwrap(),
-            NaiveDate::from_ymd_opt(2021, 12, 11).unwrap(),
-        )
-    }
-    fn timetable_2020() -> NaiveDateRange {
-        NaiveDateRange::new(
-            NaiveDate::from_ymd_opt(2019, 12, 15).unwrap(),
-            NaiveDate::from_ymd_opt(2021, 12, 12).unwrap(),
-        )
-    }
+    // fn timetable_2021() -> NaiveDateRange {
+    //     NaiveDateRange::new(
+    //         NaiveDate::from_ymd_opt(2020, 12, 13).unwrap(),
+    //         NaiveDate::from_ymd_opt(2021, 12, 11).unwrap(),
+    //     )
+    // }
+    // fn timetable_2020() -> NaiveDateRange {
+    //     NaiveDateRange::new(
+    //         NaiveDate::from_ymd_opt(2019, 12, 15).unwrap(),
+    //         NaiveDate::from_ymd_opt(2021, 12, 12).unwrap(),
+    //     )
+    // }
     pub(crate) fn try_url(date: NaiveDate) -> HResult<String> {
         if Self::timetable_2026().contains(&date) {
             Ok(String::from(
@@ -1464,14 +1470,14 @@ impl Version {
             Ok(String::from(
                 "https://archive.opentransportdata.swiss/timetable_hrdf/timetable-2022-hrdf-54/OeV_Sammlung_CH_HRDF_5_40_41_2022_20221207_205110.zip",
             ))
-        } else if Self::timetable_2021().contains(&date) {
-            Ok(String::from(
-                "https://archive.opentransportdata.swiss/timetable_hrdf/timetable-2021-hrdf-54/OeV_Sammlung_CH_HRDF_5_40_41_2021_20211208_204836.zip",
-            ))
-        } else if Self::timetable_2020().contains(&date) {
-            Ok(String::from(
-                "https://archive.opentransportdata.swiss/timetable_hrdf/timetable-2020-hrdf-54/OeV_Sammlung_CH_HRDF_5_40_41_2020_20201207_074253.zip",
-            ))
+        // } else if Self::timetable_2021().contains(&date) {
+        //     Ok(String::from(
+        //         "https://archive.opentransportdata.swiss/timetable_hrdf/timetable-2021-hrdf-54/OeV_Sammlung_CH_HRDF_5_40_41_2021_20211208_204836.zip",
+        //     ))
+        // } else if Self::timetable_2020().contains(&date) {
+        //     Ok(String::from(
+        //         "https://archive.opentransportdata.swiss/timetable_hrdf/timetable-2020-hrdf-54/OeV_Sammlung_CH_HRDF_5_40_41_2020_20201207_074253.zip",
+        //     ))
         } else {
             Err(HrdfError::OutOfRangeDate(date))
         }
@@ -1490,13 +1496,13 @@ impl TryFrom<NaiveDate> for Version {
         } else if Self::timetable_2024().contains(&date) {
             Ok(Version::V_5_40_41_2_0_7)
         } else if Self::timetable_2023().contains(&date) {
-            Ok(Version::V_5_40_41_2_0_7)
+            Ok(Version::V_5_40_41_2_0_5)
         } else if Self::timetable_2022().contains(&date) {
-            Ok(Version::V_5_40_41_2_0_7)
-        } else if Self::timetable_2021().contains(&date) {
-            Ok(Version::V_5_40_41_2_0_7)
-        } else if Self::timetable_2020().contains(&date) {
-            Ok(Version::V_5_40_41_2_0_7)
+            Ok(Version::V_5_40_41_2_0_5)
+        // } else if Self::timetable_2021().contains(&date) {
+        //     Ok(Version::V_5_40_41_2_0_4)
+        // } else if Self::timetable_2020().contains(&date) {
+        //     Ok(Version::V_5_40_41_2_0_4)
         } else {
             Err(HrdfError::OutOfRangeDate(date))
         }

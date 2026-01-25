@@ -87,9 +87,11 @@ enum LineType {
     // * Line type R T: Line region name (reserved for BAV ID)
     #[allow(unused)]
     RTline,
-    // * Line type D T: Line description (not present)
-    #[allow(unused)]
-    DTline,
+    // * Line type D T: Line description
+    DTline {
+        id: i32,
+        description: String,
+    },
     // * Line type F: Line color
     Fline {
         id: i32,
@@ -112,13 +114,13 @@ enum LineType {
     Iline,
 }
 
-fn row_k_nt_lt_w_combinator(input: &str) -> IResult<&str, Option<LineType>> {
+fn row_k_nt_lt_dt_w_combinator(input: &str) -> IResult<&str, Option<LineType>> {
     map(
         (
             i32_from_n_digits_parser(7),
             preceded(
                 char(' '),
-                alt((tag("K "), tag("N T "), tag("L T "), tag("W "))),
+                alt((tag("K "), tag("N T "), tag("L T "), tag("W "), tag("D T "))),
             ),
             string_till_eol_parser,
         ),
@@ -135,6 +137,10 @@ fn row_k_nt_lt_w_combinator(input: &str) -> IResult<&str, Option<LineType>> {
             "W " => Some(LineType::Wline {
                 id,
                 internal_designation: name,
+            }),
+            "D T " => Some(LineType::DTline {
+                id,
+                description: name,
             }),
             _ => None,
         },
@@ -163,7 +169,7 @@ fn row_f_b_combinator(input: &str) -> IResult<&str, Option<LineType>> {
 }
 
 fn parse_line(line: &str, data: &mut FxHashMap<i32, Line>) -> PResult<()> {
-    let (_, line_row) = alt((row_k_nt_lt_w_combinator, row_f_b_combinator)).parse(line)?;
+    let (_, line_row) = alt((row_k_nt_lt_dt_w_combinator, row_f_b_combinator)).parse(line)?;
 
     match line_row.ok_or(ParsingError::MissingLineType)? {
         LineType::Kline { id, name } => {
@@ -207,6 +213,18 @@ fn parse_line(line: &str, data: &mut FxHashMap<i32, Line>) -> PResult<()> {
                 )));
             }
             line.set_internal_designation(internal_designation);
+        }
+        LineType::DTline { id, description } => {
+            let line = data.get_mut(&id).ok_or_else(|| {
+                ParsingError::UnknownId(format!("For id: {id}, type K row missing."))
+            })?;
+            if id != line.id() {
+                return Err(ParsingError::UnknownId(format!(
+                    "Line id not corresponding, {id}, {}",
+                    line.id()
+                )));
+            }
+            line.set_description(description);
         }
 
         LineType::Fline { id, r, g, b } => {
@@ -275,7 +293,7 @@ mod tests {
     #[test]
     fn test_row_k_combinator_valid() {
         let input = "0000001 K ch:1:SLNID:33:1";
-        let result = row_k_nt_lt_w_combinator(input);
+        let result = row_k_nt_lt_dt_w_combinator(input);
         assert!(result.is_ok());
         let (_, line_type) = result.unwrap();
         match line_type {
@@ -290,7 +308,7 @@ mod tests {
     #[test]
     fn test_row_k_combinator_with_spaces() {
         let input = "0000010 K 68";
-        let result = row_k_nt_lt_w_combinator(input);
+        let result = row_k_nt_lt_dt_w_combinator(input);
         assert!(result.is_ok());
         let (_, line_type) = result.unwrap();
         match line_type {
@@ -305,7 +323,7 @@ mod tests {
     #[test]
     fn test_row_nt_combinator_valid() {
         let input = "0000001 N T Kurzname";
-        let result = row_k_nt_lt_w_combinator(input);
+        let result = row_k_nt_lt_dt_w_combinator(input);
         assert!(result.is_ok());
         let (_, line_type) = result.unwrap();
         match line_type {
@@ -320,7 +338,7 @@ mod tests {
     #[test]
     fn test_row_lt_combinator_valid() {
         let input = "0000001 L T Langname";
-        let result = row_k_nt_lt_w_combinator(input);
+        let result = row_k_nt_lt_dt_w_combinator(input);
         assert!(result.is_ok());
         let (_, line_type) = result.unwrap();
         match line_type {
@@ -335,7 +353,7 @@ mod tests {
     #[test]
     fn test_row_w_combinator_valid() {
         let input = "0000001 W interne Bezeichnung";
-        let result = row_k_nt_lt_w_combinator(input);
+        let result = row_k_nt_lt_dt_w_combinator(input);
         assert!(result.is_ok());
         let (_, line_type) = result.unwrap();
         match line_type {
@@ -345,6 +363,21 @@ mod tests {
             }) => {
                 assert_eq!(id, 1);
                 assert_eq!(internal_designation, "interne Bezeichnung");
+            }
+            _ => panic!("Expected Wline variant"),
+        }
+    }
+
+    #[test]
+    fn test_row_dt_combinator_valid() {
+        let input = "0000001 D T interne Bezeichnung";
+        let result = row_k_nt_lt_dt_w_combinator(input);
+        assert!(result.is_ok());
+        let (_, line_type) = result.unwrap();
+        match line_type {
+            Some(LineType::DTline { id, description }) => {
+                assert_eq!(id, 1);
+                assert_eq!(description, "interne Bezeichnung");
             }
             _ => panic!("Expected Wline variant"),
         }
@@ -431,6 +464,7 @@ mod tests {
                 "short_name": "",
                 "long_name": "",
                 "internal_designation": "",
+                "description": "",
                 "text_color": {"r":0,"g":0,"b":0},
                 "background_color": {"r":0,"g":0,"b":0}
             }"#;
@@ -453,6 +487,7 @@ mod tests {
         parse_line("0000001 W internal", &mut data).unwrap();
         parse_line("0000001 N T Short", &mut data).unwrap();
         parse_line("0000001 L T Long Name", &mut data).unwrap();
+        parse_line("0000001 D T Wow what a description", &mut data).unwrap();
         parse_line("0000001 F 255 128 064", &mut data).unwrap();
         parse_line("0000001 B 010 020 030", &mut data).unwrap();
 
@@ -465,6 +500,7 @@ mod tests {
                 "short_name": "Short",
                 "long_name": "Long Name",
                 "internal_designation": "internal",
+                "description": "Wow what a description",
                 "text_color": {"r":255,"g":128,"b":64},
                 "background_color": {"r":10,"g":20,"b":30}
             }"#;
@@ -490,6 +526,7 @@ mod tests {
                 "short_name": "L1",
                 "long_name": "",
                 "internal_designation": "",
+                "description": "",
                 "text_color": {"r":0,"g":0,"b":0},
                 "background_color": {"r":0,"g":0,"b":0}
             }"#;
@@ -503,6 +540,7 @@ mod tests {
                 "short_name": "L2",
                 "long_name": "",
                 "internal_designation": "",
+                "description": "",
                 "text_color": {"r":0,"g":0,"b":0},
                 "background_color": {"r":0,"g":0,"b":0}
             }"#;
@@ -543,6 +581,7 @@ mod tests {
                 "short_name": "",
                 "long_name": "",
                 "internal_designation": "",
+                "description": "",
                 "text_color": {"r":255,"g":0,"b":128},
                 "background_color": {"r":64,"g":128,"b":255}
             }"#;
