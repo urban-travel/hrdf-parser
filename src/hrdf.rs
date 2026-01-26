@@ -8,6 +8,7 @@ use std::{
 
 use crate::{error::HResult, models::Version, storage::DataStorage};
 use bincode::config;
+use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use url::Url;
@@ -96,8 +97,18 @@ impl Hrdf {
         Ok(hrdf)
     }
 
-    // Getters/Setters
+    pub async fn try_from_date(
+        date: NaiveDate,
+        force_rebuild_cache: bool,
+        cache_prefix: Option<String>,
+    ) -> HResult<Self> {
+        let url = Version::try_url(date)?;
+        let version = Version::try_from(date)?;
+        log::info!("Loading Hrdf Version ({version}) and Date ({date}) from url: {url}.");
+        Hrdf::new(version, &url, force_rebuild_cache, cache_prefix).await
+    }
 
+    // Getters/Setters
     pub fn data_storage(&self) -> &DataStorage {
         &self.data_storage
     }

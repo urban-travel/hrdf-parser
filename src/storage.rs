@@ -513,3 +513,188 @@ fn create_exchange_times_administration_map(
         },
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{JourneyMetadataEntry, JourneyMetadataType, JourneyRouteEntry};
+
+    use super::*;
+    use chrono::{NaiveDate, NaiveTime};
+    use rustc_hash::FxHashMap;
+
+    fn build_timetable_metadata(start: &str, end: &str) -> ResourceStorage<TimetableMetadataEntry> {
+        let mut data = FxHashMap::default();
+        data.insert(
+            1,
+            TimetableMetadataEntry::new(1, "start_date".to_string(), start.to_string()),
+        );
+        data.insert(
+            2,
+            TimetableMetadataEntry::new(2, "end_date".to_string(), end.to_string()),
+        );
+        ResourceStorage::new(data)
+    }
+
+    fn build_bit_field(bits: Vec<u8>) -> ResourceStorage<BitField> {
+        let mut data = FxHashMap::default();
+        data.insert(1, BitField::new(1, bits));
+        ResourceStorage::new(data)
+    }
+
+    fn build_journey_with_bitfield(
+        id: i32,
+        legacy_id: i32,
+        bit_field_id: Option<i32>,
+        route_stops: &[i32],
+    ) -> Journey {
+        let mut journey = Journey::new(id, legacy_id, "CH".to_string());
+        journey.add_metadata_entry(
+            JourneyMetadataType::BitField,
+            JourneyMetadataEntry::new(
+                None,
+                None,
+                None,
+                bit_field_id,
+                Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap()),
+                None,
+                None,
+                None,
+            ),
+        );
+
+        for (index, stop_id) in route_stops.iter().enumerate() {
+            let departure = if index + 1 == route_stops.len() {
+                None
+            } else {
+                Some(NaiveTime::from_hms_opt(8, (index as u32) * 10, 0).unwrap())
+            };
+            let arrival = if index == 0 {
+                None
+            } else {
+                Some(NaiveTime::from_hms_opt(8, (index as u32) * 10 - 5, 0).unwrap())
+            };
+            journey.add_route_entry(JourneyRouteEntry::new(*stop_id, arrival, departure));
+        }
+
+        journey
+    }
+
+    #[test]
+    fn bit_fields_by_day_include_defaults_and_active_days() {
+        let metadata = build_timetable_metadata("2024-01-01", "2024-01-03");
+        let bit_fields = build_bit_field(vec![0, 0, 1, 0, 1]);
+
+        let map = create_bit_fields_by_day(&bit_fields, &metadata).unwrap();
+        let day1 = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        let day2 = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap();
+        let day3 = NaiveDate::from_ymd_opt(2024, 1, 3).unwrap();
+
+        assert_eq!(map.len(), 3);
+        assert!(map.get(&day1).unwrap().contains(&0));
+        assert!(map.get(&day2).unwrap().contains(&0));
+        assert!(map.get(&day3).unwrap().contains(&0));
+        assert!(map.get(&day1).unwrap().contains(&1));
+        assert!(!map.get(&day2).unwrap().contains(&1));
+        assert!(map.get(&day3).unwrap().contains(&1));
+    }
+
+    #[test]
+    fn journey_maps_group_by_stop_and_bitfield() {
+        let journey_a = build_journey_with_bitfield(1, 100, Some(7), &[10, 20]);
+        let journey_b = build_journey_with_bitfield(2, 200, None, &[10]);
+
+        let mut journeys_data = FxHashMap::default();
+        journeys_data.insert(1, journey_a);
+        journeys_data.insert(2, journey_b);
+        let journeys = ResourceStorage::new(journeys_data);
+
+        let by_stop = create_bit_fields_by_stop_id(&journeys).unwrap();
+        assert!(by_stop.get(&10).unwrap().contains(&7));
+        assert!(by_stop.get(&10).unwrap().contains(&0));
+        assert!(by_stop.get(&20).unwrap().contains(&7));
+
+        let by_stop_and_bit = create_journeys_by_stop_id_and_bit_field_id(&journeys).unwrap();
+        assert_eq!(by_stop_and_bit.get(&(10, 7)).unwrap(), &vec![1]);
+        assert_eq!(by_stop_and_bit.get(&(10, 0)).unwrap(), &vec![2]);
+        assert_eq!(by_stop_and_bit.get(&(20, 7)).unwrap(), &vec![1]);
+    }
+
+    #[test]
+    fn stop_connection_map_collects_ids() {
+        let mut data = FxHashMap::default();
+        data.insert(1, StopConnection::new(1, 10, 11, 5));
+        data.insert(2, StopConnection::new(2, 10, 12, 7));
+        let storage = ResourceStorage::new(data);
+
+        let map = create_stop_connections_by_stop_id(&storage);
+        let ids = map.get(&10).unwrap();
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&1));
+        assert!(ids.contains(&2));
+    }
+
+    #[test]
+    fn exchange_time_maps_resolve_expected_keys() {
+        let mut admin_data = FxHashMap::default();
+        admin_data.insert(
+            1,
+            ExchangeTimeAdministration::new(1, Some(10), "A".to_string(), "B".to_string(), 5),
+        );
+        let admin_storage = ResourceStorage::new(admin_data);
+        let admin_map = create_exchange_times_administration_map(&admin_storage);
+        assert_eq!(
+            *admin_map
+                .get(&(Some(10), "A".to_string(), "B".to_string()))
+                .unwrap(),
+            1
+        );
+
+        let mut journey_data = FxHashMap::default();
+        journey_data.insert(
+            1,
+            ExchangeTimeJourney::new(
+                1,
+                10,
+                (100, "A".to_string()),
+                (200, "B".to_string()),
+                6,
+                false,
+                None,
+            ),
+        );
+        journey_data.insert(
+            2,
+            ExchangeTimeJourney::new(
+                2,
+                10,
+                (100, "A".to_string()),
+                (200, "B".to_string()),
+                8,
+                true,
+                Some(3),
+            ),
+        );
+        let journey_storage = ResourceStorage::new(journey_data);
+        let journey_map = create_exchange_times_journey_map(&journey_storage);
+
+        let key = (10, (100, "A".to_string()), (200, "B".to_string()));
+        let ids = journey_map.get(&key).unwrap();
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&1));
+        assert!(ids.contains(&2));
+    }
+
+    #[test]
+    fn through_service_map_keys_by_journeys_and_stop() {
+        let mut data = FxHashMap::default();
+        data.insert(
+            1,
+            ThroughService::new(1, (100, "A".to_string()), 10, (200, "B".to_string()), 20, 3),
+        );
+        let storage = ResourceStorage::new(data);
+        let map = create_bit_field_id_through_service_by_journey_id_stop_id(&storage);
+
+        let key = ((100, "A".to_string()), (200, "B".to_string()), 10);
+        assert_eq!(*map.get(&key).unwrap(), 3);
+    }
+}
