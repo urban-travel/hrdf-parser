@@ -1489,15 +1489,12 @@ impl TryFrom<NaiveDate> for Version {
 
     // Required method
     fn try_from(date: NaiveDate) -> Result<Self, Self::Error> {
-        if Self::timetable_2026().contains(&date) {
+        if Self::timetable_2026().contains(&date)
+            || Self::timetable_2025().contains(&date)
+            || Self::timetable_2024().contains(&date)
+        {
             Ok(Version::V_5_40_41_2_0_7)
-        } else if Self::timetable_2025().contains(&date) {
-            Ok(Version::V_5_40_41_2_0_7)
-        } else if Self::timetable_2024().contains(&date) {
-            Ok(Version::V_5_40_41_2_0_7)
-        } else if Self::timetable_2023().contains(&date) {
-            Ok(Version::V_5_40_41_2_0_5)
-        } else if Self::timetable_2022().contains(&date) {
+        } else if Self::timetable_2023().contains(&date) || Self::timetable_2022().contains(&date) {
             Ok(Version::V_5_40_41_2_0_5)
         // } else if Self::timetable_2021().contains(&date) {
         //     Ok(Version::V_5_40_41_2_0_4)
