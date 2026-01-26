@@ -1508,3 +1508,186 @@ impl TryFrom<NaiveDate> for Version {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{NaiveDate, NaiveTime};
+
+    fn build_route_entry(
+        stop_id: i32,
+        arrival: Option<&str>,
+        departure: Option<&str>,
+    ) -> JourneyRouteEntry {
+        let arrival_time = arrival.map(|value| NaiveTime::parse_from_str(value, "%H:%M").unwrap());
+        let departure_time =
+            departure.map(|value| NaiveTime::parse_from_str(value, "%H:%M").unwrap());
+        JourneyRouteEntry::new(stop_id, arrival_time, departure_time)
+    }
+
+    fn build_midnight_journey() -> Journey {
+        let mut journey = Journey::new(1, 100, "CH".to_string());
+        journey.add_route_entry(build_route_entry(1, None, Some("23:50")));
+        journey.add_route_entry(build_route_entry(2, Some("00:10"), Some("00:15")));
+        journey.add_route_entry(build_route_entry(3, Some("00:30"), None));
+        journey
+    }
+
+    #[test]
+    fn coordinates_accessors_match_system() {
+        let lv95 = Coordinates::new(CoordinateSystem::LV95, 2600000.0, 1200000.0);
+        assert_eq!(lv95.easting(), Some(2600000.0));
+        assert_eq!(lv95.northing(), Some(1200000.0));
+        assert_eq!(lv95.latitude(), None);
+        assert_eq!(lv95.longitude(), None);
+
+        let wgs84 = Coordinates::new(CoordinateSystem::WGS84, 46.948, 7.447);
+        assert_eq!(wgs84.easting(), None);
+        assert_eq!(wgs84.northing(), None);
+        assert_eq!(wgs84.latitude(), Some(46.948));
+        assert_eq!(wgs84.longitude(), Some(7.447));
+    }
+
+    #[test]
+    fn stop_exchange_flag_controls_exchange_point() {
+        let mut stop = Stop::new(1, "Bern".to_string(), None, None, None);
+        assert!(!stop.can_be_used_as_exchange_point());
+        stop.set_exchange_flag(1);
+        assert!(stop.can_be_used_as_exchange_point());
+    }
+
+    #[test]
+    fn journey_last_stop_logic_handles_loops() {
+        let mut journey = Journey::new(1, 100, "CH".to_string());
+        journey.add_route_entry(build_route_entry(1, None, Some("08:00")));
+        journey.add_route_entry(build_route_entry(2, Some("08:10"), Some("08:15")));
+        journey.add_route_entry(build_route_entry(1, Some("08:30"), None));
+
+        assert!(journey.is_last_stop(1, false).unwrap());
+        assert!(!journey.is_last_stop(1, true).unwrap());
+        assert!(!journey.is_last_stop(2, false).unwrap());
+    }
+
+    #[test]
+    fn journey_counts_and_sections_are_consistent() {
+        let mut journey = Journey::new(1, 100, "CH".to_string());
+        journey.add_route_entry(build_route_entry(1, None, Some("08:00")));
+        journey.add_route_entry(build_route_entry(2, Some("08:10"), Some("08:15")));
+        journey.add_route_entry(build_route_entry(3, Some("08:30"), Some("08:35")));
+        journey.add_route_entry(build_route_entry(4, Some("08:50"), None));
+
+        assert_eq!(journey.count_stops(1, 3), 3);
+        let section = journey.route_section(1, 3);
+        let ids: Vec<i32> = section.iter().map(|entry| entry.stop_id()).collect();
+        assert_eq!(ids, vec![2, 3]);
+    }
+
+    #[test]
+    fn journey_time_calculations_cross_midnight() {
+        let journey = build_midnight_journey();
+        let date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+
+        let (departure_time, is_next_day) = journey.departure_time_of(2).unwrap();
+        assert_eq!(departure_time, NaiveTime::from_hms_opt(0, 15, 0).unwrap());
+        assert!(is_next_day);
+
+        let (arrival_time, is_next_day) = journey.arrival_time_of(2).unwrap();
+        assert_eq!(arrival_time, NaiveTime::from_hms_opt(0, 10, 0).unwrap());
+        assert!(is_next_day);
+
+        let departure_at = journey.departure_at_of(2, date).unwrap();
+        assert_eq!(
+            departure_at,
+            NaiveDate::from_ymd_opt(2024, 1, 2)
+                .unwrap()
+                .and_time(NaiveTime::from_hms_opt(0, 15, 0).unwrap())
+        );
+
+        let arrival_at = journey.arrival_at_of_with_origin(2, date, true, 1).unwrap();
+        assert_eq!(
+            arrival_at,
+            NaiveDate::from_ymd_opt(2024, 1, 2)
+                .unwrap()
+                .and_time(NaiveTime::from_hms_opt(0, 10, 0).unwrap())
+        );
+    }
+
+    #[test]
+    fn journey_bit_field_id_requires_metadata() {
+        let journey = Journey::new(1, 100, "CH".to_string());
+        let err = journey.bit_field_id().unwrap_err();
+        match err {
+            JourneyError::MissingBitFieldMetadata => {}
+            other => panic!("Error should be MissingBitFieldMetadata but is: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn timetable_metadata_entry_parses_date() {
+        let entry =
+            TimetableMetadataEntry::new(1, "start_date".to_string(), "2024-12-15".to_string());
+        assert_eq!(
+            entry.value_as_naive_date(),
+            NaiveDate::from_ymd_opt(2024, 12, 15).unwrap()
+        );
+    }
+
+    #[test]
+    fn version_resolution_matches_date_ranges() {
+        let in_2026 = NaiveDate::from_ymd_opt(2026, 6, 1).unwrap();
+        assert_eq!(
+            Version::try_from(in_2026).unwrap(),
+            Version::V_5_40_41_2_0_7
+        );
+        let url = Version::try_url(in_2026).unwrap();
+        assert!(url.contains(
+            "https://data.opentransportdata.swiss/en/dataset/timetable-54-2026-hrdf/permalink"
+        ));
+
+        let in_2025 = NaiveDate::from_ymd_opt(2025, 6, 1).unwrap();
+        assert_eq!(
+            Version::try_from(in_2025).unwrap(),
+            Version::V_5_40_41_2_0_7
+        );
+        let url = Version::try_url(in_2025).unwrap();
+        assert!(url.contains("timetable-2025-hrdf"));
+
+        let in_2024 = NaiveDate::from_ymd_opt(2024, 6, 1).unwrap();
+        assert_eq!(
+            Version::try_from(in_2024).unwrap(),
+            Version::V_5_40_41_2_0_7
+        );
+        let url = Version::try_url(in_2024).unwrap();
+        assert!(url.contains("timetable-2024-hrdf"));
+
+        let in_2023 = NaiveDate::from_ymd_opt(2023, 6, 1).unwrap();
+        assert_eq!(
+            Version::try_from(in_2023).unwrap(),
+            Version::V_5_40_41_2_0_5
+        );
+        let url = Version::try_url(in_2023).unwrap();
+        assert!(url.contains("timetable-2023-hrdf"));
+
+        let in_2022 = NaiveDate::from_ymd_opt(2022, 6, 1).unwrap();
+        assert_eq!(
+            Version::try_from(in_2022).unwrap(),
+            Version::V_5_40_41_2_0_5
+        );
+        let url = Version::try_url(in_2022).unwrap();
+        assert!(url.contains("timetable-2022-hrdf"));
+    }
+
+    #[test]
+    #[should_panic]
+    fn version_resolution_not_matching_date_ranges() {
+        let in_2021 = NaiveDate::from_ymd_opt(2021, 6, 1).unwrap();
+        Version::try_from(in_2021).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn url_resolution_not_matching_date_ranges() {
+        let in_2021 = NaiveDate::from_ymd_opt(2021, 6, 1).unwrap();
+        Version::try_url(in_2021).unwrap();
+    }
+}
