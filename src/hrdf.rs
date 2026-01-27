@@ -6,7 +6,11 @@ use std::{
     time::Instant,
 };
 
-use crate::{error::HResult, models::Version, storage::DataStorage};
+use crate::{
+    error::{HResult, HrdfError},
+    models::Version,
+    storage::DataStorage,
+};
 use bincode::config;
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -20,8 +24,8 @@ pub struct Hrdf {
 }
 
 impl Hrdf {
-    /// Loads and parses the data.<br>
-    /// If an URL is provided, the HRDF archive (ZIP file) is downloaded automatically. If a path is provided, it must absolutely point to an HRDF archive (ZIP file).<br>
+    /// Loads and parses an HRDF archive.
+    /// If an URL is provided, the HRDF archive (ZIP file) is downloaded automatically. If a path is provided, it must absolutely point to an HRDF archive (ZIP file).
     /// The ZIP archive is automatically decompressed into the temp_dir of the OS folder.
     pub async fn new(
         version: Version,
@@ -40,7 +44,7 @@ impl Hrdf {
             log::info!("Loading HRDF data from cache ({cache_path:?})...");
 
             // If loading from cache fails, None is returned.
-            Hrdf::load_from_cache(&cache_path).ok()
+            Self::load_from_cache(&cache_path).ok()
         } else {
             // No loading from cache.
             None
@@ -97,6 +101,9 @@ impl Hrdf {
         Ok(hrdf)
     }
 
+    /// Tries to load an HRDF archive for a specific date by picking the archive which
+    /// date range contains the date.
+    /// `force_rebuild_cache` and `cache_prefix` are option related to the caching of data.
     pub async fn try_from_date(
         date: NaiveDate,
         force_rebuild_cache: bool,
@@ -105,7 +112,19 @@ impl Hrdf {
         let url = Version::try_url(date)?;
         let version = Version::try_from(date)?;
         log::info!("Loading Hrdf Version ({version}) and Date ({date}) from url: {url}.");
-        Hrdf::new(version, &url, force_rebuild_cache, cache_prefix).await
+        Self::new(version, &url, force_rebuild_cache, cache_prefix).await
+    }
+
+    /// Tries to load an HRDF archive for a specific year (which is understood as the validity year).
+    /// For example year 2026 ranes from (15.12.2025 to 14.12.2026).
+    /// `force_rebuild_cache` and `cache_prefix` are option related to the caching of data.
+    pub async fn try_from_year(
+        year: i32,
+        force_rebuild_cache: bool,
+        cache_prefix: Option<String>,
+    ) -> HResult<Self> {
+        let date = NaiveDate::from_ymd_opt(year, 1, 1).ok_or_else(|| HrdfError::InvalidYear)?;
+        Self::try_from_date(date, force_rebuild_cache, cache_prefix).await
     }
 
     // Getters/Setters
@@ -114,7 +133,6 @@ impl Hrdf {
     }
 
     // Functions
-
     pub fn build_cache(&self, path: &Path) -> HResult<()> {
         let data = bincode::serde::encode_to_vec(self, config::standard())?;
         fs::write(path, data)?;
