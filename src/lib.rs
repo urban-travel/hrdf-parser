@@ -93,4 +93,10 @@ mod tests {
             .await
             .unwrap();
     }
+
+    #[test(tokio::test)]
+    #[ignore]
+    async fn parsing_from_year_2026() {
+        let _hrdf = Hrdf::try_from_year(2026, false, None).await.unwrap();
+    }
 }

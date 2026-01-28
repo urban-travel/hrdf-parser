@@ -45,6 +45,8 @@ pub enum HrdfError {
     MissingRoute,
     #[error("Out of rage date: {0}")]
     OutOfRangeDate(NaiveDate),
+    #[error("Invalid year provided")]
+    InvalidYear,
     #[error("Version not supported: {0}")]
     SupportedVersion(Version),
 }
