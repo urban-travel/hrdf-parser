@@ -562,6 +562,14 @@ impl Journey {
             .stop_id())
     }
 
+    pub fn is_first_stop(&self, stop_id: i32, ignore_loop: bool) -> HResult<bool> {
+        if ignore_loop && self.first_stop_id()? == self.last_stop_id()? {
+            Ok(false)
+        } else {
+            Ok(stop_id == self.first_stop_id()?)
+        }
+    }
+
     pub fn last_stop_id(&self) -> HResult<i32> {
         Ok(self.route.last().ok_or(JourneyError::EmptyRoute)?.stop_id())
     }
