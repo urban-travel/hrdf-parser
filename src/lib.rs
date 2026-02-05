@@ -6,6 +6,7 @@ mod parsing;
 mod storage;
 mod utils;
 
+pub use error::HrdfError as Error;
 pub use hrdf::Hrdf;
 pub use models::*;
 pub use storage::DataStorage;
