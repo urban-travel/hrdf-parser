@@ -562,6 +562,14 @@ impl Journey {
             .stop_id())
     }
 
+    pub fn is_first_stop(&self, stop_id: i32, ignore_loop: bool) -> HResult<bool> {
+        if ignore_loop && self.first_stop_id()? == self.last_stop_id()? {
+            Ok(false)
+        } else {
+            Ok(stop_id == self.first_stop_id()?)
+        }
+    }
+
     pub fn last_stop_id(&self) -> HResult<i32> {
         Ok(self.route.last().ok_or(JourneyError::EmptyRoute)?.stop_id())
     }
@@ -654,6 +662,16 @@ impl Journey {
             (true, false) => Ok(NaiveDateTime::new(add_1_day(date)?, departure_time)),
             (false, true) => Ok(NaiveDateTime::new(sub_1_day(date)?, departure_time)),
             _ => Ok(NaiveDateTime::new(date, departure_time)),
+        }
+    }
+
+    /// The date must correspond to the route's first entry.
+    /// Do not call this function if the stop is not part of the route.
+    /// Do not call this function if the stop has no arrival time (only the first stop has no arrival time).
+    pub fn arrival_at_of(&self, stop_id: i32, date: NaiveDate) -> HResult<NaiveDateTime> {
+        match self.arrival_time_of(stop_id)? {
+            (arrival_time, false) => Ok(NaiveDateTime::new(date, arrival_time)),
+            (arrival_time, true) => Ok(NaiveDateTime::new(add_1_day(date)?, arrival_time)),
         }
     }
 
