@@ -665,6 +665,16 @@ impl Journey {
         }
     }
 
+    /// The date must correspond to the route's first entry.
+    /// Do not call this function if the stop is not part of the route.
+    /// Do not call this function if the stop has no arrival time (only the first stop has no arrival time).
+    pub fn arrival_at_of(&self, stop_id: i32, date: NaiveDate) -> HResult<NaiveDateTime> {
+        match self.arrival_time_of(stop_id)? {
+            (arrival_time, false) => Ok(NaiveDateTime::new(date, arrival_time)),
+            (arrival_time, true) => Ok(NaiveDateTime::new(add_1_day(date)?, arrival_time)),
+        }
+    }
+
     pub fn arrival_time_of(&self, stop_id: i32) -> HResult<(NaiveTime, bool)> {
         let route = self.route();
         let index = route
