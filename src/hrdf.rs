@@ -63,9 +63,13 @@ impl Hrdf {
                     // The data must be downloaded.
                     log::info!("Downloading HRDF data to {compressed_data_path:?}...");
                     let response = reqwest::get(url_or_path).await?.error_for_status()?;
-                    let mut file = std::fs::File::create(&compressed_data_path)?;
                     let mut content = Cursor::new(response.bytes().await?);
+                    // Download to a temp path and rename into place only on success, so a partial download can't be mistaken for a complete one later.
+                    let tmp_path = env::temp_dir().join(format!("{unique_filename}.zip.part"));
+                    let mut file = std::fs::File::create(&tmp_path)?;
                     std::io::copy(&mut content, &mut file)?;
+                    drop(file);
+                    fs::rename(&tmp_path, &compressed_data_path)?;
                 }
 
                 compressed_data_path
@@ -73,14 +77,20 @@ impl Hrdf {
                 PathBuf::from(url_or_path)
             };
 
-            let decompressed_data_path = env::temp_dir().join(unique_filename);
+            let decompressed_data_path = env::temp_dir().join(&unique_filename);
 
             if !decompressed_data_path.exists() {
                 // The data must be decompressed.
                 log::info!("Unzipping HRDF archive into {decompressed_data_path:?}...");
                 let file = File::open(&compressed_data_path)?;
                 let mut archive = ZipArchive::new(BufReader::new(file))?;
-                archive.extract(&decompressed_data_path)?;
+                // Same reasoning as above: extract to a temp dir and rename it into place only once extraction fully succeeds.
+                let tmp_extract_path = env::temp_dir().join(format!("{unique_filename}.part"));
+                if tmp_extract_path.exists() {
+                    fs::remove_dir_all(&tmp_extract_path)?;
+                }
+                archive.extract(&tmp_extract_path)?;
+                fs::rename(&tmp_extract_path, &decompressed_data_path)?;
             }
 
             log::info!("Parsing HRDF data from {decompressed_data_path:?}...");
@@ -135,7 +145,10 @@ impl Hrdf {
     // Functions
     pub fn build_cache(&self, path: &Path) -> HResult<()> {
         let data = bincode::serde::encode_to_vec(self, config::standard())?;
-        fs::write(path, data)?;
+        // Write to a temp path and rename into place only on success, so a process killed mid-write can't leave a truncated cache file at `path`.
+        let tmp_path = path.with_extension("cache.part");
+        fs::write(&tmp_path, data)?;
+        fs::rename(&tmp_path, path)?;
         Ok(())
     }
 
