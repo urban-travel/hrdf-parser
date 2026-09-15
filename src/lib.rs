@@ -14,6 +14,10 @@ pub use utils::timetable_end_date;
 pub use utils::timetable_start_date;
 
 #[cfg(test)]
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use chrono::NaiveDate;

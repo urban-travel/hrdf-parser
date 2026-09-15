@@ -98,6 +98,15 @@ pub(crate) fn read_lines(path: &Path, bytes_offset: u64) -> io::Result<Vec<Strin
     Ok(lines)
 }
 
+pub(crate) fn read_file_string(path: &Path, bytes_offset: u64) -> io::Result<String> {
+    let mut file = File::open(path)?;
+    file.seek(io::SeekFrom::Start(bytes_offset))?;
+    let mut reader = io::BufReader::new(file);
+    let mut contents = String::new();
+    reader.read_to_string(&mut contents)?;
+    Ok(contents)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
