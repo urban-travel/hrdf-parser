@@ -1,7 +1,6 @@
 [package]
 name = "hrdf-parser"
-version = "0.9.4"
-authors = ["Florian Burgener, Orestis Malaspinas"]
+version = "0.9.5"
 edition = "2024"
 description = "This library is dedicated to the parsing of the HRDF format. For the moment, it can only parse the Swiss version of the HRDF format."
 repository = "https://github.com/urban-travel/hrdf-parser"
@@ -27,6 +26,7 @@ zip = "8.0.0"
 
 [dev-dependencies]
 flate2 = "1.0.35"
+mimalloc = "0.1.52"
 # For -Zminimal-versions
 native-tls = "0.2.14"
 pretty_assertions = "1.4.1"

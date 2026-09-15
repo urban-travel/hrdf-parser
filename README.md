@@ -46,6 +46,17 @@ let hrdf = Hrdf::new(
 # }
 ```
 
+### Faster parsing
+
+Parsing does many small allocations. Setting
+[`mimalloc`](https://crates.io/crates/mimalloc) as your binary's global allocator made parsing
+noticeably faster in our testing:
+
+```rust,ignore
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+```
+
 ## Supported HRDF format versions
 
 HRDF 5.40.41, V 2.04 (38 fichiers) :

@@ -28,7 +28,7 @@ use crate::{
         error::{PResult, ParsingError},
         helpers::{
             direction_parser, i32_from_n_digits_parser, optional_i32_from_n_digits_parser,
-            read_lines, string_from_n_chars_parser,
+            read_file_string, string_from_n_chars_parser,
         },
     },
     storage::ResourceStorage,
@@ -883,19 +883,19 @@ pub fn parse(
 ) -> HResult<JourneyAndTypeConverter> {
     log::info!("Parsing FPLAN...");
     let file = path.join("FPLAN");
-    let lines = read_lines(&file, 0)?;
+    let contents = read_file_string(&file, 0)?;
 
     let auto_increment = AutoIncrement::new();
     let mut data = FxHashMap::default();
     let mut pk_type_converter = FxHashSet::default();
 
-    lines
-        .into_iter()
+    contents
+        .lines()
         .enumerate()
         .filter(|(_, line)| !line.trim().is_empty())
         .try_for_each(|(line_number, line)| {
             parse_line(
-                &line,
+                line,
                 &mut data,
                 &mut pk_type_converter,
                 &auto_increment,
@@ -906,7 +906,7 @@ pub fn parse(
             .map_err(|e| HrdfError::Parsing {
                 error: e,
                 file: String::from(file.to_string_lossy()),
-                line,
+                line: line.to_string(),
                 line_number,
             })
         })?;

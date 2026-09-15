@@ -102,7 +102,7 @@ use crate::{
     parsing::{
         error::{PResult, ParsingError},
         helpers::{
-            i32_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
+            i32_from_n_digits_parser, optional_i32_from_n_digits_parser, read_file_string,
             string_from_n_chars_parser, string_till_eol_parser,
         },
     },
@@ -411,14 +411,14 @@ pub fn parse(
 
     log::info!("Parsing {prefix}_LV95...");
     let file = path.join(format!("{prefix}_LV95"));
-    let platforms_lv95 = read_lines(&file, 0)?;
-    platforms_lv95
-        .into_iter()
+    let contents = read_file_string(&file, 0)?;
+    contents
+        .lines()
         .enumerate()
         .filter(|(_, line)| !line.trim().is_empty())
         .try_for_each(|(line_number, line)| {
             parse_line(
-                &line,
+                line,
                 &mut platforms,
                 &mut journey_platform,
                 &mut platforms_pk_type_converter,
@@ -429,21 +429,21 @@ pub fn parse(
             .map_err(|e| HrdfError::Parsing {
                 error: e,
                 file: String::from(file.to_string_lossy()),
-                line,
+                line: line.to_string(),
                 line_number,
             })
         })?;
 
     log::info!("Parsing {prefix}_WGS...");
     let file = path.join(format!("{prefix}_WGS"));
-    let platforms_wgs84 = read_lines(&file, 0)?;
-    platforms_wgs84
-        .into_iter()
+    let contents = read_file_string(&file, 0)?;
+    contents
+        .lines()
         .enumerate()
         .filter(|(_, line)| !line.trim().is_empty())
         .try_for_each(|(line_number, line)| {
             parse_line(
-                &line,
+                line,
                 &mut platforms,
                 &mut journey_platform,
                 &mut platforms_pk_type_converter,
@@ -454,7 +454,7 @@ pub fn parse(
             .map_err(|e| HrdfError::Parsing {
                 error: e,
                 file: String::from(file.to_string_lossy()),
-                line,
+                line: line.to_string(),
                 line_number,
             })
         })?;
