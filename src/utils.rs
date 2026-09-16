@@ -80,3 +80,174 @@ pub fn timetable_end_date(
         .value_as_naive_date();
     Ok(result)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rustc_hash::FxHashMap;
+
+    #[test]
+    fn auto_increment_starts_at_zero() {
+        let counter = AutoIncrement::new();
+        assert_eq!(counter.get(), 0);
+    }
+
+    #[test]
+    fn auto_increment_next_increments_and_returns_new_value() {
+        let counter = AutoIncrement::new();
+        assert_eq!(counter.next(), 1);
+        assert_eq!(counter.next(), 2);
+        assert_eq!(counter.next(), 3);
+    }
+
+    #[test]
+    fn auto_increment_get_does_not_advance() {
+        let counter = AutoIncrement::new();
+        counter.next();
+        assert_eq!(counter.get(), 1);
+        assert_eq!(counter.get(), 1);
+    }
+
+    #[test]
+    fn add_1_day_rolls_over_month_and_year() {
+        assert_eq!(
+            add_1_day(NaiveDate::from_ymd_opt(2026, 1, 15).unwrap()).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 1, 16).unwrap()
+        );
+        assert_eq!(
+            add_1_day(NaiveDate::from_ymd_opt(2026, 1, 31).unwrap()).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 2, 1).unwrap()
+        );
+        assert_eq!(
+            add_1_day(NaiveDate::from_ymd_opt(2026, 12, 31).unwrap()).unwrap(),
+            NaiveDate::from_ymd_opt(2027, 1, 1).unwrap()
+        );
+    }
+
+    #[test]
+    fn add_1_day_handles_leap_day() {
+        assert_eq!(
+            add_1_day(NaiveDate::from_ymd_opt(2024, 2, 28).unwrap()).unwrap(),
+            NaiveDate::from_ymd_opt(2024, 2, 29).unwrap()
+        );
+        assert_eq!(
+            add_1_day(NaiveDate::from_ymd_opt(2024, 2, 29).unwrap()).unwrap(),
+            NaiveDate::from_ymd_opt(2024, 3, 1).unwrap()
+        );
+    }
+
+    #[test]
+    fn add_1_day_errors_at_max_date() {
+        let date = NaiveDate::MAX;
+        let err = add_1_day(date).unwrap_err();
+        assert!(matches!(err, HrdfError::FailedToAddDays(d, 1) if d == date));
+    }
+
+    #[test]
+    fn sub_1_day_rolls_back_month_and_year() {
+        assert_eq!(
+            sub_1_day(NaiveDate::from_ymd_opt(2026, 3, 1).unwrap()).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 2, 28).unwrap()
+        );
+        assert_eq!(
+            sub_1_day(NaiveDate::from_ymd_opt(2026, 1, 1).unwrap()).unwrap(),
+            NaiveDate::from_ymd_opt(2025, 12, 31).unwrap()
+        );
+    }
+
+    #[test]
+    fn sub_1_day_errors_at_min_date() {
+        let date = NaiveDate::MIN;
+        let err = sub_1_day(date).unwrap_err();
+        assert!(matches!(err, HrdfError::FailedToSubDays(d, 1) if d == date));
+    }
+
+    #[test]
+    fn count_days_between_two_dates_counts_inclusive() {
+        let date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        assert_eq!(count_days_between_two_dates(date, date), 1);
+
+        let end = NaiveDate::from_ymd_opt(2024, 1, 10).unwrap();
+        assert_eq!(count_days_between_two_dates(date, end), 10);
+    }
+
+    #[test]
+    fn count_days_between_two_dates_spans_leap_day() {
+        let start = NaiveDate::from_ymd_opt(2024, 2, 27).unwrap();
+        let end = NaiveDate::from_ymd_opt(2024, 3, 1).unwrap();
+        assert_eq!(count_days_between_two_dates(start, end), 4);
+    }
+
+    #[test]
+    fn create_time_builds_valid_time() {
+        assert_eq!(
+            create_time(8, 30).unwrap(),
+            NaiveTime::from_hms_opt(8, 30, 0).unwrap()
+        );
+        assert_eq!(
+            create_time(23, 59).unwrap(),
+            NaiveTime::from_hms_opt(23, 59, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn create_time_rejects_invalid_input() {
+        assert!(matches!(
+            create_time(24, 0).unwrap_err(),
+            ParsingError::UnableToBuildTime(24, 0, 0)
+        ));
+        assert!(matches!(
+            create_time(0, 60).unwrap_err(),
+            ParsingError::UnableToBuildTime(0, 60, 0)
+        ));
+    }
+
+    #[test]
+    fn create_time_from_value_splits_hhmm() {
+        assert_eq!(
+            create_time_from_value(830).unwrap(),
+            NaiveTime::from_hms_opt(8, 30, 0).unwrap()
+        );
+        assert_eq!(
+            create_time_from_value(2359).unwrap(),
+            NaiveTime::from_hms_opt(23, 59, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn timetable_start_date_and_end_date_read_metadata() {
+        let mut data = FxHashMap::default();
+        data.insert(
+            1,
+            TimetableMetadataEntry::new(1, "start_date".to_string(), "2024-12-15".to_string()),
+        );
+        data.insert(
+            2,
+            TimetableMetadataEntry::new(2, "end_date".to_string(), "2025-12-13".to_string()),
+        );
+        let storage = ResourceStorage::new(data);
+
+        assert_eq!(
+            timetable_start_date(&storage).unwrap(),
+            NaiveDate::from_ymd_opt(2024, 12, 15).unwrap()
+        );
+        assert_eq!(
+            timetable_end_date(&storage).unwrap(),
+            NaiveDate::from_ymd_opt(2025, 12, 13).unwrap()
+        );
+    }
+
+    #[test]
+    fn timetable_start_date_and_end_date_error_when_missing() {
+        let storage = ResourceStorage::<TimetableMetadataEntry>::new(FxHashMap::default());
+
+        assert!(matches!(
+            timetable_start_date(&storage).unwrap_err(),
+            HrdfError::MissingStartDate
+        ));
+        assert!(matches!(
+            timetable_end_date(&storage).unwrap_err(),
+            HrdfError::MissingEndDate
+        ));
+    }
+}

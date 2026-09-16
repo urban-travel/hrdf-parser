@@ -11,7 +11,6 @@ use crate::{
     models::Version,
     storage::DataStorage,
 };
-use bincode::config;
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -35,7 +34,7 @@ impl Hrdf {
     ) -> HResult<Self> {
         let now = Instant::now();
 
-        let unique_filename = format!("{:x}", Sha256::digest(url_or_path.as_bytes()));
+        let unique_filename = hex::encode(Sha256::digest(url_or_path.as_bytes()));
         let cache_path = PathBuf::from(&cache_prefix.unwrap_or(String::from("./")))
             .join(format!("{unique_filename}.cache"));
 
@@ -144,7 +143,7 @@ impl Hrdf {
 
     // Functions
     pub fn build_cache(&self, path: &Path) -> HResult<()> {
-        let data = bincode::serde::encode_to_vec(self, config::standard())?;
+        let data = postcard::to_stdvec(self)?;
         // Write to a temp path and rename into place only on success, so a process killed mid-write can't leave a truncated cache file at `path`.
         let tmp_path = path.with_extension("cache.part");
         fs::write(&tmp_path, data)?;
@@ -154,7 +153,7 @@ impl Hrdf {
 
     pub fn load_from_cache(path: &Path) -> HResult<Self> {
         let data = fs::read(path)?;
-        let (hrdf, _) = bincode::serde::decode_from_slice(&data, config::standard())?;
+        let hrdf = postcard::from_bytes(&data)?;
         Ok(hrdf)
     }
 }
