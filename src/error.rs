@@ -1,5 +1,4 @@
 use crate::{JourneyError, Version, parsing::error::ParsingError};
-use bincode::error::{DecodeError, EncodeError};
 use chrono::NaiveDate;
 use thiserror::Error;
 use zip::result::ZipError;
@@ -27,10 +26,8 @@ pub enum HrdfError {
     FailedToSubDays(NaiveDate, u64),
     #[error("BitFieldId {0} not found")]
     BitFieldIdNotFound(i32),
-    #[error("Failed to read cache: {0}")]
-    ReadCache(#[from] DecodeError),
-    #[error("Failed to write cache: {0}")]
-    WriteCacher(#[from] EncodeError),
+    #[error("Failed to (de)serialize cache: {0}")]
+    Cache(#[from] postcard::Error),
     #[error("Failed decompress data: {0}")]
     Decompress(#[from] ZipError),
     #[error("Failed to download data: {0}")]
