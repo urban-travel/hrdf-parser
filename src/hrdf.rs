@@ -35,7 +35,7 @@ impl Hrdf {
     ) -> HResult<Self> {
         let now = Instant::now();
 
-        let unique_filename = format!("{:x}", Sha256::digest(url_or_path.as_bytes()));
+        let unique_filename = hex::encode(Sha256::digest(url_or_path.as_bytes()));
         let cache_path = PathBuf::from(&cache_prefix.unwrap_or(String::from("./")))
             .join(format!("{unique_filename}.cache"));
 

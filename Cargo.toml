@@ -9,15 +9,16 @@ license-file = "LICENSE"
 [dependencies]
 bincode = { version = "2.0.1", features = ["serde"] }
 chrono = { version = "0.4.45", features = ["serde"] }
+hex = "0.4.3"
 log = "0.4.34"
 nom = { version = "8.0.0", features = ["alloc", "std"] }
 reqwest = "0.13.5"
 rustc-hash = "2.1.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.151"
-sha2 = "0.10.9"
-strum = "0.27.2"
-strum_macros = "0.27.2"
+sha2 = "0.11"
+strum = "0.28.0"
+strum_macros = "0.28.0"
 test-log = "0.2.21"
 thiserror = "2.0.20"
 tokio = { version = "1.53.1", features = ["macros", "rt", "rt-multi-thread"] }
