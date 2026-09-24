@@ -91,8 +91,8 @@ fn parse_line(
         }
         InfoLines::MetaData(mt) => {
             if *index < NUM_DATE_KEYS {
-                // The start and end dates must be valid dates; anything else would panic in
-                // `TimetableMetadataEntry::value_as_naive_date` later on.
+                // The start and end dates must be valid dates; reject anything else here, where the
+                // offending line can still be reported.
                 return Err(ParsingError::Unknown(format!(
                     "Expected a date (DD.MM.YYYY) for {}, got {line:?}",
                     keys[*index]

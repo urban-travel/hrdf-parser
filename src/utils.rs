@@ -63,25 +63,23 @@ pub fn create_time_from_value(value: u32) -> PResult<NaiveTime> {
 pub fn timetable_start_date(
     timetable_metadata: &ResourceStorage<TimetableMetadataEntry>,
 ) -> HResult<NaiveDate> {
-    let result = timetable_metadata
+    timetable_metadata
         .data()
         .values()
         .find(|val| val.key() == "start_date")
         .ok_or(HrdfError::MissingStartDate)?
-        .value_as_naive_date();
-    Ok(result)
+        .value_as_naive_date()
 }
 
 pub fn timetable_end_date(
     timetable_metadata: &ResourceStorage<TimetableMetadataEntry>,
 ) -> HResult<NaiveDate> {
-    let result = timetable_metadata
+    timetable_metadata
         .data()
         .values()
         .find(|val| val.key() == "end_date")
         .ok_or(HrdfError::MissingEndDate)?
-        .value_as_naive_date();
-    Ok(result)
+        .value_as_naive_date()
 }
 
 #[cfg(test)]
