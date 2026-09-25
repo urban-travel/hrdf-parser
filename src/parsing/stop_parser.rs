@@ -566,10 +566,12 @@ fn parse_stop_line(line: &str, stops: &mut FxHashMap<i32, Stop>) -> PResult<()> 
         },
     ) = station_combinator.parse(line)?;
 
-    stops.insert(
+    if let Some(previous) = stops.insert(
         stop_id,
         Stop::new(stop_id, designation, long_name, abbreviation, synonyms),
-    );
+    ) {
+        log::warn!("Duplicate stop {stop_id} in BAHNHOF: replaces {previous:?}");
+    }
     Ok(())
 }
 

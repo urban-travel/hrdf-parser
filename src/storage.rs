@@ -508,7 +508,21 @@ fn create_exchange_times_administration_map(
                 exchange_time.administration_2().into(),
             );
 
-            acc.insert(key, exchange_time.id());
+            if let Some(previous_id) = acc.insert(key, exchange_time.id()) {
+                // Only one exchange time is kept per (stop, administration 1, administration 2).
+                let previous_duration = exchange_times_administration
+                    .find(previous_id)
+                    .map(|previous| previous.duration());
+                log::warn!(
+                    "Duplicate exchange time for stop {:?}, administrations {} -> {}: \
+                     id {previous_id} ({previous_duration:?} min) replaced by id {} ({} min)",
+                    exchange_time.stop_id(),
+                    exchange_time.administration_1(),
+                    exchange_time.administration_2(),
+                    exchange_time.id(),
+                    exchange_time.duration(),
+                );
+            }
             acc
         },
     )

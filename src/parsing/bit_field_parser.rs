@@ -82,7 +82,14 @@ pub fn parse(path: &Path) -> HResult<ResourceStorage<BitField>> {
                 line_number,
             })
         })
-        .collect::<HResult<FxHashMap<i32, BitField>>>()?;
+        .try_fold(FxHashMap::default(), |mut acc, item| {
+            let (id, bit_field) = item?;
+            if let Some(previous) = acc.insert(id, bit_field) {
+                let bits: String = previous.bits().iter().map(|bit| bit.to_string()).collect();
+                log::warn!("Duplicate bit field id {id} in BITFELD: replaces bits {bits}");
+            }
+            HResult::Ok(acc)
+        })?;
     Ok(ResourceStorage::new(bitfields))
 }
 
