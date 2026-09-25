@@ -359,7 +359,7 @@ fn create_bit_fields_by_day(
 ) -> HResult<FxHashMap<NaiveDate, FxHashSet<i32>>> {
     let start_date = timetable_start_date(timetable_metadata)?;
     let num_days =
-        count_days_between_two_dates(start_date, timetable_end_date(timetable_metadata)?);
+        count_days_between_two_dates(start_date, timetable_end_date(timetable_metadata)?)?;
 
     let dates = (0..num_days)
         .map(|i| {

@@ -44,9 +44,12 @@ pub fn sub_1_day(date: NaiveDate) -> HResult<NaiveDate> {
         .ok_or(HrdfError::FailedToSubDays(date, 1))
 }
 
-pub fn count_days_between_two_dates(date_1: NaiveDate, date_2: NaiveDate) -> usize {
-    usize::try_from((date_2 - date_1).num_days()).expect("The number of days should be positive.")
-        + 1
+/// Number of days from `date_1` to `date_2`, both included.
+/// Returns `HrdfError::OutOfRangeDate(date_2)` if `date_2` is before `date_1`.
+pub fn count_days_between_two_dates(date_1: NaiveDate, date_2: NaiveDate) -> HResult<usize> {
+    usize::try_from((date_2 - date_1).num_days())
+        .map(|days| days + 1)
+        .map_err(|_| HrdfError::OutOfRangeDate(date_2))
 }
 
 pub fn create_time(hour: u32, minute: u32) -> PResult<NaiveTime> {
@@ -60,25 +63,23 @@ pub fn create_time_from_value(value: u32) -> PResult<NaiveTime> {
 pub fn timetable_start_date(
     timetable_metadata: &ResourceStorage<TimetableMetadataEntry>,
 ) -> HResult<NaiveDate> {
-    let result = timetable_metadata
+    timetable_metadata
         .data()
         .values()
         .find(|val| val.key() == "start_date")
         .ok_or(HrdfError::MissingStartDate)?
-        .value_as_naive_date();
-    Ok(result)
+        .value_as_naive_date()
 }
 
 pub fn timetable_end_date(
     timetable_metadata: &ResourceStorage<TimetableMetadataEntry>,
 ) -> HResult<NaiveDate> {
-    let result = timetable_metadata
+    timetable_metadata
         .data()
         .values()
         .find(|val| val.key() == "end_date")
         .ok_or(HrdfError::MissingEndDate)?
-        .value_as_naive_date();
-    Ok(result)
+        .value_as_naive_date()
 }
 
 #[cfg(test)]
@@ -165,17 +166,27 @@ mod tests {
     #[test]
     fn count_days_between_two_dates_counts_inclusive() {
         let date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
-        assert_eq!(count_days_between_two_dates(date, date), 1);
+        assert_eq!(count_days_between_two_dates(date, date).unwrap(), 1);
 
         let end = NaiveDate::from_ymd_opt(2024, 1, 10).unwrap();
-        assert_eq!(count_days_between_two_dates(date, end), 10);
+        assert_eq!(count_days_between_two_dates(date, end).unwrap(), 10);
     }
 
     #[test]
     fn count_days_between_two_dates_spans_leap_day() {
         let start = NaiveDate::from_ymd_opt(2024, 2, 27).unwrap();
         let end = NaiveDate::from_ymd_opt(2024, 3, 1).unwrap();
-        assert_eq!(count_days_between_two_dates(start, end), 4);
+        assert_eq!(count_days_between_two_dates(start, end).unwrap(), 4);
+    }
+
+    #[test]
+    fn count_days_between_two_dates_errors_when_end_is_before_start() {
+        let start = NaiveDate::from_ymd_opt(2024, 1, 10).unwrap();
+        let end = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        assert!(matches!(
+            count_days_between_two_dates(start, end),
+            Err(HrdfError::OutOfRangeDate(date)) if date == end
+        ));
     }
 
     #[test]

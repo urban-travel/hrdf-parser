@@ -41,7 +41,7 @@ use crate::{
     error::{HResult, HrdfError},
     models::{DirectionType, ExchangeTimeLine, LineInfo},
     parsing::{
-        error::PResult,
+        error::{PResult, ParsingError},
         helpers::{
             i16_from_n_digits_parser, optional_i32_from_n_digits_parser, read_lines,
             string_from_n_chars_parser,
@@ -141,7 +141,11 @@ fn parse_line(
 
     let transport_type_id_1 = *transport_types_pk_type_converter
         .get(&transport_type_id_1)
-        .ok_or("Unknown legacy ID for transport_type_1 {transport_type_id_1}")?;
+        .ok_or_else(|| {
+            ParsingError::UnknownId(format!(
+                "Unknown legacy ID for transport_type_1 {transport_type_id_1}"
+            ))
+        })?;
 
     let line_id_1 = if line_id_1 == "*" {
         None
@@ -157,7 +161,11 @@ fn parse_line(
 
     let transport_type_id_2 = *transport_types_pk_type_converter
         .get(&transport_type_id_2)
-        .ok_or("Unknown legacy ID for transport_type_id_2 {transport_type_id_2}")?;
+        .ok_or_else(|| {
+            ParsingError::UnknownId(format!(
+                "Unknown legacy ID for transport_type_2 {transport_type_id_2}"
+            ))
+        })?;
 
     let line_id_2 = if line_id_2 == "*" {
         None
@@ -482,5 +490,41 @@ mod tests {
              }"###;
         let (attribute, reference) = get_json_values(attribute, reference).unwrap();
         assert_eq!(attribute, reference);
+    }
+
+    #[test]
+    fn unknown_transport_type_1_error_names_the_type() {
+        let mut converter = FxHashMap::default();
+        converter.insert("B".to_string(), 1);
+        let err = parse_line(
+            "8301113 000011 S   *        * 007000 B   *        * 003  Luino (I)",
+            &AutoIncrement::new(),
+            &converter,
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("transport_type_1 S"),
+            "unexpected message: {msg}"
+        );
+        assert!(!msg.contains('{'), "message must be interpolated: {msg}");
+    }
+
+    #[test]
+    fn unknown_transport_type_2_error_names_the_type() {
+        let mut converter = FxHashMap::default();
+        converter.insert("S".to_string(), 1);
+        let err = parse_line(
+            "8301113 000011 S   *        * 007000 B   *        * 003  Luino (I)",
+            &AutoIncrement::new(),
+            &converter,
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("transport_type_2 B"),
+            "unexpected message: {msg}"
+        );
+        assert!(!msg.contains('{'), "message must be interpolated: {msg}");
     }
 }

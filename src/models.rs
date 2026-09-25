@@ -1293,9 +1293,12 @@ impl TimetableMetadataEntry {
         &self.value
     }
 
-    /// unwrap: Do not call this function if the value is not a date.
-    pub fn value_as_naive_date(&self) -> NaiveDate {
-        NaiveDate::parse_from_str(self.value(), "%Y-%m-%d").unwrap()
+    /// Returns `HrdfError::InvalidDate` if the value is not a `YYYY-MM-DD` date.
+    pub fn value_as_naive_date(&self) -> HResult<NaiveDate> {
+        NaiveDate::parse_from_str(self.value(), "%Y-%m-%d").map_err(|_| HrdfError::InvalidDate {
+            key: self.key.clone(),
+            value: self.value.clone(),
+        })
     }
 }
 
@@ -1654,9 +1657,21 @@ mod tests {
         let entry =
             TimetableMetadataEntry::new(1, "start_date".to_string(), "2024-12-15".to_string());
         assert_eq!(
-            entry.value_as_naive_date(),
+            entry.value_as_naive_date().unwrap(),
             NaiveDate::from_ymd_opt(2024, 12, 15).unwrap()
         );
+    }
+
+    #[test]
+    fn timetable_metadata_entry_invalid_date_is_an_error_not_a_panic() {
+        let entry = TimetableMetadataEntry::new(1, "start_date".to_string(), "INFO+".to_string());
+        match entry.value_as_naive_date() {
+            Err(HrdfError::InvalidDate { key, value }) => {
+                assert_eq!(key, "start_date");
+                assert_eq!(value, "INFO+");
+            }
+            other => panic!("Expected InvalidDate, got {other:?}"),
+        }
     }
 
     #[test]
