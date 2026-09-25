@@ -236,7 +236,9 @@ fn parse_line(line: &str, data: &mut FxHashMap<i32, Line>) -> PResult<()> {
 
     match line_row.ok_or(ParsingError::MissingLineType)? {
         LineType::Kline { id, name } => {
-            data.insert(id, Line::new(id, name));
+            if let Some(previous) = data.insert(id, Line::new(id, name)) {
+                log::warn!("Duplicate K line for line {id} in LINIE: replaces {previous:?}");
+            }
         }
         LineType::NTline { id, short_name } => {
             let line = data.get_mut(&id).ok_or_else(|| {

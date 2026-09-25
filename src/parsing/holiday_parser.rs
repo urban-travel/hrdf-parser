@@ -94,7 +94,9 @@ fn parse_name_translations(name_translations: String) -> PResult<FxHashMap<Langu
         })
         .try_fold(FxHashMap::default(), |mut acc, item| {
             let (k, v) = item?;
-            acc.insert(k, v);
+            if let Some(previous) = acc.insert(k, v) {
+                log::warn!("Duplicate {k} name for a holiday in FEIERTAG: replaces {previous:?}");
+            }
             Ok(acc)
         })
 }
