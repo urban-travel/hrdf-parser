@@ -57,8 +57,8 @@ pub struct DataStorage {
     bit_fields_by_stop_id: FxHashMap<i32, FxHashSet<i32>>,
     journeys_by_stop_id_and_bit_field_id: FxHashMap<(i32, i32), Vec<i32>>,
     stop_connections_by_stop_id: FxHashMap<i32, FxHashSet<i32>>,
-    bit_field_id_for_through_service_by_journey_id_stop_id:
-        FxHashMap<(JourneyId, JourneyId, i32), i32>,
+    bit_field_ids_for_through_service_by_journey_id_stop_id:
+        FxHashMap<(JourneyId, JourneyId, i32), Vec<i32>>,
     exchange_times_administration_map: FxHashMap<(Option<i32>, String, String), i32>,
     exchange_times_journey_map: FxHashMap<(i32, JourneyId, JourneyId), FxHashSet<i32>>,
 
@@ -178,8 +178,8 @@ impl DataStorage {
         let journeys_by_stop_id_and_bit_field_id =
             create_journeys_by_stop_id_and_bit_field_id(&journeys)?;
         log::info!("Building stop connections by stop id...");
-        let bit_field_id_for_through_service_by_journey_id_stop_id =
-            create_bit_field_id_through_service_by_journey_id_stop_id(&through_service);
+        let bit_field_ids_for_through_service_by_journey_id_stop_id =
+            create_bit_field_ids_through_service_by_journey_id_stop_id(&through_service);
         log::info!("Building stop connections by stop id...");
         let stop_connections_by_stop_id = create_stop_connections_by_stop_id(&stop_connections);
         log::info!("Building exchange times administration map...");
@@ -218,7 +218,7 @@ impl DataStorage {
             bit_fields_by_stop_id,
             journeys_by_stop_id_and_bit_field_id,
             stop_connections_by_stop_id,
-            bit_field_id_for_through_service_by_journey_id_stop_id,
+            bit_field_ids_for_through_service_by_journey_id_stop_id,
             exchange_times_administration_map,
             exchange_times_journey_map,
             // Additional global data
@@ -294,10 +294,10 @@ impl DataStorage {
         &self.stop_connections_by_stop_id
     }
 
-    pub fn bit_field_id_for_through_service_by_journey_id_stop_id(
+    pub fn bit_field_ids_for_through_service_by_journey_id_stop_id(
         &self,
-    ) -> &FxHashMap<(JourneyId, JourneyId, i32), i32> {
-        &self.bit_field_id_for_through_service_by_journey_id_stop_id
+    ) -> &FxHashMap<(JourneyId, JourneyId, i32), Vec<i32>> {
+        &self.bit_field_ids_for_through_service_by_journey_id_stop_id
     }
 
     pub fn exchange_times_administration_map(
@@ -437,25 +437,31 @@ fn create_journeys_by_stop_id_and_bit_field_id(
     )
 }
 
-/// Given journey_stop_id, and journey_id_1, journey_id_2, we obtain the bit_field_id of the ThroughService
-fn create_bit_field_id_through_service_by_journey_id_stop_id(
+/// Given journey_stop_id, and journey_id_1, journey_id_2, we obtain the bit_field_ids of the ThroughServices
+fn create_bit_field_ids_through_service_by_journey_id_stop_id(
     through_services: &ResourceStorage<ThroughService>,
-) -> FxHashMap<(JourneyId, JourneyId, i32), i32> {
-    through_services
-        .entries()
-        .into_iter()
-        .fold(FxHashMap::default(), |mut acc, through_service| {
-            let journey_1_id = through_service.journey_1_id();
-            let journey_2_id = through_service.journey_2_id();
-            let journey_stop_id = through_service.journey_1_stop_id();
-            let bit_field_id = through_service.bit_field_id();
-
-            acc.insert(
-                (journey_1_id.clone(), journey_2_id.clone(), journey_stop_id),
-                bit_field_id,
+) -> FxHashMap<(JourneyId, JourneyId, i32), Vec<i32>> {
+    let mut map = through_services.entries().into_iter().fold(
+        FxHashMap::<_, Vec<i32>>::default(),
+        |mut acc, through_service| {
+            let key = (
+                through_service.journey_1_id().clone(),
+                through_service.journey_2_id().clone(),
+                through_service.journey_1_stop_id(),
             );
+            acc.entry(key)
+                .or_default()
+                .push(through_service.bit_field_id());
             acc
-        })
+        },
+    );
+    // Sorted so that the result does not depend on the hash-map order; DURCHBI contains exact
+    // duplicate lines.
+    map.values_mut().for_each(|bit_field_ids| {
+        bit_field_ids.sort_unstable();
+        bit_field_ids.dedup();
+    });
+    map
 }
 
 fn create_stop_connections_by_stop_id(
@@ -712,9 +718,71 @@ mod tests {
             ThroughService::new(1, (100, "A".to_string()), 10, (200, "B".to_string()), 20, 3),
         );
         let storage = ResourceStorage::new(data);
-        let map = create_bit_field_id_through_service_by_journey_id_stop_id(&storage);
+        let map = create_bit_field_ids_through_service_by_journey_id_stop_id(&storage);
 
         let key = ((100, "A".to_string()), (200, "B".to_string()), 10);
-        assert_eq!(*map.get(&key).unwrap(), 3);
+        assert_eq!(map[&key], vec![3]);
+    }
+
+    #[test]
+    fn through_service_map_keeps_every_bit_field_of_a_key() {
+        let mut data = FxHashMap::default();
+        // Same journeys and stop; bit field 3 appears twice, as exact duplicate lines do in DURCHBI.
+        for (id, bit_field_id) in [(1, 4), (2, 3), (3, 3)] {
+            data.insert(
+                id,
+                ThroughService::new(
+                    id,
+                    (100, "A".to_string()),
+                    10,
+                    (200, "B".to_string()),
+                    10,
+                    bit_field_id,
+                ),
+            );
+        }
+        let storage = ResourceStorage::new(data);
+        let map = create_bit_field_ids_through_service_by_journey_id_stop_id(&storage);
+
+        let key = ((100, "A".to_string()), (200, "B".to_string()), 10);
+        assert_eq!(map.len(), 1);
+        assert_eq!(map[&key], vec![3, 4]);
+    }
+
+    #[test]
+    fn through_service_map_keeps_different_keys_apart() {
+        let mut data = FxHashMap::default();
+        // Same journeys at another stop, and another journey 2 at the same stop.
+        for (id, journey_2, stop_id, bit_field_id) in
+            [(1, 200, 10, 3), (2, 200, 11, 4), (3, 201, 10, 5)]
+        {
+            data.insert(
+                id,
+                ThroughService::new(
+                    id,
+                    (100, "A".to_string()),
+                    stop_id,
+                    (journey_2, "B".to_string()),
+                    stop_id,
+                    bit_field_id,
+                ),
+            );
+        }
+        let storage = ResourceStorage::new(data);
+        let map = create_bit_field_ids_through_service_by_journey_id_stop_id(&storage);
+
+        assert_eq!(map.len(), 3);
+        assert_eq!(
+            map[&((100, "A".to_string()), (200, "B".to_string()), 10)],
+            vec![3]
+        );
+        assert_eq!(
+            map[&((100, "A".to_string()), (200, "B".to_string()), 11)],
+            vec![4]
+        );
+        assert_eq!(
+            map[&((100, "A".to_string()), (201, "B".to_string()), 10)],
+            vec![5]
+        );
     }
 }
