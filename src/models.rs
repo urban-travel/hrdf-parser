@@ -519,16 +519,110 @@ impl Journey {
         self.route.push(entry);
     }
 
-    pub(crate) fn bit_field_id(&self) -> JResult<Option<i32>> {
-        let entry = self
+    /// The bit fields that apply at each position of the route, from the *A VE lines.
+    ///
+    /// A section runs from its from stop to the first following occurrence of its to stop, both
+    /// included, so a stop where two sections meet gets both bit fields. A blank stop means the
+    /// start or the end of the route, and a blank bit field means every day (0). A stop that no
+    /// section covers, e.g. because a section cannot be placed on the route, gets every bit field
+    /// of the journey.
+    pub(crate) fn bit_field_ids_by_route_index(&self) -> JResult<Vec<Vec<i32>>> {
+        let entries = self
             .metadata()
             .get(&JourneyMetadataType::BitField)
             .ok_or(JourneyError::MissingBitFieldMetadata)?;
+        if entries.is_empty() {
+            return Err(JourneyError::EmptyJourneyMetadata);
+        }
 
-        Ok(entry
-            .first()
-            .ok_or(JourneyError::EmptyJourneyMetadata)?
-            .bit_field_id)
+        let mut result: Vec<Vec<i32>> = vec![Vec::new(); self.route.len()];
+        for entry in entries {
+            let bit_field_id = entry.bit_field_id.unwrap_or(0);
+            match self.section_range(entry) {
+                Some((start, end)) => result[start..=end]
+                    .iter_mut()
+                    .filter(|ids| !ids.contains(&bit_field_id))
+                    .for_each(|ids| ids.push(bit_field_id)),
+                None => log::warn!(
+                    "Journey ({}, {}): *A VE section {:?} ({:?}) -> {:?} ({:?}) (bit field {bit_field_id}) is not on the route",
+                    self.legacy_id,
+                    self.administration,
+                    entry.from_stop_id,
+                    entry.departure_time,
+                    entry.until_stop_id,
+                    entry.arrival_time,
+                ),
+            }
+        }
+
+        let mut all: Vec<i32> = entries
+            .iter()
+            .map(|entry| entry.bit_field_id.unwrap_or(0))
+            .collect();
+        all.sort_unstable();
+        all.dedup();
+        for (index, ids) in result.iter_mut().enumerate() {
+            if ids.is_empty() {
+                log::warn!(
+                    "Journey ({}, {}): stop {} at route index {index} is covered by no *A VE section, using bit fields {all:?}",
+                    self.legacy_id,
+                    self.administration,
+                    self.route[index].stop_id(),
+                );
+                ids.clone_from(&all);
+            } else {
+                ids.sort_unstable();
+            }
+        }
+        Ok(result)
+    }
+
+    /// Route indexes (both included) of the section described by `entry`: from its from stop
+    /// (with its departure time, if given) to the first following occurrence of its to stop (with
+    /// its arrival time, if given). `None` for a stop means the start or the end of the route.
+    fn section_range(&self, entry: &JourneyMetadataEntry) -> Option<(usize, usize)> {
+        let last = self.route.len().checked_sub(1)?;
+        let start = match entry.from_stop_id {
+            None => 0,
+            Some(stop_id) => self.route.iter().position(|e| {
+                e.stop_id() == stop_id
+                    && entry
+                        .departure_time
+                        .is_none_or(|time| *e.departure_time() == Some(time))
+            })?,
+        };
+        let end = match entry.until_stop_id {
+            None => last,
+            Some(stop_id) => {
+                // Without an arrival time, a section ending at its own start stop (a loop) must end
+                // at a later visit, not at the start itself.
+                let from = if entry.arrival_time.is_none() && entry.from_stop_id == Some(stop_id) {
+                    start + 1
+                } else {
+                    start
+                };
+                let end = from
+                    + self.route.get(from..)?.iter().position(|e| {
+                        e.stop_id() == stop_id
+                            && entry
+                                .arrival_time
+                                .is_none_or(|time| *e.arrival_time() == Some(time))
+                    })?;
+                // Consecutive calls at the to stop with the same arrival time (e.g. a turning loop
+                // shorter than a minute) cannot be told apart by time; the section ends at the last
+                // of them, as it does whenever the times differ.
+                end + self.route[end + 1..]
+                    .iter()
+                    .take_while(|e| {
+                        e.stop_id() == stop_id
+                            && entry
+                                .arrival_time
+                                .is_some_and(|time| *e.arrival_time() == Some(time))
+                    })
+                    .count()
+            }
+        };
+        Some((start, end))
     }
 
     pub fn transport_type_id(&self) -> HResult<i32> {
@@ -1642,11 +1736,235 @@ mod tests {
         );
     }
 
+    /// A journey over `stops` with one *A VE line per (from stop, to stop, bit field) in `sections`.
+    fn journey_with_sections(
+        stops: &[i32],
+        sections: &[(Option<i32>, Option<i32>, Option<i32>)],
+    ) -> Journey {
+        let mut journey = Journey::new(1, 100, "CH".to_string());
+        for &stop_id in stops {
+            journey.add_route_entry(JourneyRouteEntry::new(stop_id, None, None));
+        }
+        for &(from_stop_id, until_stop_id, bit_field_id) in sections {
+            journey.add_metadata_entry(
+                JourneyMetadataType::BitField,
+                JourneyMetadataEntry::new(
+                    from_stop_id,
+                    until_stop_id,
+                    None,
+                    bit_field_id,
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
+            );
+        }
+        journey
+    }
+
     #[test]
-    fn journey_bit_field_id_requires_metadata() {
+    fn bit_field_ids_by_route_index_one_section_covers_the_route() {
+        let journey = journey_with_sections(&[1, 2, 3], &[(Some(1), Some(3), Some(10))]);
+        assert_eq!(
+            journey.bit_field_ids_by_route_index().unwrap(),
+            vec![vec![10], vec![10], vec![10]]
+        );
+    }
+
+    #[test]
+    fn bit_field_ids_by_route_index_two_sections_share_their_boundary_stop() {
+        let journey = journey_with_sections(
+            &[1, 2, 3, 4],
+            &[(Some(1), Some(2), Some(10)), (Some(2), Some(4), Some(20))],
+        );
+        assert_eq!(
+            journey.bit_field_ids_by_route_index().unwrap(),
+            vec![vec![10], vec![10, 20], vec![20], vec![20]]
+        );
+    }
+
+    #[test]
+    fn bit_field_ids_by_route_index_blank_stops_mean_the_whole_route() {
+        let journey = journey_with_sections(&[1, 2, 3], &[(None, None, Some(10))]);
+        assert_eq!(
+            journey.bit_field_ids_by_route_index().unwrap(),
+            vec![vec![10], vec![10], vec![10]]
+        );
+    }
+
+    #[test]
+    fn bit_field_ids_by_route_index_blank_bit_field_means_every_day() {
+        let journey = journey_with_sections(&[1, 2, 3], &[(Some(1), Some(3), None)]);
+        assert_eq!(
+            journey.bit_field_ids_by_route_index().unwrap(),
+            vec![vec![0], vec![0], vec![0]]
+        );
+    }
+
+    #[test]
+    fn bit_field_ids_by_route_index_handles_a_stop_visited_twice() {
+        // Stop 1 is visited at index 0 and 3; the second visit belongs to the second section.
+        let journey = journey_with_sections(
+            &[1, 2, 3, 1, 4],
+            &[(Some(1), Some(3), Some(10)), (Some(3), Some(4), Some(20))],
+        );
+        assert_eq!(
+            journey.bit_field_ids_by_route_index().unwrap(),
+            vec![vec![10], vec![10], vec![10, 20], vec![20], vec![20]]
+        );
+    }
+
+    #[test]
+    fn bit_field_ids_by_route_index_uncovered_stops_get_every_bit_field() {
+        // The second section starts at stop 9, which is not on the route, and the third one ends
+        // before it starts, so stop 3 is covered by no section.
+        let journey = journey_with_sections(
+            &[1, 2, 3],
+            &[
+                (Some(1), Some(2), Some(10)),
+                (Some(9), Some(3), Some(20)),
+                (Some(3), Some(1), Some(30)),
+            ],
+        );
+        assert_eq!(
+            journey.bit_field_ids_by_route_index().unwrap(),
+            vec![vec![10], vec![10], vec![10, 20, 30]]
+        );
+    }
+
+    type Time = Option<(u32, u32)>;
+
+    /// A journey over `route` (stop, arrival, departure) with one *A VE line per
+    /// (from stop, departure time, to stop, arrival time, bit field) in `sections`.
+    fn journey_with_timed_sections(
+        route: &[(i32, Time, Time)],
+        sections: &[(Option<i32>, Time, Option<i32>, Time, i32)],
+    ) -> Journey {
+        let time = |t: Time| t.map(|(h, m)| NaiveTime::from_hms_opt(h, m, 0).unwrap());
+        let mut journey = Journey::new(1, 100, "CH".to_string());
+        route.iter().for_each(|&(stop_id, arrival, departure)| {
+            journey.add_route_entry(JourneyRouteEntry::new(
+                stop_id,
+                time(arrival),
+                time(departure),
+            ))
+        });
+        sections.iter().for_each(
+            |&(from_stop_id, departure, until_stop_id, arrival, bit_field_id)| {
+                journey.add_metadata_entry(
+                    JourneyMetadataType::BitField,
+                    JourneyMetadataEntry::new(
+                        from_stop_id,
+                        until_stop_id,
+                        None,
+                        Some(bit_field_id),
+                        time(departure),
+                        time(arrival),
+                        None,
+                        None,
+                    ),
+                )
+            },
+        );
+        journey
+    }
+
+    #[test]
+    fn bit_field_ids_by_route_index_loop_with_times_covers_the_route() {
+        // A circular journey 1 -> 2 -> 3 -> 1, as in the Konstanz buses of the 2026 archive.
+        let journey = journey_with_timed_sections(
+            &[
+                (1, None, Some((8, 0))),
+                (2, Some((8, 10)), Some((8, 10))),
+                (3, Some((8, 20)), Some((8, 20))),
+                (1, Some((8, 30)), None),
+            ],
+            &[(Some(1), Some((8, 0)), Some(1), Some((8, 30)), 10)],
+        );
+        assert_eq!(
+            journey.bit_field_ids_by_route_index().unwrap(),
+            vec![vec![10], vec![10], vec![10], vec![10]]
+        );
+    }
+
+    #[test]
+    fn bit_field_ids_by_route_index_loop_split_into_two_sections_by_times() {
+        let journey = journey_with_timed_sections(
+            &[
+                (1, None, Some((8, 0))),
+                (2, Some((8, 10)), Some((8, 10))),
+                (3, Some((8, 20)), Some((8, 21))),
+                (1, Some((8, 30)), None),
+            ],
+            &[
+                (Some(1), Some((8, 0)), Some(3), Some((8, 20)), 10),
+                (Some(3), Some((8, 21)), Some(1), Some((8, 30)), 20),
+            ],
+        );
+        assert_eq!(
+            journey.bit_field_ids_by_route_index().unwrap(),
+            vec![vec![10], vec![10], vec![10, 20], vec![20]]
+        );
+    }
+
+    #[test]
+    fn bit_field_ids_by_route_index_departure_time_selects_the_second_visit() {
+        // Stop 1 is visited at index 0 and 2; the second section starts at the second visit.
+        let journey = journey_with_timed_sections(
+            &[
+                (1, None, Some((8, 0))),
+                (2, Some((8, 10)), Some((8, 10))),
+                (1, Some((8, 20)), Some((8, 21))),
+                (3, Some((8, 30)), None),
+            ],
+            &[
+                (Some(1), Some((8, 0)), Some(1), Some((8, 20)), 10),
+                (Some(1), Some((8, 21)), Some(3), None, 20),
+            ],
+        );
+        assert_eq!(
+            journey.bit_field_ids_by_route_index().unwrap(),
+            vec![vec![10], vec![10], vec![10, 20], vec![20]]
+        );
+    }
+
+    #[test]
+    fn bit_field_ids_by_route_index_section_ends_at_the_last_call_with_the_same_time() {
+        // The last stop is listed twice at the same time, as Zürich, Auzelg in the 2026 archive:
+        // the section (to stop 3, arrival 08:20) ends at the second call, the end of the route.
+        let journey = journey_with_timed_sections(
+            &[
+                (1, None, Some((8, 0))),
+                (2, Some((8, 10)), Some((8, 10))),
+                (3, Some((8, 20)), Some((8, 20))),
+                (3, Some((8, 20)), None),
+            ],
+            &[(Some(1), Some((8, 0)), Some(3), Some((8, 20)), 10)],
+        );
+        assert_eq!(
+            journey.section_range(&journey.metadata()[&JourneyMetadataType::BitField][0]),
+            Some((0, 3))
+        );
+        assert_eq!(
+            journey.bit_field_ids_by_route_index().unwrap(),
+            vec![vec![10], vec![10], vec![10], vec![10]]
+        );
+    }
+
+    #[test]
+    fn bit_field_ids_by_route_index_loop_without_times_covers_the_route() {
+        let journey = journey_with_sections(&[1, 2, 3, 1], &[(Some(1), Some(1), Some(10))]);
+        assert_eq!(
+            journey.bit_field_ids_by_route_index().unwrap(),
+            vec![vec![10], vec![10], vec![10], vec![10]]
+        );
+    }
+
+    #[test]
+    fn bit_field_ids_by_route_index_requires_metadata() {
         let journey = Journey::new(1, 100, "CH".to_string());
-        let err = journey.bit_field_id().unwrap_err();
-        match err {
+        match journey.bit_field_ids_by_route_index().unwrap_err() {
             JourneyError::MissingBitFieldMetadata => {}
             other => panic!("Error should be MissingBitFieldMetadata but is: {other:?}"),
         }
