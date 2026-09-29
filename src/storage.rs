@@ -5,7 +5,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    JourneyError, JourneyId,
+    JourneyId,
     error::{HResult, HrdfError},
     models::{
         Attribute, BitField, Direction, ExchangeTimeAdministration, ExchangeTimeJourney,
@@ -407,14 +407,16 @@ fn create_bit_fields_by_stop_id(
     journeys.entries().into_iter().try_fold(
         FxHashMap::default(),
         |mut acc: FxHashMap<i32, FxHashSet<i32>>, journey| {
-            journey.route().iter().try_for_each(|route_entry| {
-                acc.entry(route_entry.stop_id())
-                    .or_default()
-                    // If the journey has no bit_field_id, the default value is 0. A value of 0 means that the journey operates every day.
-                    .insert(journey.bit_field_id()?.unwrap_or(0));
-                Ok::<(), JourneyError>(())
-            })?;
-            Ok(acc)
+            // Each stop gets the bit fields of the *A VE sections it belongs to (0 means every day).
+            let bit_field_ids = journey.bit_field_ids_by_route_index()?;
+            journey
+                .route()
+                .iter()
+                .zip(bit_field_ids)
+                .for_each(|(route_entry, ids)| {
+                    acc.entry(route_entry.stop_id()).or_default().extend(ids);
+                });
+            Ok::<_, HrdfError>(acc)
         },
     )
 }
@@ -425,14 +427,17 @@ fn create_journeys_by_stop_id_and_bit_field_id(
     journeys.entries().into_iter().try_fold(
         FxHashMap::default(),
         |mut acc: FxHashMap<(i32, i32), Vec<i32>>, journey| {
-            journey.route().iter().try_for_each(|route_entry| {
-                // If the journey has no bit_field_id, the default value is 0. A value of 0 means that the journey operates every day.
-                acc.entry((route_entry.stop_id(), journey.bit_field_id()?.unwrap_or(0)))
-                    .or_default()
-                    .push(journey.id());
-                Ok::<(), JourneyError>(())
-            })?;
-            Ok(acc)
+            // Each stop gets the bit fields of the *A VE sections it belongs to (0 means every day).
+            let bit_field_ids = journey.bit_field_ids_by_route_index()?;
+            journey
+                .route()
+                .iter()
+                .zip(bit_field_ids)
+                .flat_map(|(route_entry, ids)| {
+                    ids.into_iter().map(|id| (route_entry.stop_id(), id))
+                })
+                .for_each(|key| acc.entry(key).or_default().push(journey.id()));
+            Ok::<_, HrdfError>(acc)
         },
     )
 }
@@ -643,6 +648,49 @@ mod tests {
         assert_eq!(by_stop_and_bit.get(&(10, 7)).unwrap(), &vec![1]);
         assert_eq!(by_stop_and_bit.get(&(10, 0)).unwrap(), &vec![2]);
         assert_eq!(by_stop_and_bit.get(&(20, 7)).unwrap(), &vec![1]);
+    }
+
+    #[test]
+    fn journey_maps_use_the_bit_field_of_each_ave_section() {
+        // Route 10 -> 20 -> 30 with bit field 7 on 10..20 and bit field 8 on 20..30.
+        let mut journey = Journey::new(1, 100, "CH".to_string());
+        [(10, 20, 7), (20, 30, 8)].into_iter().for_each(
+            |(from_stop_id, until_stop_id, bit_field_id)| {
+                journey.add_metadata_entry(
+                    JourneyMetadataType::BitField,
+                    JourneyMetadataEntry::new(
+                        Some(from_stop_id),
+                        Some(until_stop_id),
+                        None,
+                        Some(bit_field_id),
+                        None,
+                        None,
+                        None,
+                        None,
+                    ),
+                );
+            },
+        );
+        [10, 20, 30].into_iter().for_each(|stop_id| {
+            journey.add_route_entry(JourneyRouteEntry::new(stop_id, None, None))
+        });
+        let journeys = ResourceStorage::new(FxHashMap::from_iter([(1, journey)]));
+
+        let by_stop = create_bit_fields_by_stop_id(&journeys).unwrap();
+        assert_eq!(by_stop[&10], FxHashSet::from_iter([7]));
+        // The stop where the two sections meet belongs to both.
+        assert_eq!(by_stop[&20], FxHashSet::from_iter([7, 8]));
+        assert_eq!(by_stop[&30], FxHashSet::from_iter([8]));
+
+        let by_stop_and_bit = create_journeys_by_stop_id_and_bit_field_id(&journeys).unwrap();
+        assert_eq!(by_stop_and_bit.len(), 4);
+        assert_eq!(by_stop_and_bit[&(10, 7)], vec![1]);
+        assert_eq!(by_stop_and_bit[&(20, 7)], vec![1]);
+        assert_eq!(by_stop_and_bit[&(20, 8)], vec![1]);
+        assert_eq!(by_stop_and_bit[&(30, 8)], vec![1]);
+        // The first section's bit field does not apply to the last stop, nor the second's to the first.
+        assert!(!by_stop_and_bit.contains_key(&(30, 7)));
+        assert!(!by_stop_and_bit.contains_key(&(10, 8)));
     }
 
     #[test]

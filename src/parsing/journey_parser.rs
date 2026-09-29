@@ -15,7 +15,7 @@ use nom::{
     branch::alt,
     bytes::tag,
     character::{char, complete::space1},
-    combinator::map,
+    combinator::{map, opt},
     sequence::preceded,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -58,6 +58,8 @@ enum JourneyLines {
         stop_from_id: Option<i32>,
         stop_to_id: Option<i32>,
         bit_field_id: Option<i32>,
+        departure_time: Option<i32>, // At stop_from_id.
+        arrival_time: Option<i32>,   // At stop_to_id.
     },
     Aline {
         offer: String,
@@ -217,12 +219,18 @@ fn row_a_ve_combinator(input: &str) -> IResult<&str, JourneyLines> {
                 optional_i32_from_n_digits_parser(7),
                 preceded(char(' '), optional_i32_from_n_digits_parser(7)),
                 preceded(char(' '), optional_i32_from_n_digits_parser(6)),
+                opt(preceded(char(' '), optional_i32_from_n_digits_parser(6))),
+                opt(preceded(char(' '), optional_i32_from_n_digits_parser(6))),
             ),
         ),
-        |(stop_from_id, stop_to_id, bit_field_id)| JourneyLines::AVEline {
-            stop_from_id,
-            stop_to_id,
-            bit_field_id,
+        |(stop_from_id, stop_to_id, bit_field_id, departure_time, arrival_time)| {
+            JourneyLines::AVEline {
+                stop_from_id,
+                stop_to_id,
+                bit_field_id,
+                departure_time: departure_time.flatten(),
+                arrival_time: arrival_time.flatten(),
+            }
         },
     )
     .parse(input)
@@ -619,6 +627,8 @@ fn parse_line(
             stop_from_id,
             stop_to_id,
             bit_field_id,
+            departure_time,
+            arrival_time,
         } => {
             let journey = data.get_mut(&auto_increment.get()).ok_or_else(|| {
                 ParsingError::UnknownId(format!(
@@ -633,8 +643,8 @@ fn parse_line(
                     stop_to_id,
                     None,
                     bit_field_id,
-                    None,
-                    None,
+                    create_time(departure_time)?,
+                    create_time(arrival_time)?,
                     None,
                     None,
                 ),
@@ -938,6 +948,94 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[test]
+    fn parsing_rows_with_two_ave_sections() {
+        // Shortened from journey 1008 (administration 000072) of the 2026 archive: Davos Platz ->
+        // Klosters Platz on bit field 078957, Klosters Platz -> Landquart on bit field 079261.
+        let rows = [
+            "*Z 001008 000072   000                                     % -- 44343846947 038001 --",
+            "*G RE  8509073 8509002                                     %",
+            "*A VE 8509073 8509068 078957                               %",
+            "*A VE 8509068 8509002 079261                               %",
+            "8509073 Davos Platz                  00501                 %",
+            "8509072 Davos Dorf            00504  00505                 %",
+            "8509068 Klosters Platz        00528  00529                 %",
+            "8509060 Schiers               00559  00600                 %",
+            "8509002 Landquart             00613                        %",
+        ];
+        let auto_increment = AutoIncrement::new();
+        let mut data = FxHashMap::default();
+        let mut pk_type_converter = FxHashSet::default();
+        let transport_types_pk_type_converter = FxHashMap::from_iter([("RE".to_string(), 100)]);
+        let attributes_pk_type_converter = FxHashMap::<String, i32>::default();
+        let directions_pk_type_converter = FxHashMap::<String, i32>::default();
+
+        rows.iter().for_each(|line| {
+            parse_line(
+                line,
+                &mut data,
+                &mut pk_type_converter,
+                &auto_increment,
+                &transport_types_pk_type_converter,
+                &attributes_pk_type_converter,
+                &directions_pk_type_converter,
+            )
+            .unwrap()
+        });
+
+        let journey = data.get(&1).unwrap();
+        assert_eq!(
+            journey.bit_field_ids_by_route_index().unwrap(),
+            vec![
+                vec![78957],        // Davos Platz
+                vec![78957],        // Davos Dorf
+                vec![78957, 79261], // Klosters Platz, where the two sections meet
+                vec![79261],        // Schiers
+                vec![79261],        // Landquart
+            ]
+        );
+    }
+
+    #[test]
+    fn parsing_rows_of_a_circular_journey() {
+        // Shortened from journey 1598 (administration 80_VHB) of the 2026 archive: the *A VE
+        // section starts and ends at the same stop, told apart by the departure and arrival times.
+        let rows = [
+            "*Z 001598 80_VHB   000                                     % -- 44342153488 006001 --",
+            "*G B   1101628 1101628  01413  01500                       %",
+            "*A VE 1101628 1101628 222763  01413  01500                 %",
+            "1101628 Konstanz, Universitä         01413                 %",
+            "1101583 Konstanz, Jacob Burc  01416  01416                 %",
+            "1101535 Konstanz, Bahnhof     01441  01441                 %",
+            "1101628 Konstanz, Universitä  01500                        %",
+        ];
+        let auto_increment = AutoIncrement::new();
+        let mut data = FxHashMap::default();
+        let mut pk_type_converter = FxHashSet::default();
+        let transport_types_pk_type_converter = FxHashMap::from_iter([("B".to_string(), 100)]);
+        let attributes_pk_type_converter = FxHashMap::<String, i32>::default();
+        let directions_pk_type_converter = FxHashMap::<String, i32>::default();
+
+        rows.iter().for_each(|line| {
+            parse_line(
+                line,
+                &mut data,
+                &mut pk_type_converter,
+                &auto_increment,
+                &transport_types_pk_type_converter,
+                &attributes_pk_type_converter,
+                &directions_pk_type_converter,
+            )
+            .unwrap()
+        });
+
+        let journey = data.get(&1).unwrap();
+        assert_eq!(
+            journey.bit_field_ids_by_route_index().unwrap(),
+            vec![vec![222763]; 4]
+        );
+    }
+
+    #[test]
     fn parsing_rows() {
         let rows = vec![
             "*Z 002359 000011   101                                     % -- 37649518273 --"
@@ -1224,6 +1322,7 @@ mod tests {
                     stop_from_id,
                     stop_to_id,
                     bit_field_id: reference,
+                    ..
                 } => Ok((res, (stop_from_id, stop_to_id, reference))),
                 l => Err(format!("AVEline expected but got {l:?}").as_str().into()),
             }
@@ -1255,6 +1354,51 @@ mod tests {
                 res.trim(),
                 "% Ab HS-Nr. 8500090 bis HS-Nr. 8503000, gelten die Gültigkeitstage 001417 (Bitfeld für bspw. alle Montage)"
             );
+        }
+
+        #[test]
+        fn success_with_times() {
+            // Journey 1598 (administration 80_VHB) of the 2026 archive, a circular bus route.
+            let input = "*A VE 1101628 1101628 222763  01413  01500                 %";
+            match row_a_ve_combinator(input).unwrap() {
+                (
+                    res,
+                    JourneyLines::AVEline {
+                        stop_from_id,
+                        stop_to_id,
+                        bit_field_id,
+                        departure_time,
+                        arrival_time,
+                    },
+                ) => {
+                    assert_eq!(Some(1101628), stop_from_id);
+                    assert_eq!(Some(1101628), stop_to_id);
+                    assert_eq!(Some(222763), bit_field_id);
+                    assert_eq!(Some(1413), departure_time);
+                    assert_eq!(Some(1500), arrival_time);
+                    assert_eq!(res.trim(), "%");
+                }
+                (_, l) => panic!("AVEline expected but got {l:?}"),
+            }
+        }
+
+        #[test]
+        fn success_without_times() {
+            let input = "*A VE 8509073 8509068 078957                               %";
+            match row_a_ve_combinator(input).unwrap() {
+                (
+                    _,
+                    JourneyLines::AVEline {
+                        departure_time,
+                        arrival_time,
+                        ..
+                    },
+                ) => {
+                    assert_eq!(None, departure_time);
+                    assert_eq!(None, arrival_time);
+                }
+                (_, l) => panic!("AVEline expected but got {l:?}"),
+            }
         }
     }
 
