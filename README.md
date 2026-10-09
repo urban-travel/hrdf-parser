@@ -5,100 +5,53 @@
 
 # HRDF Parser
 
-This library is dedicated to the parsing of the HRDF format. For the moment, it can only parse the Swiss version of the HRDF format.
+Parses the routing-relevant part of Swiss HRDF timetables (HRDF 5.40.41, realisation
+specification 2.0.7) published on [opentransportdata.swiss](https://data.opentransportdata.swiss/).
 
 Authors:
 
 * Florian Burgener
 * Orestis Malaspinas
 
-[https://crates.io/crates/hrdf-parser](https://crates.io/crates/hrdf-parser)
-
 ## Prerequisites
 
 * Rust Toolchain (<https://www.rust-lang.org/tools/install>)
 * OpenSSL (`apt install libssl-dev` on Ubuntu)
 
-## Installation
-
-```sh
-cargo add hrdf-parser
-```
-
 ## Usage
 
 ```rust,no_run
 # #[tokio::main(flavor = "current_thread")]
-# async fn main() -> Result<(), Box<dyn core::error::Error>> {
-#
-use hrdf_parser::Hrdf;
-use hrdf_parser::Version;
+# async fn main() -> Result<(), hrdf_parser::Error> {
+use hrdf_parser::Timetable;
 
-let hrdf = Hrdf::new(
-    Version::V_5_40_41_2_0_5,
-    "https://opentransportdata.swiss/en/dataset/timetable-54-2024-hrdf/permalink",
-    false,
-    None,
-)
-.await?;
-
-#   Ok(())
+// Timetable 2027 runs from 2026-12-13 to 2027-12-11. Also: Timetable::date, ::url, ::path.
+let timetable = Timetable::year(2027).cache_dir("cache").load().await?;
+println!("{} journeys", timetable.journeys.len());
+# Ok(())
 # }
 ```
 
-### Faster parsing
+The archive is downloaded once and the parsed timetable is cached next to it, so later loads take
+about two seconds instead of thirty. `force_rebuild(true)` downloads and parses again.
 
-Parsing does many small allocations. Setting
-[`mimalloc`](https://crates.io/crates/mimalloc) as your binary's global allocator made parsing
-noticeably faster in our testing:
+`cargo run --release --example load -- path/to/hrdf.zip` prints what an archive contains.
 
-```rust,ignore
-#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
-```
+## Files read
 
-## Supported HRDF format versions
+| File | Content |
+|---|---|
+| ECKDATEN | timetable period |
+| BITFELD | service days |
+| BAHNHOF, BFKOORD_LV95, BFKOORD_WGS | stops, names, coordinates |
+| KMINFO | stops where changing vehicles is forbidden |
+| UMSTEIGB, UMSTEIGV, UMSTEIGL, UMSTEIGZ | minimum transfer times (stop, administrations, lines, journey pairs) |
+| METABHF | footpaths between stops |
+| DURCHBI | through services |
+| FPLAN | journeys: stop times, boarding/alighting bans, service days per section, cyclic journeys, line, direction |
+| LINIE, RICHTUNG, BETRIEB_DE | line names, direction texts, operator names |
+| GLEISE_LV95 | the platform (track, bus bay...) of each call |
+| ZUGART | English names of the transport categories |
 
-HRDF 5.40.41, V 2.04 (38 fichiers) :
-* ATTRIBUT
-* ATTRIBUT_DE (file not used)
-* ATTRIBUT_EN (file not used)
-* ATTRIBUT_FR (file not used)
-* ATTRIBUT_IT (file not used)
-* BAHNHOF
-* BETRIEB_DE
-* BETRIEB_EN
-* BETRIEB_FR
-* BETRIEB_IT
-* BFKOORD_LV95
-* BFKOORD_WGS
-* BFPRIOS
-* BHFART (file not used)
-* BHFART_60
-* BITFELD
-* DURCHBI
-* ECKDATEN
-* FEIERTAG
-* FPLAN
-* GLEIS
-* GLEIS_LV95
-* GLEIS_WGS
-* GRENZHLT (file not used)
-* INFOTEXT_DE
-* INFOTEXT_EN
-* INFOTEXT_FR
-* INFOTEXT_IT
-* KMINFO
-* LINIE
-* METABHF
-* RICHTUNG
-* UMSTEIGB
-* UMSTEIGL
-* UMSTEIGV
-* UMSTEIGZ
-* ZUGART
-* ZEITVS (file not used)
-
-HRDF 5.40.41, V 2.04 (this version also contains the 38 files listed above) :
-* GLEISE_LV95 (file not used)
-* GLEISE_WGS (file not used)
+Not read: ATTRIBUT, BETRIEB_EN/FR/IT, BFPRIOS, BHFART, BITFIELD (same as BITFELD), FEIERTAG,
+GLEISE_WGS (same as GLEISE_LV95 with other coordinates), INFOTEXT_*, ZEITVS.
