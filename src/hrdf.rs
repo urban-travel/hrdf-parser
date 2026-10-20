@@ -177,4 +177,10 @@ impl Hrdf {
         self.data_storage = self.data_storage.add(elements_to_add);
         Ok(self)
     }
+
+    pub fn export_csv_time_graph(self){
+        let out_file = File::create("export.csv").unwrap();
+        let mut csv_writer = csv::Writer::from_writer(out_file);
+        self.data_storage.export_to_csv_time_graph(&mut csv_writer);
+    }
 }

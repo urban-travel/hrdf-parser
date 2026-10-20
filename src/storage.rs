@@ -19,7 +19,8 @@ use sha2::digest::consts::True;
 use std::collections::HashMap;
 use std::hash::Hasher;
 use std::{path::Path, time::Instant};
-
+use std::fs::File;
+use csv::Writer;
 // ------------------------------------------------------------------------------------------------
 // --- DataStorage
 // ------------------------------------------------------------------------------------------------
@@ -471,6 +472,18 @@ impl DataStorage {
             AddableTypes::TransportCompany => {}
         }
         completed
+    }
+
+    pub fn export_to_csv_time_graph(&self, wf: &mut Writer<File>) {
+        self.journeys_by_stop_id_and_bit_field_id.iter().for_each(
+            |(_, journeys)| {
+                journeys.iter().for_each(
+                    |(journey)| {
+                        wf.serialize((journey)).expect("Something went wrong serializing data");
+                    }
+                )
+            }
+        )
     }
 }
 
