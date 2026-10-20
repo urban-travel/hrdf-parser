@@ -182,5 +182,6 @@ impl Hrdf {
         let out_file = File::create("export.csv").unwrap();
         let mut csv_writer = csv::Writer::from_writer(out_file);
         self.data_storage.export_to_csv_time_graph(&mut csv_writer);
+        csv_writer.flush().unwrap();
     }
 }
