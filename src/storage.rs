@@ -1,17 +1,11 @@
 use crate::hrdf::{AddableTypes, ModifiableTypes, RemovableTypes};
-use crate::{
-    JourneyError, JourneyId, JourneyMetadataType,
-    error::{HResult, HrdfError},
-    models::{
-        Attribute, BitField, Direction, ExchangeTimeAdministration, ExchangeTimeJourney,
-        ExchangeTimeLine, Holiday, InformationText, Journey, JourneyPlatform, Line, Model,
-        Platform, Stop, StopConnection, ThroughService, TimetableMetadataEntry, TransportCompany,
-        TransportType, Version,
-    },
-    parsing,
-    utils::{count_days_between_two_dates, timetable_end_date, timetable_start_date},
-};
-use chrono::{Days, NaiveDate};
+use crate::{error::{HResult, HrdfError}, models::{
+    Attribute, BitField, Direction, ExchangeTimeAdministration, ExchangeTimeJourney,
+    ExchangeTimeLine, Holiday, InformationText, Journey, JourneyPlatform, Line, Model,
+    Platform, Stop, StopConnection, ThroughService, TimetableMetadataEntry, TransportCompany,
+    TransportType, Version,
+}, parsing, utils::{count_days_between_two_dates, timetable_end_date, timetable_start_date}, JourneyError, JourneyId, JourneyMetadataType, JourneyRouteEntry};
+use chrono::{Days, NaiveDate, NaiveTime};
 use nom::sequence::Tuple;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
@@ -475,13 +469,22 @@ impl DataStorage {
     }
 
     pub fn export_to_csv_time_graph(&self, wf: &mut Writer<File>) {
-        self.journeys_by_stop_id_and_bit_field_id.iter().for_each(
+        self.journeys.data.iter().for_each(
             |(_, journeys)| {
-                journeys.iter().for_each(
-                    |(journey)| {
-                        wf.serialize((journey)).expect("Something went wrong serializing data");
+                let metadata = journeys.metadata()[&JourneyMetadataType::Line][0].clone();
+                let tag = String::from(journeys.administration()) + metadata.extra_field_1.or(Some(String::from(""))).unwrap().trim();
+                journeys.route().iter().fold( (&None, 0),
+                    |(prev_time, old_stop_id), journey: &JourneyRouteEntry | -> (&Option<NaiveTime>, i32) {
+                        if let Some(prev_time) = prev_time {
+                            let cost = journey.departure_time().unwrap() - *prev_time;
+                            let active_time = prev_time;
+                            let start_node = old_stop_id;
+                            let destination_node = journey.stop_id();
+                            wf.serialize((start_node, destination_node, active_time, cost.num_minutes(), journey)).expect("Something went wrong serializing data");
+                        }
+                        (journey.departure_time(), journey.stop_id())
                     }
-                )
+                );
             }
         )
     }
