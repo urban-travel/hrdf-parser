@@ -470,6 +470,7 @@ impl DataStorage {
     }
 
     pub fn export_to_csv_time_graph(&self, wf: &mut Writer<File>, filter_administration: Option<String>, start_date: Option<&NaiveDate>, duration: Option<&Duration>) {
+        wf.serialize(("start_node", "destination_node", "active_time (in minutes)", "cost (in minutes)", "tag")).expect("Something went wrong serializing data");
         self.journeys.data.iter().for_each(
             |(_, journeys)| {
                 if let Some(metadata) = journeys.metadata().get(&JourneyMetadataType::Line) {
