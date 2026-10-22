@@ -473,7 +473,7 @@ impl DataStorage {
             |(_, journeys)| {
                 if let Some(metadata) = journeys.metadata().get(&JourneyMetadataType::Line) {
                     let metadata = metadata[0].clone();
-                    let tag = String::from(journeys.administration()) + metadata.extra_field_1.or(Some(String::from(""))).unwrap().trim();
+                    let tag = String::from(journeys.administration()) + "#" + metadata.extra_field_1.or(Some(String::from(""))).unwrap().trim();
                     journeys.route().iter().fold((&None, 0),
                                                  |(prev_time, old_stop_id), journey: &JourneyRouteEntry| -> (&Option<NaiveTime>, i32) {
                                                      if let Some(prev_time) = prev_time {
