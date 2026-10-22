@@ -5,7 +5,7 @@ use crate::{error::{HResult, HrdfError}, models::{
     Platform, Stop, StopConnection, ThroughService, TimetableMetadataEntry, TransportCompany,
     TransportType, Version,
 }, parsing, utils::{count_days_between_two_dates, timetable_end_date, timetable_start_date}, JourneyError, JourneyId, JourneyMetadataType, JourneyRouteEntry};
-use chrono::{Days, NaiveDate, NaiveTime};
+use chrono::{Days, NaiveDate, NaiveTime, Timelike};
 use nom::sequence::Tuple;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
@@ -482,10 +482,10 @@ impl DataStorage {
                                                  |(prev_time, old_stop_id), journey: &JourneyRouteEntry| -> (&Option<NaiveTime>, i32) {
                                                      if let Some(prev_time) = prev_time {
                                                          let cost = journey.arrival_time().unwrap() - *prev_time;
-                                                         let active_time = prev_time;
+                                                         let active_time = *prev_time - NaiveTime::from_num_seconds_from_midnight_opt(0, 0).unwrap();
                                                          let start_node = old_stop_id;
                                                          let destination_node = journey.stop_id();
-                                                         wf.serialize((start_node, destination_node, active_time, cost.num_minutes(), tag.clone())).expect("Something went wrong serializing data");
+                                                         wf.serialize((start_node, destination_node, active_time.num_minutes(), cost.num_minutes(), tag.clone())).expect("Something went wrong serializing data");
                                                      }
                                                      (journey.departure_time(), journey.stop_id())
                                                  },
