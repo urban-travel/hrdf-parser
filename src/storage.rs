@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use std::hash::Hasher;
 use std::{path::Path, time::Instant};
 use std::fs::File;
+use std::time::Duration;
 use csv::Writer;
 // ------------------------------------------------------------------------------------------------
 // --- DataStorage
@@ -468,12 +469,15 @@ impl DataStorage {
         completed
     }
 
-    pub fn export_to_csv_time_graph(&self, wf: &mut Writer<File>) {
+    pub fn export_to_csv_time_graph(&self, wf: &mut Writer<File>, filter_administration: Option<String>, start_date: NaiveDate, duration: Duration) {
         self.journeys.data.iter().for_each(
             |(_, journeys)| {
                 if let Some(metadata) = journeys.metadata().get(&JourneyMetadataType::Line) {
                     let metadata = metadata[0].clone();
                     let tag = String::from(journeys.administration()) + "#" + metadata.extra_field_1.or(Some(String::from(""))).unwrap().trim();
+                    if let Some(filter_administration) = filter_administration.clone() && filter_administration != String::from(journeys.administration()){
+                        return
+                    }
                     journeys.route().iter().fold((&None, 0),
                                                  |(prev_time, old_stop_id), journey: &JourneyRouteEntry| -> (&Option<NaiveTime>, i32) {
                                                      if let Some(prev_time) = prev_time {
