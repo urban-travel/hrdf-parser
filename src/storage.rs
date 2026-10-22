@@ -471,20 +471,22 @@ impl DataStorage {
     pub fn export_to_csv_time_graph(&self, wf: &mut Writer<File>) {
         self.journeys.data.iter().for_each(
             |(_, journeys)| {
-                let metadata = journeys.metadata()[&JourneyMetadataType::Line][0].clone();
-                let tag = String::from(journeys.administration()) + metadata.extra_field_1.or(Some(String::from(""))).unwrap().trim();
-                journeys.route().iter().fold( (&None, 0),
-                    |(prev_time, old_stop_id), journey: &JourneyRouteEntry | -> (&Option<NaiveTime>, i32) {
-                        if let Some(prev_time) = prev_time {
-                            let cost = journey.arrival_time().unwrap() - *prev_time;
-                            let active_time = prev_time;
-                            let start_node = old_stop_id;
-                            let destination_node = journey.stop_id();
-                            wf.serialize((start_node, destination_node, active_time, cost.num_minutes())).expect("Something went wrong serializing data");
-                        }
-                        (journey.departure_time(), journey.stop_id())
-                    }
-                );
+                if let Some(metadata) = journeys.metadata().get(&JourneyMetadataType::Line) {
+                    let metadata = metadata[0].clone();
+                    let tag = String::from(journeys.administration()) + metadata.extra_field_1.or(Some(String::from(""))).unwrap().trim();
+                    journeys.route().iter().fold((&None, 0),
+                                                 |(prev_time, old_stop_id), journey: &JourneyRouteEntry| -> (&Option<NaiveTime>, i32) {
+                                                     if let Some(prev_time) = prev_time {
+                                                         let cost = journey.arrival_time().unwrap() - *prev_time;
+                                                         let active_time = prev_time;
+                                                         let start_node = old_stop_id;
+                                                         let destination_node = journey.stop_id();
+                                                         wf.serialize((start_node, destination_node, active_time, cost.num_minutes())).expect("Something went wrong serializing data");
+                                                     }
+                                                     (journey.departure_time(), journey.stop_id())
+                                                 },
+                    );
+                }
             }
         )
     }
