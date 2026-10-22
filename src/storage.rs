@@ -476,7 +476,7 @@ impl DataStorage {
                 journeys.route().iter().fold( (&None, 0),
                     |(prev_time, old_stop_id), journey: &JourneyRouteEntry | -> (&Option<NaiveTime>, i32) {
                         if let Some(prev_time) = prev_time {
-                            let cost = journey.departure_time().unwrap() - *prev_time;
+                            let cost = journey.arrival_time().unwrap() - *prev_time;
                             let active_time = prev_time;
                             let start_node = old_stop_id;
                             let destination_node = journey.stop_id();
