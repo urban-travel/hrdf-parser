@@ -179,7 +179,7 @@ impl Hrdf {
         Ok(self)
     }
 
-    pub fn export_csv_time_graph(&self, filter_administration: Option<String>, start_date: NaiveDate, duration: Duration, out_file_name: &str){
+    pub fn export_csv_time_graph(&self, filter_administration: Option<String>, start_date: &NaiveDate, duration: &Duration, out_file_name: &str){
         let out_file = File::create(out_file_name).unwrap();
         let mut csv_writer = csv::Writer::from_writer(out_file);
         self.data_storage.export_to_csv_time_graph(&mut csv_writer, filter_administration, start_date, duration);
