@@ -469,7 +469,7 @@ impl DataStorage {
         completed
     }
 
-    pub fn export_to_csv_time_graph(&self, wf: &mut Writer<File>, filter_administration: Option<String>, start_date: &NaiveDate, duration: &Duration) {
+    pub fn export_to_csv_time_graph(&self, wf: &mut Writer<File>, filter_administration: Option<String>, start_date: Option<&NaiveDate>, duration: Option<&Duration>) {
         self.journeys.data.iter().for_each(
             |(_, journeys)| {
                 if let Some(metadata) = journeys.metadata().get(&JourneyMetadataType::Line) {
