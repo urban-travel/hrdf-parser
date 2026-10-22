@@ -480,7 +480,7 @@ impl DataStorage {
                             let active_time = prev_time;
                             let start_node = old_stop_id;
                             let destination_node = journey.stop_id();
-                            wf.serialize((start_node, destination_node, active_time, cost.num_minutes(), journey)).expect("Something went wrong serializing data");
+                            wf.serialize((start_node, destination_node, active_time, cost.num_minutes())).expect("Something went wrong serializing data");
                         }
                         (journey.departure_time(), journey.stop_id())
                     }
